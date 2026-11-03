@@ -1,3 +1,5 @@
+import { calculateNextScore, getDecayedScore } from "./utils/masteryScoreEngine.js";
+
 export const state = {
   userToken: null,
   profile: {
@@ -8,7 +10,7 @@ export const state = {
     streakCount: 0
   },
   curriculum: [],
-  mastery: {}, // Keyed by generatorPath: { stars, accuracy, totalAttempted, totalCorrect, rollingHistory }
+  mastery: {}, // Keyed by generatorPath: { score, accuracy, totalAttempted, totalCorrect, rollingHistory, lastPracticed }
   pendingMasteryUpdates: new Set(),
   dailySession: {
     targetQuestions: 5,
@@ -23,7 +25,35 @@ export function setStateData(payload) {
   if (!payload) return;
   if (payload.profile) state.profile = { ...state.profile, ...payload.profile };
   if (payload.curriculum) state.curriculum = payload.curriculum;
-  if (payload.mastery) state.mastery = payload.mastery;
+  if (payload.mastery) {
+    state.mastery = {};
+    // Process mastery map and apply decay / legacy conversions
+    Object.keys(payload.mastery).forEach(path => {
+      const item = payload.mastery[path];
+      let rawScore = item.score !== undefined ? item.score : (item.stars !== undefined ? item.stars : 0);
+
+      // Legacy conversion for old 0–3 star records stored in Sheet
+      if (rawScore > 0 && rawScore <= 3 && item.score === undefined) {
+        if (rawScore === 1) rawScore = 40;
+        else if (rawScore === 2) rawScore = 70;
+        else if (rawScore === 3) rawScore = 90;
+      }
+
+      // Calculate time-decayed score for SRS
+      const effectiveScore = getDecayedScore(rawScore, item.lastPracticed, 2);
+
+      state.mastery[path] = {
+        generatorPath: path,
+        score: rawScore,
+        effectiveScore: effectiveScore,
+        accuracy: Number(item.accuracy) || 0,
+        totalAttempted: Number(item.totalAttempted) || 0,
+        totalCorrect: Number(item.totalCorrect) || 0,
+        rollingHistory: item.rollingHistory || [],
+        lastPracticed: item.lastPracticed || ""
+      };
+    });
+  }
   if (payload.token) state.userToken = payload.token;
 }
 
@@ -37,18 +67,19 @@ export function addXP(amount) {
 }
 
 /**
- * Local-First Question Attempt Recorder.
+ * Local-First Question Attempt Recorder using Mastery Score (0–100).
  */
-export function recordQuestionAttempt(generatorPath, isCorrect, hintsUsed = 0) {
+export function recordQuestionAttempt(generatorPath, isCorrect, hintsUsed = 0, maxHints = 3) {
   if (!generatorPath) return;
 
   let skillData = state.mastery[generatorPath] || {
     generatorPath: generatorPath,
-    stars: 0,
+    score: 0,
     accuracy: 0,
     totalAttempted: 0,
     totalCorrect: 0,
-    rollingHistory: []
+    rollingHistory: [],
+    lastPracticed: new Date().toISOString()
   };
 
   skillData.totalAttempted += 1;
@@ -70,18 +101,14 @@ export function recordQuestionAttempt(generatorPath, isCorrect, hintsUsed = 0) {
   const correctRolling = skillData.rollingHistory.filter(h => h.correct).length;
   skillData.accuracy = totalRolling > 0 ? Math.round((correctRolling / totalRolling) * 100) : 0;
 
-  // Star Calculation Logic
-  const hintsInHistory = skillData.rollingHistory.reduce((sum, h) => sum + h.hints, 0);
-  const last5 = skillData.rollingHistory.slice(-5);
-  const last5Perfect = last5.length === 5 && last5.every(h => h.correct && h.hints === 0);
+  // Check if score is currently decayed
+  const isDecayed = (skillData.effectiveScore || skillData.score) < skillData.score;
 
-  if (last5Perfect) {
-    skillData.stars = 3;
-  } else if (totalRolling >= 5 && skillData.accuracy >= 80 && hintsInHistory <= 1) {
-    skillData.stars = Math.max(skillData.stars, 2);
-  } else if (totalRolling >= 5 && skillData.accuracy >= 60) {
-    skillData.stars = Math.max(skillData.stars, 1);
-  }
+  // Calculate new Mastery Score (0–100)
+  const nextScore = calculateNextScore(skillData.score, isCorrect, hintsUsed, maxHints, isDecayed);
+  skillData.score = nextScore;
+  skillData.effectiveScore = nextScore;
+  skillData.lastPracticed = new Date().toISOString();
 
   state.mastery[generatorPath] = skillData;
   state.pendingMasteryUpdates.add(generatorPath);
