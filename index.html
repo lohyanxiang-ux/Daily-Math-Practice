@@ -5,12 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Math Skill Practice</title>
   <link rel="stylesheet" href="css/style.css">
-  
-  <!-- KaTeX CSS & JS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
   
-  <!-- Stub callback to prevent race condition error -->
   <script>
     window.handleCredentialResponse = function(response) {
       if (typeof window.processGoogleSignIn === 'function') {
@@ -20,52 +17,40 @@
       }
     };
   </script>
-
-  <!-- Google Sign-In SDK -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
-  <!-- AUTH CONTAINER -->
+  <!-- AUTHENTICATION CARD -->
   <div id="auth-card" class="card">
     <h2>Student Sign-In</h2>
     <p>Sign in with your school Google account to start practicing.</p>
     
     <div id="g_id_onload"
          data-client_id="874463235708-a7ep34l9ecn43mqvj4nkknn44js6halc.apps.googleusercontent.com"
-         data-callback="handleCredentialResponse">
+         data-callback="handleCredentialResponse"
+         data-use_fedcm_for_prompt="false">
     </div>
     <div class="g_id_signin" data-type="standard"></div>
     <div id="auth-status" style="margin-top: 10px; font-weight: bold;"></div>
   </div>
 
-  <!-- MAIN DASHBOARD & PRACTICE INTERFACE -->
+  <!-- MAIN APP CONTAINER -->
   <div id="app-container" style="display: none;">
-    <header class="profile-bar card">
-      <div>
-        <h2 id="profile-name">Student</h2>
-        <span id="profile-meta" class="badge">Class - Year (Stream)</span>
+    <!-- TOP NAVBAR -->
+    <header class="top-nav card">
+      <div class="nav-user">
+        <h3 id="nav-profile-name">Student</h3>
+        <span id="nav-profile-meta" class="badge">Class - Year (Stream)</span>
       </div>
-      <div class="stats-group">
-        <div class="stat"><span class="label">XP</span> <b id="profile-xp">0</b></div>
-        <div class="stat"><span class="label">Streak</span> <b id="profile-streak">0</b> 🔥</div>
+      <div class="nav-stats">
+        <div class="stat"><span class="label">XP</span> <b id="nav-profile-xp">0</b></div>
+        <div class="stat"><span class="label">Streak</span> <b id="nav-profile-streak">0</b> 🔥</div>
       </div>
     </header>
 
-    <main class="practice-box card">
-      <div class="skill-header">
-        <span id="skill-strand" class="tag">Strand</span>
-        <h3 id="skill-title">Skill Title</h3>
-      </div>
-      <div id="question-prompt" class="math-display">Loading question...</div>
-      
-      <div class="answer-section">
-        <input type="text" id="student-answer" placeholder="Type your answer...">
-        <button id="submit-btn">Submit Answer</button>
-        <button id="next-btn">Next Question</button>
-      </div>
-      <div id="feedback" class="feedback"></div>
-    </main>
+    <!-- DYNAMIC VIEWPORT (Views mount inside here) -->
+    <main id="app-viewport"></main>
   </div>
 
   <script type="module" src="js/app.js"></script>
