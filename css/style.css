@@ -224,3 +224,43 @@ canvas#scratchpad-canvas {
   font-weight: 600;
   cursor: pointer;
 }
+
+.col-scrollable {
+  overflow-y: auto !important;
+}
+
+.hint-btn {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.hint-card {
+  background: #fffbeb;
+  border-left: 4px solid #f59e0b;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+}
+
+.solution-box {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 14px;
+  margin-top: 16px;
+  color: #166534;
+}
+
+.keypad-btn.variable {
+  background: #e0f2fe;
+  color: #0369a1;
+  font-style: italic;
+  font-weight: 700;
+}
