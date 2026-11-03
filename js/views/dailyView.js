@@ -1,14 +1,17 @@
 import { state, addXP } from "../state.js";
 import { registry } from "../questions/registry.js";
 import { navigateTo } from "../router.js";
+import { initScratchpad } from "../components/scratchpad.js";
+import { initKeypad } from "../components/keypad.js";
 
 export function renderDailyPractice(container) {
   let questionIndex = 0;
   const totalQuestions = state.dailySession.targetQuestions;
   let sessionScore = 0;
   let currentQuestion = null;
+  let activeAnswer = "";
+  let keypadInstance = null;
 
-  // Primary active SkillID from curriculum or fallback default
   const activeSkillId = (state.curriculum && state.curriculum.length > 0)
     ? state.curriculum[0].skillId
     : "sec1_g1_alg_linear";
@@ -22,67 +25,109 @@ export function renderDailyPractice(container) {
     currentQuestion = registry.generateQuestion(activeSkillId, "basic");
 
     container.innerHTML = `
-      <div class="card practice-box">
-        <div class="practice-top">
-          <button id="btn-exit" class="secondary-btn">← Back to Dashboard</button>
-          <span class="step-indicator">Question ${questionIndex + 1} of ${totalQuestions}</span>
+      <div class="practice-grid-3col">
+        <!-- COLUMN 1: QUESTION & STATUS -->
+        <div class="practice-col">
+          <div class="question-header">
+            <button id="btn-exit-dashboard" class="secondary-btn">← Dashboard</button>
+            <span class="step-indicator">Q${questionIndex + 1} of ${totalQuestions}</span>
+          </div>
+
+          <div class="skill-header">
+            <span class="tag">${currentQuestion ? currentQuestion.strand : 'Algebra'}</span>
+            <h4 style="margin-top: 6px; color: var(--text-muted);">${activeSkillId}</h4>
+          </div>
+
+          <div id="question-prompt" class="math-display">
+            ${currentQuestion ? currentQuestion.prompt : 'Loading prompt...'}
+          </div>
+
+          <div id="daily-feedback" class="feedback-area"></div>
         </div>
 
-        <div class="skill-header">
-          <span class="tag">${currentQuestion ? currentQuestion.strand : 'Algebra'}</span>
-          <h3>${activeSkillId}</h3>
+        <!-- COLUMN 2: APPLE PENCIL SCRATCHPAD -->
+        <div class="practice-col">
+          <div class="scratchpad-toolbar">
+            <span style="font-weight: 700; font-size: 0.95rem;">✏️ Working Area</span>
+            <button id="btn-clear-canvas" class="secondary-btn" style="font-size: 0.8rem;">Clear Workspace</button>
+          </div>
+          <div class="canvas-wrapper">
+            <canvas id="scratchpad-canvas"></canvas>
+          </div>
         </div>
 
-        <div id="question-prompt" class="math-display">
-          ${currentQuestion ? currentQuestion.prompt : 'No question available.'}
-        </div>
+        <!-- COLUMN 3: CUSTOM ON-SCREEN KEYPAD -->
+        <div class="practice-col">
+          <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 8px;">Enter Answer</div>
+          
+          <div id="keypad-display" class="answer-display-box"></div>
 
-        <div class="answer-section">
-          <input type="text" id="daily-answer-input" placeholder="Type your answer..." autofocus>
-          <button id="daily-submit-btn">Submit Answer</button>
-        </div>
+          <div class="keypad-grid">
+            <button class="keypad-btn" data-val="7">7</button>
+            <button class="keypad-btn" data-val="8">8</button>
+            <button class="keypad-btn" data-val="9">9</button>
+            <button class="keypad-btn action" data-action="backspace">⌫</button>
 
-        <div id="daily-feedback" class="feedback"></div>
+            <button class="keypad-btn" data-val="4">4</button>
+            <button class="keypad-btn" data-val="5">5</button>
+            <button class="keypad-btn" data-val="6">6</button>
+            <button class="keypad-btn operator" data-val="+">+</button>
+
+            <button class="keypad-btn" data-val="1">1</button>
+            <button class="keypad-btn" data-val="2">2</button>
+            <button class="keypad-btn" data-val="3">3</button>
+            <button class="keypad-btn operator" data-val="-">-</button>
+
+            <button class="keypad-btn" data-val="0">0</button>
+            <button class="keypad-btn operator" data-val=".">.</button>
+            <button class="keypad-btn operator" data-val="x">x</button>
+            <button class="keypad-btn operator" data-val="/">/</button>
+
+            <button class="keypad-btn action" data-action="clear">C</button>
+            <button class="keypad-btn operator" data-val="-">(-)</button>
+            <button class="keypad-btn submit" data-action="submit">Submit ➔</button>
+          </div>
+        </div>
       </div>
     `;
 
-    document.getElementById("btn-exit").addEventListener("click", () => {
+    // Initialize Canvas Scratchpad & Virtual Keypad components
+    initScratchpad(container);
+
+    keypadInstance = initKeypad(
+      container,
+      (val) => { activeAnswer = val; },
+      (val) => { handleSubmission(val); }
+    );
+
+    document.getElementById("btn-exit-dashboard").addEventListener("click", () => {
       navigateTo("dashboard");
     });
+  }
 
-    const submitBtn = document.getElementById("daily-submit-btn");
-    const answerInput = document.getElementById("daily-answer-input");
+  function handleSubmission(ans) {
+    if (!currentQuestion) return;
 
-    const handleSubmission = () => {
-      if (!currentQuestion) return;
+    const userAns = ans.replace(/\s+/g, '').toLowerCase();
+    const expected = String(currentQuestion.expectedAnswer).replace(/\s+/g, '').toLowerCase();
+    const feedbackEl = document.getElementById("daily-feedback");
 
-      const userAns = answerInput.value.replace(/\s+/g, '').toLowerCase();
-      const expected = String(currentQuestion.expectedAnswer).replace(/\s+/g, '').toLowerCase();
-      const feedbackEl = document.getElementById("daily-feedback");
+    if (userAns === expected) {
+      sessionScore++;
+      addXP(10);
+      feedbackEl.style.background = "#d1fae5";
+      feedbackEl.style.color = "#065f46";
+      feedbackEl.innerText = "Correct! 🎉 +10 XP";
+    } else {
+      feedbackEl.style.background = "#fee2e2";
+      feedbackEl.style.color = "#991b1b";
+      feedbackEl.innerText = `Incorrect. Expected: ${currentQuestion.expectedAnswer}`;
+    }
 
-      if (userAns === expected) {
-        sessionScore++;
-        addXP(10);
-        feedbackEl.innerHTML = "<span style='color:green;'>Correct! 🎉 +10 XP</span>";
-      } else {
-        feedbackEl.innerHTML = `<span style='color:red;'>Incorrect. Expected: ${currentQuestion.expectedAnswer}</span>`;
-      }
-
-      submitBtn.disabled = true;
-      answerInput.disabled = true;
-
-      setTimeout(() => {
-        questionIndex++;
-        loadQuestion();
-      }, 1500);
-    };
-
-    submitBtn.addEventListener("click", handleSubmission);
-    answerInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter" && !submitBtn.disabled) {
-        handleSubmission();
-      }
-    });
+    setTimeout(() => {
+      questionIndex++;
+      loadQuestion();
+    }, 1500);
   }
 
   function renderSummary() {
@@ -91,20 +136,19 @@ export function renderDailyPractice(container) {
     if (bonusXP > 0) addXP(bonusXP);
 
     container.innerHTML = `
-      <div class="card summary-box" style="text-align: center; padding: 2rem;">
-        <h2>🎉 Daily Practice Complete!</h2>
-        <p style="font-size: 1.2rem; margin: 1rem 0;">
-          You scored <strong>${sessionScore} / ${totalQuestions}</strong>
+      <div class="practice-col" style="justify-content: center; align-items: center; text-align: center; padding: 3rem;">
+        <h2 style="font-size: 2rem;">🎉 Daily Quest Completed!</h2>
+        <p style="font-size: 1.2rem; color: var(--text-muted); margin: 12px 0;">
+          Final Score: <strong>${sessionScore} / ${totalQuestions}</strong>
         </p>
-        <div style="margin: 1.5rem 0;">
-          <p>Earned: <strong>+${sessionScore * 10} XP</strong></p>
-          ${bonusXP > 0 ? `<p style="color: gold; font-weight: bold;">⭐ Perfect Score Bonus: +${bonusXP} XP!</p>` : ''}
+        <div style="font-size: 1.1rem; margin-bottom: 24px;">
+          Total XP Earned: <strong style="color: var(--primary);">+${(sessionScore * 10) + bonusXP} XP</strong>
         </div>
-        <button id="btn-return-dashboard" class="action-btn" style="padding: 0.8rem 1.5rem;">Return to Dashboard</button>
+        <button id="btn-return-dash" class="keypad-btn submit" style="padding: 14px 28px; font-size: 1.1rem;">Return to Dashboard</button>
       </div>
     `;
 
-    document.getElementById("btn-return-dashboard").addEventListener("click", () => {
+    document.getElementById("btn-return-dash").addEventListener("click", () => {
       navigateTo("dashboard");
     });
   }
