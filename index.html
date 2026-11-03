@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <!-- Viewport locked for fixed iPad landscape app experience -->
+  <!-- Viewport locked for iPad landscape app experience -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Math Skill Practice</title>
   
   <!-- CSS Stylesheet with Cache-Busting -->
-  <link rel="stylesheet" href="css/style.css?v=1.1">
+  <link rel="stylesheet" href="css/style.css?v=1.2">
   
-  <!-- KaTeX CSS & JS for Question Prompts & Solutions -->
+  <!-- KaTeX CSS & JS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
  
@@ -28,6 +28,34 @@
     };
   </script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <style>
+    .keypad-btn {
+      padding: 16px 10px;
+      font-size: 1.4rem;
+      font-weight: 700;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      background: #ffffff;
+      color: #1e293b;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .keypad-btn:active {
+      transform: scale(0.95);
+      background: #e2e8f0;
+    }
+    .tab-btn {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+  </style>
 </head>
 <body>
 
@@ -40,10 +68,10 @@
 
     <!-- ROLE TOGGLE TABS -->
     <div style="display: flex; background: #f1f5f9; padding: 4px; border-radius: 12px; margin-bottom: 20px;">
-      <button id="tab-student-mode" type="button" style="flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: 700; font-size: 0.9rem; cursor: pointer; background: #ffffff; color: #0f172a; box-shadow: 0 2px 4px rgba(0,0,0,0.05); touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
+      <button id="tab-student-mode" type="button" class="tab-btn" onclick="window.switchAuthTab('student')" style="flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: 700; font-size: 0.9rem; cursor: pointer; background: #ffffff; color: #0f172a; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
         🎓 Student Sign In
       </button>
-      <button id="tab-teacher-mode" type="button" style="flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: 700; font-size: 0.9rem; cursor: pointer; background: transparent; color: #64748b; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
+      <button id="tab-teacher-mode" type="button" class="tab-btn" onclick="window.switchAuthTab('teacher')" style="flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: 700; font-size: 0.9rem; cursor: pointer; background: transparent; color: #64748b;">
         🏫 Teacher Sign In
       </button>
     </div>
@@ -55,23 +83,23 @@
         <input type="password" id="student-pin-input" readonly placeholder="••••" style="width: 100%; padding: 12px; border: 1.5px solid #cbd5e1; border-radius: 10px; font-size: 1.6rem; text-align: center; letter-spacing: 12px; box-sizing: border-box; background: #f8fafc;">
       </div>
 
-      <!-- ON-SCREEN NUMERIC KEYPAD FOR STUDENTS -->
-      <div id="pin-keypad" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; -webkit-user-select: none; user-select: none;">
-        <button type="button" class="keypad-btn" data-val="1">1</button>
-        <button type="button" class="keypad-btn" data-val="2">2</button>
-        <button type="button" class="keypad-btn" data-val="3">3</button>
-        <button type="button" class="keypad-btn" data-val="4">4</button>
-        <button type="button" class="keypad-btn" data-val="5">5</button>
-        <button type="button" class="keypad-btn" data-val="6">6</button>
-        <button type="button" class="keypad-btn" data-val="7">7</button>
-        <button type="button" class="keypad-btn" data-val="8">8</button>
-        <button type="button" class="keypad-btn" data-val="9">9</button>
-        <button type="button" class="keypad-btn" data-val="clear" style="background: #fee2e2; color: #991b1b;">Clear</button>
-        <button type="button" class="keypad-btn" data-val="0">0</button>
-        <button type="button" class="keypad-btn" data-val="backspace" style="background: #e2e8f0;">⌫</button>
+      <!-- ON-SCREEN NUMERIC KEYPAD -->
+      <div id="pin-keypad" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px;">
+        <button type="button" class="keypad-btn" onclick="window.appendPin('1')">1</button>
+        <button type="button" class="keypad-btn" onclick="window.appendPin('2')">2</button>
+        <button type="button" class="keypad-btn" onclick="window.appendPin('3')">3</button>
+        <button type="button" class="keypad-btn" onclick="window.appendPin('4')">4</button>
+        <button type="button" class="keypad-btn" onclick="window.appendPin('5')">5</button>
+        <button type="button" class="keypad-btn" onclick="window.appendPin('6')">6</button>
+        <button type="button" class="keypad-btn" onclick="window.appendPin('7')">7</button>
+        <button type="button" class="keypad-btn" onclick="window.appendPin('8')">8</button>
+        <button type="button" class="keypad-btn" onclick="window.appendPin('9')">9</button>
+        <button type="button" class="keypad-btn" onclick="window.clearPin()" style="background: #fee2e2; color: #991b1b;">Clear</button>
+        <button type="button" class="keypad-btn" onclick="window.appendPin('0')">0</button>
+        <button type="button" class="keypad-btn" onclick="window.backspacePin()" style="background: #e2e8f0;">⌫</button>
       </div>
 
-      <button id="btn-submit-pin" type="button" style="width: 100%; padding: 14px; background: #2563eb; color: #ffffff; border: none; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
+      <button id="btn-submit-pin" type="button" onclick="window.submitStudentPin()" style="width: 100%; padding: 14px; background: #2563eb; color: #ffffff; border: none; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
         Enter Practice App ➔
       </button>
     </div>
@@ -113,7 +141,7 @@
           <div class="stat"><span class="label">Streak</span> <b id="nav-profile-streak">0</b> 🔥</div>
         </div>
 
-        <button id="btn-logout" type="button" style="padding: 8px 14px; background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-radius: 8px; font-size: 0.82rem; font-weight: 700; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
+        <button id="btn-logout" type="button" onclick="window.handleLogoutApp()" style="padding: 8px 14px; background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-radius: 8px; font-size: 0.82rem; font-weight: 700; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
           🚪 Logout
         </button>
       </div>
@@ -123,30 +151,7 @@
     <main id="app-viewport"></main>
   </div>
 
-  <!-- STYLES FOR TOUCH TARGETS & KEYPAD -->
-  <style>
-    .keypad-btn {
-      padding: 14px;
-      font-size: 1.3rem;
-      font-weight: 700;
-      border: 1px solid #cbd5e1;
-      border-radius: 10px;
-      background: #ffffff;
-      color: #1e293b;
-      cursor: pointer;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-      -webkit-user-select: none;
-      user-select: none;
-    }
-    .keypad-btn:active {
-      transform: scale(0.96);
-      background: #f1f5f9;
-    }
-  </style>
-
   <!-- MAIN JAVASCRIPT MODULE ENTRY POINT -->
-  <script type="module" src="js/app.js?v=1.1"></script>
+  <script type="module" src="js/app.js?v=1.2"></script>
 </body>
 </html>
