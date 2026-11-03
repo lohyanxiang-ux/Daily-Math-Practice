@@ -8,7 +8,7 @@ import { renderKaTeX } from "../utils/katexHelper.js";
 import { isAlgebraicallyEquivalent } from "../utils/mathEquivalence.js";
 
 export function renderDailyPractice(container, params = {}) {
-  // 1. Resolve Mode Configuration
+  // 1. Practice Mode & Session Rules Resolution
   const mode = params.mode || "dailyQuest";
   const isDailyQuest = mode === "dailyQuest";
   const isSkillTree = mode === "skillTree";
@@ -26,10 +26,9 @@ export function renderDailyPractice(container, params = {}) {
   let currentSkillTitle = "";
   const sessionInitialScores = {};
 
-  // Resolved Queue for Multi-Question Modes
   let queue = Array.isArray(params.queue) ? params.queue : [];
 
-  // 2. Background Mastery Batch Sync
+  // 2. Background Mastery Sync on Visibility Change / Exit
   function flushMasterySync() {
     if (state.pendingMasteryUpdates && state.pendingMasteryUpdates.size > 0 && state.userToken) {
       const dirtyPaths = Array.from(state.pendingMasteryUpdates);
@@ -46,7 +45,7 @@ export function renderDailyPractice(container, params = {}) {
   };
   document.addEventListener("visibilitychange", visibilityHandler);
 
-  // 3. Question Fetching Engine
+  // 3. Dynamic Question Importer & Generator
   async function fetchNextQuestion() {
     let queueItem = null;
 
@@ -56,9 +55,7 @@ export function renderDailyPractice(container, params = {}) {
 
     if (queueItem) {
       activeGeneratorPath = typeof queueItem === "object" ? queueItem.generatorPath : String(queueItem);
-    } else if (activeGeneratorPath) {
-      // Path specified directly via params
-    } else if (state.curriculum && state.curriculum.length > 0) {
+    } else if (!activeGeneratorPath && state.curriculum && state.curriculum.length > 0) {
       const studentYear = state.profile ? String(state.profile.year).trim() : "";
       const studentStream = state.profile ? String(state.profile.stream).trim() : "";
 
@@ -71,9 +68,9 @@ export function renderDailyPractice(container, params = {}) {
         : state.curriculum[0];
 
       activeGeneratorPath = selectedSkill.generatorPath;
-    } else {
-      activeGeneratorPath = "algebra/linearEquations.js";
     }
+
+    if (!activeGeneratorPath) activeGeneratorPath = "algebra/linearEquations.js";
 
     const selectedSkill = (state.curriculum || []).find(s => s.generatorPath === activeGeneratorPath) || {
       title: "Math Practice",
@@ -87,7 +84,7 @@ export function renderDailyPractice(container, params = {}) {
       sessionInitialScores[activeGeneratorPath] = state.mastery[activeGeneratorPath] ? state.mastery[activeGeneratorPath].score : 0;
     }
 
-    // Determine Tier (SRS caps at Tier 1/2 for memory refresh)
+    // Determine Difficulty Tier (SRS capped at Tier 1/2)
     const currentScore = state.mastery[activeGeneratorPath]?.score || 0;
     let tier = isSRS ? 1 : (currentScore < 40 ? 1 : (currentScore < 70 ? 2 : 3));
 
@@ -95,12 +92,12 @@ export function renderDailyPractice(container, params = {}) {
       const genModule = await loadQuestionGenerator(activeGeneratorPath);
       return genModule.generateQuestion(tier);
     } catch (err) {
-      console.error(`Failed to load generator for path: ${activeGeneratorPath}`, err);
+      console.error(`Failed to load question generator for: [${activeGeneratorPath}]`, err);
       return null;
     }
   }
 
-  // 4. Question View Renderer
+  // 4. Main 3-Column Question Workspace Renderer
   async function loadQuestion() {
     if (!isSkillTree && questionIndex >= totalQuestions) {
       renderSummary();
@@ -120,8 +117,8 @@ export function renderDailyPractice(container, params = {}) {
     if (!currentQuestion) {
       container.innerHTML = `
         <div class="practice-col" style="justify-content: center; align-items: center; height: 100%; min-height: 300px;">
-          <h3>Unable to load question generator module.</h3>
-          <button id="btn-exit-err" class="secondary-btn" style="margin-top: 12px; padding: 10px 20px; cursor: pointer;">Return to Dashboard</button>
+          <h3>Unable to load question generator.</h3>
+          <button id="btn-exit-err" class="secondary-btn" style="margin-top: 12px;">Back to Dashboard</button>
         </div>
       `;
       container.querySelector("#btn-exit-err")?.addEventListener("click", () => {
@@ -137,12 +134,12 @@ export function renderDailyPractice(container, params = {}) {
     if (isSRS) modeBadge = `<span class="tag" style="background: #fef3c7; color: #b45309; font-weight: 700;">🔄 Memory Refresher</span>`;
 
     const progressText = isSkillTree ? `Question ${questionIndex + 1}` : `Q${questionIndex + 1} of ${totalQuestions}`;
-    const skipBtnHtml = allowSkip ? `<button id="btn-skip-question" class="secondary-btn" style="background: #fff7ed; color: #c2410c; border-color: #ffedd5; cursor: pointer;">Skip ⏭️</button>` : "";
+    const skipBtnHtml = allowSkip ? `<button id="btn-skip-question" class="secondary-btn" style="background: #fff7ed; color: #c2410c; border-color: #ffedd5;">Skip ⏭️</button>` : "";
     const exitBtnText = isSkillTree ? "💾 Save & Exit" : "← Exit";
 
     const stepsList = currentQuestion.steps || currentQuestion.hints || [];
 
-    // 3-COLUMN WORKSPACE LAYOUT
+    // 3-COLUMN WORKSPACE HTML DOM
     container.innerHTML = `
       <div class="practice-grid-3col">
         
@@ -151,11 +148,11 @@ export function renderDailyPractice(container, params = {}) {
           
           <!-- FIXED QUESTION HEADER -->
           <div class="protected-question-header">
-            <div class="question-header" style="display: flex; justify-content: space-between; align-items: center;">
-              <button id="btn-exit-dashboard" class="secondary-btn" style="cursor: pointer;">${exitBtnText}</button>
+            <div class="question-header">
+              <button id="btn-exit-dashboard" class="secondary-btn">${exitBtnText}</button>
               <div style="display: flex; gap: 8px; align-items: center;">
                 ${skipBtnHtml}
-                <span class="step-indicator" style="font-weight: 700; color: #64748b;">${progressText}</span>
+                <span class="step-indicator">${progressText}</span>
               </div>
             </div>
 
@@ -164,32 +161,30 @@ export function renderDailyPractice(container, params = {}) {
                 ${modeBadge}
                 <span class="tag">${currentQuestion.strand || 'Algebra'}</span>
               </div>
-              <h4 style="margin: 4px 0 0 0; color: var(--text-muted, #475569); font-size: 1.1rem;">${currentSkillTitle}</h4>
+              <h4 style="margin-top: 2px; color: var(--text-muted);">${currentSkillTitle}</h4>
             </div>
 
-            <div id="question-prompt" class="math-display" style="margin-top: 10px; font-size: 1.1rem; line-height: 1.5; color: #0f172a;">
+            <div id="question-prompt" class="math-display" style="margin-top: 8px;">
               ${currentQuestion.prompt}
             </div>
           </div>
 
           <!-- SCROLLABLE HINTS & SOLUTION AREA -->
-          <div class="scrollable-hints-area" style="padding-top: 10px;">
+          <div class="scrollable-hints-area">
             <div class="hints-wrapper">
               <div>
-                <button id="btn-ask-hint" class="hint-btn" style="cursor: pointer;">
-                  💡 Ask for Hint (<span id="hint-count">0</span>/${stepsList.length})
-                </button>
+                <button id="btn-ask-hint" class="hint-btn">💡 Ask for Hint (<span id="hint-count">0</span>/${stepsList.length})</button>
               </div>
-              <div id="hints-container" class="hints-list" style="margin-top: 8px;"></div>
+              <div id="hints-container" class="hints-list"></div>
             </div>
 
-            <div id="daily-feedback" class="feedback-area" style="margin-top: 12px; font-weight: 700; border-radius: 8px; min-height: 24px;"></div>
-            <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 12px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;"></div>
+            <div id="daily-feedback" class="feedback-area"></div>
+            <div id="full-solution-container" class="solution-box" style="display: none;"></div>
           </div>
 
         </div>
 
-        <!-- COLUMN 2: SCRATCHPAD WITH CANVAS TOOLBAR -->
+        <!-- COLUMN 2: SCRATCHPAD CANVAS WORKSPACE (Matches scratchpad.js DOM) -->
         <div class="practice-col">
           <div class="scratchpad-toolbar">
             <div class="tool-group">
@@ -215,9 +210,9 @@ export function renderDailyPractice(container, params = {}) {
           </div>
         </div>
 
-        <!-- COLUMN 3: VIRTUAL MATH KEYPAD -->
+        <!-- COLUMN 3: VIRTUAL KEYPAD (Matches keypad.js DOM) -->
         <div class="practice-col keypad-col">
-          <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 6px; flex-shrink: 0; color: #334155;">Enter Answer</div>
+          <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 6px; flex-shrink: 0;">Enter Answer</div>
           <div id="keypad-display" class="answer-display-box"></div>
           <div class="keypad-grid"></div>
         </div>
@@ -228,36 +223,26 @@ export function renderDailyPractice(container, params = {}) {
     // Render KaTeX Math Expressions
     renderKaTeX(container.querySelector("#question-prompt"));
 
-    // Initialize Canvas Scratchpad Component
+    // Initialize Scratchpad Canvas Component
     initScratchpad(container);
 
-    // Initialize Math Keypad Component
+    // Initialize Math Keypad Component with Submit & Skip Callbacks
     initKeypad(
       container,
       currentQuestion.keypad,
       (val) => { activeAnswer = val; },
-      (val) => { handleSubmission(val); }
+      (val) => { handleSubmission(val); },
+      () => { handleSkip(); }
     );
 
-    // Event Listener: Trigger next question after submission
+    // Event Listener: Next Question custom event dispatched by keypad.js
     container.addEventListener("triggerNextQuestion", () => {
       questionIndex++;
       loadQuestion();
     });
 
-    // Event Listener: Skip Question (Penalty-Free for Daily Quest / SRS)
-    container.querySelector("#btn-skip-question")?.addEventListener("click", () => {
-      const feedbackEl = container.querySelector("#daily-feedback");
-      if (feedbackEl) {
-        feedbackEl.style.background = "#f1f5f9";
-        feedbackEl.style.color = "#475569";
-        feedbackEl.innerText = "⏭️ Question skipped (no penalty). Loading next...";
-      }
-      setTimeout(() => {
-        questionIndex++;
-        loadQuestion();
-      }, 600);
-    });
+    // Event Listener: Skip button in top protected header
+    container.querySelector("#btn-skip-question")?.addEventListener("click", () => handleSkip());
 
     // Event Listener: Progressive Hints
     const hintBtn = container.querySelector("#btn-ask-hint");
@@ -273,7 +258,6 @@ export function renderDailyPractice(container, params = {}) {
 
       const hintCard = document.createElement("div");
       hintCard.className = "hint-card";
-      hintCard.style.cssText = "background: #fffbe3; border-left: 4px solid #f59e0b; padding: 10px 12px; margin-bottom: 8px; border-radius: 6px; color: #78350f; font-size: 0.9rem;";
       hintCard.innerHTML = `<strong>Step ${currentHintStep}:</strong> <div>${stepText}</div>`;
       hintsContainer.appendChild(hintCard);
       renderKaTeX(hintCard);
@@ -292,7 +276,22 @@ export function renderDailyPractice(container, params = {}) {
     });
   }
 
-  // 5. Answer Submission Evaluator
+  // 5. Penalty-Free Skip Handler
+  function handleSkip() {
+    const feedbackEl = container.querySelector("#daily-feedback");
+    if (feedbackEl) {
+      feedbackEl.style.padding = "10px 14px";
+      feedbackEl.style.background = "#f1f5f9";
+      feedbackEl.style.color = "#475569";
+      feedbackEl.innerText = "⏭️ Question skipped (no mastery score penalty). Loading next...";
+    }
+    setTimeout(() => {
+      questionIndex++;
+      loadQuestion();
+    }, 500);
+  }
+
+  // 6. Answer Submission & Solution Evaluator
   function handleSubmission(userAns) {
     if (!currentQuestion) return;
 
@@ -302,7 +301,7 @@ export function renderDailyPractice(container, params = {}) {
 
     const isCorrect = isAlgebraicallyEquivalent(userAns, currentQuestion.expectedAnswer);
 
-    // Record attempt to local state & queue for Google Sheets sync
+    // Record attempt to local state & queue for Google Sheets batch sync
     recordQuestionAttempt(activeGeneratorPath, isCorrect, currentHintStep, stepsList.length || 3);
 
     if (isCorrect) {
@@ -327,22 +326,22 @@ export function renderDailyPractice(container, params = {}) {
     if (stepsList.length > 0 && solutionBox) {
       solutionBox.style.display = "block";
       solutionBox.innerHTML = `
-        <h5 style="margin: 0 0 8px 0; font-size: 0.95rem; color: #1e293b;">📖 Full Solution Review:</h5>
-        <ol style="padding-left: 20px; margin: 0; color: #334155; font-size: 0.9rem;">
+        <h4 style="margin-bottom: 8px;">📖 Full Solution Review:</h4>
+        <ol style="padding-left: 20px; margin: 0;">
           ${stepsList.map(step => `<li style="margin-bottom: 6px;">${step}</li>`).join("")}
         </ol>
       `;
       renderKaTeX(solutionBox);
     }
 
-    // Skill Tree Victory Trigger: Auto-complete when hitting 90+ score
+    // Skill Tree Victory Condition: Auto-complete when hitting 90+ mastery score
     const currentScore = state.mastery[activeGeneratorPath]?.score || 0;
     if (isSkillTree && currentScore >= 90) {
       setTimeout(() => renderSummary(true), 1200);
     }
   }
 
-  // 6. Summary View & Score Synchronization
+  // 7. Session Summary & Final Synchronization
   function renderSummary(isMastered = false) {
     document.removeEventListener("visibilitychange", visibilityHandler);
     
@@ -360,7 +359,7 @@ export function renderDailyPractice(container, params = {}) {
       flushMasterySync();
     }
 
-    // Generate Skill Score Summary Breakdown
+    // Build Mastery Score Summary Breakdown
     const summaryRowsHtml = Object.keys(sessionInitialScores).map(path => {
       const skillObj = (state.curriculum || []).find(s => s.generatorPath === path) || { title: "Practiced Skill" };
       const startScore = sessionInitialScores[path] || 0;
@@ -380,21 +379,23 @@ export function renderDailyPractice(container, params = {}) {
       `;
     }).join("");
 
-    const headerTitle = isMastered ? "🏆 Skill Mastered (90+ Score)!" : "🎉 Practice Session Complete!";
+    const headerTitle = isMastered ? "🏆 Skill Mastered (90+ Score)!" : "🎉 Session Completed!";
 
     container.innerHTML = `
-      <div class="practice-col" style="justify-content: center; align-items: center; text-align: center; padding: 2.5rem; max-width: 520px; margin: 40px auto; background: #ffffff; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
-        <h2 style="font-size: 1.8rem; color: #0f172a; margin-bottom: 6px;">${headerTitle}</h2>
-        <p style="font-size: 0.95rem; color: var(--text-muted, #64748b); margin: 0 0 20px 0;">
-          Your updated mastery scores have been synchronized with Google Sheets.
+      <div class="practice-col" style="justify-content: center; align-items: center; text-align: center; padding: 3rem; max-width: 520px; margin: 40px auto;">
+        <h2 style="font-size: 2rem; color: #0f172a; margin-bottom: 6px;">${headerTitle}</h2>
+        <p style="font-size: 1.1rem; color: var(--text-muted); margin: 12px 0 24px 0;">
+          Final Score: <strong>${sessionScore} / ${totalQuestions === Infinity ? questionIndex : totalQuestions}</strong>
         </p>
 
-        <div style="width: 100%; margin-bottom: 20px; text-align: left;">
+        <div style="width: 100%; margin-bottom: 24px; text-align: left;">
           <div style="font-size: 0.85rem; font-weight: 700; color: #475569; margin-bottom: 8px;">Mastery Score Summary:</div>
           ${summaryRowsHtml || '<div style="color: #64748b; font-size: 0.88rem;">Session finished.</div>'}
         </div>
 
-        <button id="btn-return-dash" class="keypad-btn submit" style="width: 100%; padding: 14px; font-size: 1rem; border-radius: 12px; cursor: pointer;">Return to Dashboard</button>
+        <button id="btn-return-dash" class="keypad-btn submit" style="padding: 14px 28px; font-size: 1.1rem; cursor: pointer; width: 100%;">
+          Return to Dashboard
+        </button>
       </div>
     `;
 
