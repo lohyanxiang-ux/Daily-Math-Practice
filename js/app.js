@@ -1,5 +1,5 @@
 import { fetchUserData, loginWithPin } from "./services/backend.js";
-import { updateState, state } from "./state.js";
+import { updateState, resetState, state } from "./state.js";
 import { navigateTo } from "./router.js";
 
 // Google OAuth Callback (Teachers)
@@ -50,6 +50,27 @@ function handleLoginSuccess(res) {
   }
 }
 
+function handleLogout() {
+  resetState();
+
+  const authCard = document.getElementById("auth-card");
+  const appContainer = document.getElementById("app-container");
+  const pinInput = document.getElementById("student-pin-input");
+  const statusEl = document.getElementById("auth-status");
+  const viewport = document.getElementById("app-viewport");
+
+  if (appContainer) appContainer.style.display = "none";
+  if (authCard) authCard.style.display = "block";
+  if (pinInput) pinInput.value = "";
+  if (statusEl) statusEl.innerText = "";
+  if (viewport) viewport.innerHTML = "";
+
+  // Disable auto-select prompt for Google OAuth session
+  if (window.google && window.google.accounts && window.google.accounts.id) {
+    window.google.accounts.id.disableAutoSelect();
+  }
+}
+
 function renderTopNav(profile) {
   const nameEl = document.getElementById("nav-profile-name");
   const metaEl = document.getElementById("nav-profile-meta");
@@ -68,7 +89,7 @@ function renderTopNav(profile) {
   if (streakEl) streakEl.innerText = profile.streakCount || 0;
 }
 
-// UI EVENT LISTENERS FOR TAB TOGGLE & PIN KEYPAD
+// UI EVENT LISTENERS FOR TAB TOGGLE, KEYPAD & LOGOUT
 document.addEventListener("DOMContentLoaded", () => {
   const tabStudent = document.getElementById("tab-student-mode");
   const tabTeacher = document.getElementById("tab-teacher-mode");
@@ -78,6 +99,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const pinInput = document.getElementById("student-pin-input");
   const btnSubmitPin = document.getElementById("btn-submit-pin");
+  const btnLogout = document.getElementById("btn-logout");
+
+  // Logout Listener
+  if (btnLogout) {
+    btnLogout.addEventListener("click", handleLogout);
+  }
 
   // Tab Toggle Logic
   if (tabStudent && tabTeacher) {
