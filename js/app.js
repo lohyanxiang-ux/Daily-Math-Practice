@@ -8,8 +8,16 @@ let currentProfile = null;
 window.processGoogleSignIn = async (response) => {
   document.getElementById("auth-status").innerText = "Loading profile from Google Sheets...";
   
+  // Safely extract token string whether response is an object or string
+  const token = (typeof response === "string") ? response : (response && response.credential);
+
+  if (!token) {
+    document.getElementById("auth-status").innerText = "Error: Could not extract Google token.";
+    return;
+  }
+
   try {
-    const res = await fetchUserData(response.credential);
+    const res = await fetchUserData(token);
     if (res.status === "success") {
       currentProfile = res.profile;
       renderProfile(res.profile);
