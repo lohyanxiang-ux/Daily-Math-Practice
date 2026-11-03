@@ -264,3 +264,146 @@ canvas#scratchpad-canvas {
   font-style: italic;
   font-weight: 700;
 }
+
+/* FIX FOR COLUMN 1: PREVENT MATH OVERLAP & IMPROVE SCROLLING */
+.practice-col.col-scrollable {
+  overflow-y: auto !important;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* QUESTION PROMPT CONTAINER */
+.math-display {
+  font-size: 1.3rem;
+  font-weight: 600;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 12px;
+  border-left: 4px solid var(--primary);
+  min-height: auto !important; /* Allow container to resize dynamically */
+  height: auto !important;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.math-display .katex-display {
+  margin: 12px 0 !important; /* Ensure proper spacing around equations */
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* HINTS CONTAINER */
+.hints-wrapper {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hint-btn {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.hint-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ENHANCED SCRATCHPAD TOOLBAR */
+.scratchpad-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-btn {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tool-btn.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px #d1d5db;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.color-swatch.active {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+/* SCRATCHPAD CANVAS WRAPPER (EXPANDED VERTICAL SPACE) */
+.canvas-wrapper {
+  flex: 1;
+  background: #ffffff;
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  position: relative;
+  overflow-y: auto; /* Enable vertical scrolling */
+  touch-action: none; /* Block page gestures for Pencil precision */
+}
+
+canvas#scratchpad-canvas {
+  display: block;
+  width: 100%;
+  background: transparent;
+}
+
+/* NEXT QUESTION ACTION BUTTON */
+.btn-next-question {
+  width: 100%;
+  padding: 14px;
+  background: #10b981;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 0 #059669;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: transform 0.1s ease;
+}
+
+.btn-next-question:active {
+  transform: translateY(4px);
+  box-shadow: none;
+}
