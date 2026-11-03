@@ -3,7 +3,7 @@
  * @param {string} relativePath - e.g. "algebra/quadraticFactorisation.js"
  * @param {number} tier - Difficulty level (1 = Basic, 2 = Intermediate, 3 = Advanced)
  */
-export async function loadAndGenerateQuestion(relativePath, tier = 1) {
+export async function loadQuestionGenerator(relativePath, tier = 1) {
   try {
     if (!relativePath) throw new Error("No generator path provided.");
 
