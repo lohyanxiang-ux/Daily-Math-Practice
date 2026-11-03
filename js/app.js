@@ -1,5 +1,5 @@
 import { fetchUserData, loginWithPin } from "./services/backend.js";
-import { updateState } from "./state.js";
+import { updateState, state } from "./state.js";
 import { navigateTo } from "./router.js";
 
 // Google OAuth Callback (Teachers)
@@ -39,7 +39,7 @@ function handleLoginSuccess(res) {
     if (authCard) authCard.style.display = "none";
     if (appContainer) appContainer.style.display = "block";
 
-    // Route to Teacher Dashboard or Student Dashboard based on role
+    // Route based on role
     if (res.profile && (res.profile.role === "teacher" || res.profile.role === "admin")) {
       navigateTo("teacherDashboard");
     } else {
@@ -76,7 +76,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const teacherSec = document.getElementById("teacher-login-section");
   const statusEl = document.getElementById("auth-status");
 
-  const emailInput = document.getElementById("student-email-input");
   const pinInput = document.getElementById("student-pin-input");
   const btnSubmitPin = document.getElementById("btn-submit-pin");
 
@@ -130,13 +129,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // Submit PIN
   if (btnSubmitPin) {
     btnSubmitPin.addEventListener("click", async () => {
-      const email = emailInput.value.trim().toLowerCase();
       const pin = pinInput.value.trim();
 
-      if (!email) {
-        if (statusEl) statusEl.innerText = "Please enter your school email address.";
-        return;
-      }
       if (pin.length !== 4) {
         if (statusEl) statusEl.innerText = "Please enter your 4-digit PIN.";
         return;
@@ -145,7 +139,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (statusEl) statusEl.innerText = "Verifying PIN...";
 
       try {
-        const res = await loginWithPin(email, pin);
+        const res = await loginWithPin(pin);
         handleLoginSuccess(res);
       } catch (err) {
         if (statusEl) statusEl.innerText = "Sign in error: " + err.message;
