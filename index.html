@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <!-- Viewport locked for fixed iPad landscape app experience (Prevents Apple Pencil page zoom) -->
+  <!-- Viewport locked for fixed iPad landscape app experience -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Math Skill Practice</title>
   
@@ -32,7 +32,7 @@
 <body>
 
   <!-- AUTHENTICATION CARD -->
-  <div id="auth-card" class="card" style="max-width: 440px; margin: 40px auto; background: #ffffff; border-radius: 20px; padding: 28px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); font-family: system-ui, sans-serif;">
+  <div id="auth-card" class="card" style="position: relative; z-index: 10; max-width: 440px; margin: 40px auto; background: #ffffff; border-radius: 20px; padding: 28px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); font-family: system-ui, -apple-system, sans-serif;">
     <div style="text-align: center; margin-bottom: 20px;">
       <h2 style="margin: 0 0 6px 0; color: #1e293b; font-size: 1.5rem;">📐 Math Practice Portal</h2>
       <p style="margin: 0; color: #64748b; font-size: 0.88rem;">Select your sign-in mode to continue</p>
@@ -40,10 +40,10 @@
 
     <!-- ROLE TOGGLE TABS -->
     <div style="display: flex; background: #f1f5f9; padding: 4px; border-radius: 12px; margin-bottom: 20px;">
-      <button id="tab-student-mode" type="button" style="flex: 1; padding: 10px; border: none; border-radius: 10px; font-weight: 700; font-size: 0.9rem; cursor: pointer; background: #ffffff; color: #0f172a; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+      <button id="tab-student-mode" type="button" style="flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: 700; font-size: 0.9rem; cursor: pointer; background: #ffffff; color: #0f172a; box-shadow: 0 2px 4px rgba(0,0,0,0.05); touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
         🎓 Student Sign In
       </button>
-      <button id="tab-teacher-mode" type="button" style="flex: 1; padding: 10px; border: none; border-radius: 10px; font-weight: 700; font-size: 0.9rem; cursor: pointer; background: transparent; color: #64748b;">
+      <button id="tab-teacher-mode" type="button" style="flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: 700; font-size: 0.9rem; cursor: pointer; background: transparent; color: #64748b; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
         🏫 Teacher Sign In
       </button>
     </div>
@@ -56,7 +56,7 @@
       </div>
 
       <!-- ON-SCREEN NUMERIC KEYPAD FOR STUDENTS -->
-      <div id="pin-keypad" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px;">
+      <div id="pin-keypad" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; -webkit-user-select: none; user-select: none;">
         <button type="button" class="keypad-btn" data-val="1">1</button>
         <button type="button" class="keypad-btn" data-val="2">2</button>
         <button type="button" class="keypad-btn" data-val="3">3</button>
@@ -71,7 +71,7 @@
         <button type="button" class="keypad-btn" data-val="backspace" style="background: #e2e8f0;">⌫</button>
       </div>
 
-      <button id="btn-submit-pin" type="button" style="width: 100%; padding: 12px; background: #2563eb; color: #ffffff; border: none; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: background 0.2s;">
+      <button id="btn-submit-pin" type="button" style="width: 100%; padding: 14px; background: #2563eb; color: #ffffff; border: none; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
         Enter Practice App ➔
       </button>
     </div>
@@ -113,8 +113,7 @@
           <div class="stat"><span class="label">Streak</span> <b id="nav-profile-streak">0</b> 🔥</div>
         </div>
 
-        <!-- GLOBAL LOGOUT BUTTON -->
-        <button id="btn-logout" type="button" style="padding: 6px 14px; background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-radius: 8px; font-size: 0.82rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">
+        <button id="btn-logout" type="button" style="padding: 8px 14px; background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-radius: 8px; font-size: 0.82rem; font-weight: 700; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
           🚪 Logout
         </button>
       </div>
@@ -123,6 +122,29 @@
     <!-- DYNAMIC VIEWPORT -->
     <main id="app-viewport"></main>
   </div>
+
+  <!-- STYLES FOR TOUCH TARGETS & KEYPAD -->
+  <style>
+    .keypad-btn {
+      padding: 14px;
+      font-size: 1.3rem;
+      font-weight: 700;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      background: #ffffff;
+      color: #1e293b;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .keypad-btn:active {
+      transform: scale(0.96);
+      background: #f1f5f9;
+    }
+  </style>
 
   <!-- MAIN JAVASCRIPT MODULE ENTRY POINT -->
   <script type="module" src="js/app.js?v=1.1"></script>
