@@ -357,21 +357,31 @@ canvas#scratchpad-canvas {
   box-sizing: border-box;
 }
 
-/* MATHLIVE INTERACTIVE FIELD DISPLAY CONTAINER */
+/* INTERACTIVE MATHFIELD DISPLAY BOX */
 .answer-display-box {
-  min-height: 52px;
-  max-height: 60px;
+  min-height: 64px; /* Expanded height to fit stacked fractions */
   background: #ffffff;
   border: 2px solid var(--primary);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 10px;
+  padding: 6px 12px;
   margin-bottom: 8px;
   flex-shrink: 0;
   box-sizing: border-box;
   overflow-x: auto;
+  overflow-y: visible;
+}
+
+math-field {
+  width: 100%;
+  font-size: 1.35rem;
+  border: none;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 2px 0;
 }
 
 math-field {
