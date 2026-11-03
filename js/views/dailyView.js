@@ -26,12 +26,16 @@ export function renderDailyPractice(container, params = {}) {
     }
   }
 
-  // Background tab switch listener: flush if student hides/switches browser tab
+  // Flush sync if student switches or closes the browser tab mid-session
   const visibilityHandler = () => {
     if (document.visibilityState === "hidden") flushMasterySync();
   };
   document.addEventListener("visibilitychange", visibilityHandler);
 
+  /**
+   * Selects skill, checks student's earned Stars, calculates difficulty Tier,
+   * and dynamically loads the question generator.
+   */
   async function fetchNextQuestion() {
     if (!state.curriculum || state.curriculum.length === 0) return null;
 
@@ -58,7 +62,15 @@ export function renderDailyPractice(container, params = {}) {
 
     activeGeneratorPath = selectedSkill.generatorPath;
     currentSkillTitle = selectedSkill.title || "Math Practice";
-    return await loadAndGenerateQuestion(selectedSkill.generatorPath);
+
+    // LOOKUP STUDENT MASTERY STARS TO DETERMINE DIFFICULTY TIER
+    // 0 Stars -> Tier 1 (Basic) | 1 Star -> Tier 2 (Intermediate) | 2-3 Stars -> Tier 3 (Advanced)
+    const skillMastery = state.mastery[activeGeneratorPath] || { stars: 0 };
+    const currentStars = skillMastery.stars || 0;
+    const tier = currentStars < 1 ? 1 : (currentStars === 1 ? 2 : 3);
+
+    // Dynamic import passing target tier
+    return await loadAndGenerateQuestion(selectedSkill.generatorPath, tier);
   }
 
   async function loadQuestion() {
@@ -92,7 +104,7 @@ export function renderDailyPractice(container, params = {}) {
 
     container.innerHTML = `
       <div class="practice-grid-3col">
-        <!-- COLUMN 1: QUESTION, HINTS, & SOLUTION REVIEW -->
+        <!-- COLUMN 1: QUESTION, TIER BADGE, HINTS, & SOLUTION REVIEW -->
         <div class="practice-col col-scrollable">
           <div class="question-header">
             <button id="btn-exit-dashboard" class="secondary-btn">← Exit Session</button>
@@ -100,14 +112,20 @@ export function renderDailyPractice(container, params = {}) {
           </div>
 
           <div class="skill-header">
-            <span class="tag">${currentQuestion.strand || 'Algebra'}</span>
-            <h4 style="margin-top: 4px; color: var(--text-muted);">${currentSkillTitle}</h4>
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px;">
+              <span class="tag">${currentQuestion.strand || 'Algebra'}</span>
+              <span class="tag" style="background: #fef3c7; color: #92400e; font-weight: 700;">
+                ${currentQuestion.tierName || `Tier ${currentQuestion.tier || 1}`}
+              </span>
+            </div>
+            <h4 style="margin-top: 2px; color: var(--text-muted);">${currentSkillTitle}</h4>
           </div>
 
           <div id="question-prompt" class="math-display">
             ${currentQuestion.prompt}
           </div>
 
+          <!-- PROGRESSIVE HINTS SECTION -->
           <div class="hints-wrapper">
             <div>
               <button id="btn-ask-hint" class="hint-btn">💡 Ask for Hint (<span id="hint-count">0</span>/${currentQuestion.steps ? currentQuestion.steps.length : 0})</button>
@@ -207,7 +225,7 @@ export function renderDailyPractice(container, params = {}) {
 
     const isCorrect = isAlgebraicallyEquivalent(userAns, currentQuestion.expectedAnswer);
 
-    // RECORD ATTEMPT IN LOCAL STATE (Zero Network Latency)
+    // RECORD ATTEMPT IN LOCAL STATE & RE-CALCULATE STARS INSTANTLY
     recordQuestionAttempt(activeGeneratorPath, isCorrect, currentHintStep);
 
     if (isCorrect) {
