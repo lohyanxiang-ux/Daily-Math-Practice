@@ -17,6 +17,28 @@ export function renderDailyPractice(container, params = {}) {
   let activeGeneratorPath = params.generatorPath || "";
   let currentSkillTitle = "";
 
+  // Inject Exit Button into Top Navigation Bar
+  const topNav = document.querySelector(".top-nav");
+  let exitBtnContainer = document.getElementById("nav-exit-container");
+  if (!exitBtnContainer && topNav) {
+    exitBtnContainer = document.createElement("div");
+    exitBtnContainer.id = "nav-exit-container";
+    topNav.insertBefore(exitBtnContainer, topNav.firstChild);
+  }
+
+  if (exitBtnContainer) {
+    exitBtnContainer.innerHTML = `<button id="btn-nav-exit" class="secondary-btn">← Exit Practice</button>`;
+    document.getElementById("btn-nav-exit").addEventListener("click", () => {
+      flushMasterySync();
+      cleanupTopNav();
+      navigateTo("dashboard");
+    });
+  }
+
+  function cleanupTopNav() {
+    if (exitBtnContainer) exitBtnContainer.innerHTML = "";
+  }
+
   function flushMasterySync() {
     if (state.pendingMasteryUpdates.size > 0 && state.userToken) {
       const updates = Array.from(state.pendingMasteryUpdates).map(path => state.mastery[path]);
@@ -65,6 +87,7 @@ export function renderDailyPractice(container, params = {}) {
 
   async function loadQuestion() {
     if (questionIndex >= totalQuestions) {
+      cleanupTopNav();
       renderSummary();
       return;
     }
@@ -86,7 +109,7 @@ export function renderDailyPractice(container, params = {}) {
         </div>
       `;
       container.querySelector("#btn-exit-err").addEventListener("click", () => {
-        document.removeEventListener("visibilitychange", visibilityHandler);
+        cleanupTopNav();
         navigateTo("dashboard");
       });
       return;
@@ -94,40 +117,32 @@ export function renderDailyPractice(container, params = {}) {
 
     container.innerHTML = `
       <div class="practice-grid-3col">
-        <!-- COLUMN 1: PROTECTED QUESTION & SCROLLABLE HINTS/SOLUTIONS -->
+        <!-- COLUMN 1: COMPACT QUESTION & ALWAYS-VISIBLE HINTS -->
         <div class="practice-col col-scrollable">
           
-          <!-- FIXED QUESTION BOX (PROTECTED FROM BEING COVERED) -->
           <div class="protected-question-header">
-            <div class="question-header">
-              <button id="btn-exit-dashboard" class="secondary-btn">← Exit</button>
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <button id="btn-skip-question" class="secondary-btn" style="background: #fff7ed; color: #c2410c; border-color: #ffedd5;">Skip ⏭️</button>
-                <span class="step-indicator">Q${questionIndex + 1} of ${totalQuestions}</span>
-              </div>
-            </div>
-
-            <div class="skill-header" style="margin-top: 8px;">
-              <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px;">
-                <span class="tag">${currentQuestion.strand || 'Algebra'}</span>
+            <!-- COMPACT HEADER LINE WITH QUESTION COUNT -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <span class="tag">${currentQuestion.strand || 'Math'}</span>
                 <span class="tag" style="background: #fef3c7; color: #92400e; font-weight: 700;">
                   ${currentQuestion.tierName || (currentQuestion.tier === 1 ? 'Basic' : currentQuestion.tier === 2 ? 'Intermediate' : 'Advanced')}
                 </span>
               </div>
-              <h4 style="margin-top: 2px; color: var(--text-muted);">${currentSkillTitle}</h4>
+              <span class="step-indicator" style="font-weight: 700; color: var(--primary);">Q${questionIndex + 1} of ${totalQuestions}</span>
             </div>
 
-            <div id="question-prompt" class="math-display" style="margin-top: 8px;">
+            <h4 style="margin: 2px 0 6px 0; color: var(--text-muted); font-size: 1rem;">${currentSkillTitle}</h4>
+
+            <div id="question-prompt" class="math-display">
               ${currentQuestion.prompt}
             </div>
           </div>
 
-          <!-- SCROLLABLE HINTS & SOLUTION AREA -->
+          <!-- ALWAYS VISIBLE HINTS & SOLUTIONS AREA -->
           <div class="scrollable-hints-area">
             <div class="hints-wrapper">
-              <div>
-                <button id="btn-ask-hint" class="hint-btn">💡 Ask for Hint (<span id="hint-count">0</span>/${currentQuestion.steps ? currentQuestion.steps.length : 0})</button>
-              </div>
+              <button id="btn-ask-hint" class="hint-btn">💡 Ask for Hint (<span id="hint-count">0</span>/${currentQuestion.steps ? currentQuestion.steps.length : 0})</button>
               <div id="hints-container" class="hints-list"></div>
             </div>
 
@@ -137,7 +152,7 @@ export function renderDailyPractice(container, params = {}) {
 
         </div>
 
-        <!-- COLUMN 2: SCRATCHPAD WITH POINTER & ICONS -->
+        <!-- COLUMN 2: APPLE PENCIL SCRATCHPAD -->
         <div class="practice-col">
           <div class="scratchpad-toolbar">
             <div class="tool-group">
@@ -163,7 +178,7 @@ export function renderDailyPractice(container, params = {}) {
           </div>
         </div>
 
-        <!-- COLUMN 3: NO-SCROLL VIRTUAL KEYPAD -->
+        <!-- COLUMN 3: 3-COLUMN OR 4-COLUMN VIRTUAL KEYPAD WITH SKIP BUTTON -->
         <div class="practice-col keypad-col">
           <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 6px; flex-shrink: 0;">Enter Answer</div>
           <div id="keypad-display" class="answer-display-box"></div>
@@ -179,23 +194,16 @@ export function renderDailyPractice(container, params = {}) {
       container,
       currentQuestion.keypad,
       (val) => { activeAnswer = val; },
-      (val) => { handleSubmission(val); }
+      (val) => { handleSubmission(val); },
+      () => { handleSkip(); }
     );
 
-    // Event Listener: Trigger next question from Keypad Submit button replacement
     container.addEventListener("triggerNextQuestion", () => {
       questionIndex++;
       loadQuestion();
     });
 
-    // Event Listener: Skip Question
-    container.querySelector("#btn-skip-question").addEventListener("click", () => {
-      recordQuestionAttempt(activeGeneratorPath, false, 0); // Count skipped as attempt
-      questionIndex++;
-      loadQuestion();
-    });
-
-    // Event Listener: Hints
+    // Hint Request Handler
     const hintBtn = container.querySelector("#btn-ask-hint");
     const hintsContainer = container.querySelector("#hints-container");
     const hintCountEl = container.querySelector("#hint-count");
@@ -218,12 +226,12 @@ export function renderDailyPractice(container, params = {}) {
         hintBtn.innerText = "All Hints Revealed";
       }
     });
+  }
 
-    document.getElementById("btn-exit-dashboard").addEventListener("click", () => {
-      document.removeEventListener("visibilitychange", visibilityHandler);
-      flushMasterySync();
-      navigateTo("dashboard");
-    });
+  function handleSkip() {
+    recordQuestionAttempt(activeGeneratorPath, false, 0);
+    questionIndex++;
+    loadQuestion();
   }
 
   function handleSubmission(userAns) {
