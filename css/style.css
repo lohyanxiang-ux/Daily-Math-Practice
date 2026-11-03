@@ -496,3 +496,17 @@ math-field {
   transform: translateY(4px);
   box-shadow: none;
 }
+
+/* ENABLE DIRECT TAP & CARET PLACEMENT INSIDE MATHLIVE FIELDS */
+math-field,
+math-field::part(content) {
+  user-select: auto !important;
+  -webkit-user-select: auto !important;
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+}
+
+/* OPTIONAL: Hide the small default MathLive keyboard toggle icon at the bottom right */
+math-field::part(virtual-keyboard-toggle) {
+  display: none !important;
+}
