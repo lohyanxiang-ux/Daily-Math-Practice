@@ -1,1 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Math Skill Practice</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- KaTeX for math rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
 
+  <!-- AUTH CONTAINER -->
+  <div id="auth-card" class="card">
+    <h2>Student Sign-In</h2>
+    <p>Sign in with your school Google account to start practicing.</p>
+    <div id="g_id_onload"
+         data-client_id="YOUR_OAUTH_CLIENT_ID"
+         data-callback="handleCredentialResponse">
+    </div>
+    <div class="g_id_signin" data-type="standard"></div>
+    <div id="auth-status"></div>
+  </div>
+
+  <!-- MAIN DASHBOARD & PRACTICE INTERFACE -->
+  <div id="app-container" style="display: none;">
+    <!-- Profile Header Bar -->
+    <header class="profile-bar card">
+      <div>
+        <h2 id="profile-name">Student</h2>
+        <span id="profile-meta" class="badge">Class - Year (Stream)</span>
+      </div>
+      <div class="stats-group">
+        <div class="stat"><span class="label">XP</span> <b id="profile-xp">0</b></div>
+        <div class="stat"><span class="label">Streak</span> <b id="profile-streak">0</b> 🔥</div>
+      </div>
+    </header>
+
+    <!-- Test Question Generator Box -->
+    <main class="practice-box card">
+      <div class="skill-header">
+        <span id="skill-strand" class="tag">Strand</span>
+        <h3 id="skill-title">Skill Title</h3>
+      </div>
+      <div id="question-prompt" class="math-display">Loading question...</div>
+      
+      <div class="answer-section">
+        <input type="text" id="student-answer" placeholder="Type your answer...">
+        <button id="submit-btn">Submit Answer</button>
+        <button id="next-btn">Next Question</button>
+      </div>
+      <div id="feedback" class="feedback"></div>
+    </main>
+  </div>
+
+  <!-- Load main app entry point as ES6 Module -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
