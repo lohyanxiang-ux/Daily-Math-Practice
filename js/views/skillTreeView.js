@@ -1,6 +1,7 @@
 import { state } from "../state.js";
 import { navigateTo } from "../router.js";
 import { syncBatchMastery } from "../services/backend.js";
+import { getMasteryMetadata } from "../utils/masteryScoreEngine.js";
 
 export function renderSkillTree(container) {
   let activeStrand = "All";
@@ -81,21 +82,28 @@ export function renderSkillTree(container) {
 
               <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px;">
                 ${skills.map(skill => {
-                  const m = state.mastery[skill.generatorPath] || { stars: 0, accuracy: 0, totalAttempted: 0 };
-                  const isLocked = skill.prerequisites && state.mastery[skill.prerequisites]?.stars < 1;
+                  const m = state.mastery[skill.generatorPath] || { score: 0, accuracy: 0, totalAttempted: 0 };
                   
-                  // Render 3-Star icons
-                  const starsHtml = [1, 2, 3].map(i => 
-                    `<span style="font-size: 1.2rem; opacity: ${i <= m.stars ? '1' : '0.25'};">⭐</span>`
-                  ).join('');
+                  // Skill is locked if prerequisite exists and its score is below 40 (Basic threshold)
+                  const prereqScore = skill.prerequisites && state.mastery[skill.prerequisites] 
+                    ? (state.mastery[skill.prerequisites].score || 0) 
+                    : 100;
+                  const isLocked = skill.prerequisites ? prereqScore < 40 : false;
+                  
+                  // Retrieve color code, background style, and tier name for score
+                  const meta = getMasteryMetadata(m.score || 0);
 
                   return `
                     <div style="border: 1.5px solid var(--border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; background: ${isLocked ? '#f9fafb' : '#ffffff'};">
                       <div>
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <!-- CARD HEADER: STRAND TAG & COLOR-CODED MASTERY SCORE PILL -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                           <span class="tag" style="font-size: 0.75rem;">${skill.strand}</span>
-                          <div>${starsHtml}</div>
+                          <span style="${meta.badgeCss} padding: 3px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                            ${meta.tierName} • <strong>${meta.score}</strong>/100
+                          </span>
                         </div>
+
                         <h4 style="font-size: 1rem; color: var(--text-main); margin-bottom: 6px;">${skill.title}</h4>
                         <div style="font-size: 0.8rem; color: var(--text-muted);">
                           Accuracy: <strong>${m.accuracy}%</strong> (${m.totalAttempted} attempted)
@@ -107,7 +115,7 @@ export function renderSkillTree(container) {
                         background: ${isLocked ? '#e5e7eb' : 'var(--primary)'};
                         color: ${isLocked ? '#9ca3af' : '#ffffff'};
                       ">
-                        ${isLocked ? '🔒 Locked' : (m.stars > 0 ? 'Practice Again ➔' : 'Start Skill ➔')}
+                        ${isLocked ? '🔒 Locked' : ((m.score || 0) > 0 ? 'Practice Again ➔' : 'Start Skill ➔')}
                       </button>
                     </div>
                   `;
