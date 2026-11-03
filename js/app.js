@@ -6,20 +6,33 @@ const GOOGLE_CLIENT_ID = "874463235708-a7ep34l9ecn43mqvj4nkknn44js6halc.apps.goo
 let currentQuestion = null;
 let currentProfile = null;
 
-// Initialize Google Sign-In programmatically
-window.addEventListener("load", () => {
-  if (window.google) {
+// Reliable SDK loader (handles fast page loads & cached scripts)
+function initGoogleSignIn() {
+  const container = document.getElementById("google-btn-container");
+  
+  if (window.google && window.google.accounts && container) {
     google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID,
       callback: handleCredentialResponse
     });
 
-    google.accounts.id.renderButton(
-      document.getElementById("google-btn-container"),
-      { theme: "outline", size: "large" }
-    );
+    google.accounts.id.renderButton(container, {
+      theme: "outline",
+      size: "large",
+      width: 250
+    });
+  } else {
+    // Retry every 100ms until Google SDK is ready in memory
+    setTimeout(initGoogleSignIn, 100);
   }
-});
+}
+
+// Start initialization check immediately
+if (document.readyState === "complete" || document.readyState === "interactive") {
+  initGoogleSignIn();
+} else {
+  window.addEventListener("DOMContentLoaded", initGoogleSignIn);
+}
 
 async function handleCredentialResponse(response) {
   document.getElementById("auth-status").innerText = "Loading profile from Google Sheets...";
