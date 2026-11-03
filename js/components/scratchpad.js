@@ -3,20 +3,18 @@ export function initScratchpad(containerEl) {
   const canvas = containerEl.querySelector("#scratchpad-canvas");
   const ctx = canvas.getContext("2d");
 
-  // State controls
   let isDrawing = false;
   let lastX = 0;
   let lastY = 0;
-  let currentMode = "pen"; // 'pen' or 'eraser'
-  let currentColor = "#1e293b"; // Default dark navy/black
-  let currentSize = 2.5;
+  let currentMode = "pen"; // 'pen', 'eraser', or 'pointer'
+  let currentColor = "#1e293b";
+  const currentSize = 2.5;
 
   function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
     const rect = wrapper.getBoundingClientRect();
-    
-    // Set actual canvas resolution with extra vertical scrollable height (2000px)
     const totalHeight = 2000;
+
     canvas.width = rect.width * dpr;
     canvas.height = totalHeight * dpr;
     canvas.style.width = `${rect.width}px`;
@@ -40,6 +38,15 @@ export function initScratchpad(containerEl) {
   }
 
   function startDrawing(e) {
+    // DISABLE MULTI-TOUCH: Block if more than 1 touch point is detected
+    if (e.touches && e.touches.length > 1) {
+      isDrawing = false;
+      return;
+    }
+
+    // Pointer / Scroll mode does not draw
+    if (currentMode === "pointer") return;
+
     isDrawing = true;
     const coords = getCoordinates(e);
     lastX = coords.x;
@@ -47,9 +54,15 @@ export function initScratchpad(containerEl) {
   }
 
   function draw(e) {
-    if (!isDrawing) return;
-    e.preventDefault();
+    if (!isDrawing || currentMode === "pointer") return;
 
+    // Reject multi-touch gestures mid-stroke
+    if (e.touches && e.touches.length > 1) {
+      isDrawing = false;
+      return;
+    }
+
+    e.preventDefault();
     const coords = getCoordinates(e);
 
     ctx.beginPath();
@@ -58,7 +71,7 @@ export function initScratchpad(containerEl) {
 
     if (currentMode === "eraser") {
       ctx.globalCompositeOperation = "destination-out";
-      ctx.lineWidth = currentSize * 6; // Make eraser broader than pen
+      ctx.lineWidth = currentSize * 7;
     } else {
       ctx.globalCompositeOperation = "source-over";
       ctx.strokeStyle = currentColor;
@@ -66,7 +79,6 @@ export function initScratchpad(containerEl) {
     }
 
     ctx.stroke();
-
     lastX = coords.x;
     lastY = coords.y;
   }
@@ -75,20 +87,27 @@ export function initScratchpad(containerEl) {
     isDrawing = false;
   }
 
-  // Event Listeners for Drawing
+  // Drawing event listeners
   canvas.addEventListener("pointerdown", startDrawing);
   canvas.addEventListener("pointermove", draw);
   canvas.addEventListener("pointerup", stopDrawing);
   canvas.addEventListener("pointerleave", stopDrawing);
 
-  // --- TOOLBAR CONTROLS SETUP --- //
-
-  // Mode Toggles (Pen / Eraser)
+  // TOOLBAR ACTION HANDLERS
   containerEl.querySelectorAll("[data-tool]").forEach(btn => {
     btn.addEventListener("click", () => {
       containerEl.querySelectorAll("[data-tool]").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       currentMode = btn.getAttribute("data-tool");
+
+      // In Pointer mode, enable touch scrolling; otherwise block touch scrolling for drawing precision
+      if (currentMode === "pointer") {
+        wrapper.style.touchAction = "pan-y";
+        canvas.style.touchAction = "pan-y";
+      } else {
+        wrapper.style.touchAction = "none";
+        canvas.style.touchAction = "none";
+      }
     });
   });
 
@@ -98,23 +117,18 @@ export function initScratchpad(containerEl) {
       containerEl.querySelectorAll(".color-swatch").forEach(s => s.classList.remove("active"));
       swatch.classList.add("active");
       currentColor = swatch.getAttribute("data-color");
-      
-      // Auto-switch back to Pen mode when selecting a color
-      currentMode = "pen";
-      const penBtn = containerEl.querySelector("[data-tool='pen']");
-      const eraserBtn = containerEl.querySelector("[data-tool='eraser']");
-      if (penBtn) penBtn.classList.add("active");
-      if (eraserBtn) eraserBtn.classList.remove("active");
+
+      // Auto-switch to pen mode if color selected
+      if (currentMode === "pointer" || currentMode === "eraser") {
+        currentMode = "pen";
+        containerEl.querySelectorAll("[data-tool]").forEach(b => b.classList.remove("active"));
+        const penBtn = containerEl.querySelector("[data-tool='pen']");
+        if (penBtn) penBtn.classList.add("active");
+        wrapper.style.touchAction = "none";
+        canvas.style.touchAction = "none";
+      }
     });
   });
-
-  // Size Selector
-  const sizeSelect = containerEl.querySelector("#scratchpad-size");
-  if (sizeSelect) {
-    sizeSelect.addEventListener("change", (e) => {
-      currentSize = parseFloat(e.target.value);
-    });
-  }
 
   // Clear Canvas Button
   const clearBtn = containerEl.querySelector("#btn-clear-canvas");
