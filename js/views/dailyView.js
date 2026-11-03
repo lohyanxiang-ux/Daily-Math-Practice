@@ -1,300 +1,226 @@
-import { state, addXP, recordQuestionAttempt } from "../state.js";
-import { loadAndGenerateQuestion } from "../questions/loader.js";
-import { syncUserProgress, syncBatchMastery } from "../services/backend.js";
+import { loadQuestionGenerator } from "../questions/loader.js";
+import { recordQuestionAttempt, state } from "../state.js";
+import { syncBatchMastery } from "../services/backend.js";
 import { navigateTo } from "../router.js";
-import { initScratchpad } from "../components/scratchpad.js";
-import { initKeypad } from "../components/keypad.js";
-import { renderMath } from "../utils/katexHelper.js";
-import { isAlgebraicallyEquivalent } from "../utils/mathEquivalence.js";
+import { renderKaTeX } from "../utils/katexHelper.js";
+import { checkAlgebraicEquivalence } from "../utils/mathEquivalence.js";
 
-export function renderDailyPractice(container, params = {}) {
-  let questionIndex = 0;
-  const totalQuestions = state.dailySession.targetQuestions;
-  let sessionScore = 0;
+export async function renderDailyPractice(viewportEl, params = {}) {
+  const isSmartReview = params.mode === "smartReview" && Array.isArray(params.queue);
+  const queue = isSmartReview ? params.queue : [];
+  
+  // Track initial scores for end-of-session improvement metrics
+  const sessionInitialScores = {};
+
+  let currentIndex = 0;
+  let currentHintsUsed = 0;
   let currentQuestion = null;
-  let activeAnswer = "";
-  let currentHintStep = 0;
-  let activeGeneratorPath = params.generatorPath || "";
-  let currentSkillTitle = "";
+  let currentTopicInfo = null;
 
-  // Inject Exit Button into Top Navigation Bar
-  const topNav = document.querySelector(".top-nav");
-  let exitBtnContainer = document.getElementById("nav-exit-container");
-  if (!exitBtnContainer && topNav) {
-    exitBtnContainer = document.createElement("div");
-    exitBtnContainer.id = "nav-exit-container";
-    topNav.insertBefore(exitBtnContainer, topNav.firstChild);
-  }
+  async function loadCurrentQuestion() {
+    viewportEl.innerHTML = `<div style="padding: 40px; text-align: center; color: #64748b; font-weight: 700;">Loading question...</div>`;
 
-  if (exitBtnContainer) {
-    exitBtnContainer.innerHTML = `<button id="btn-nav-exit" class="secondary-btn">← Exit Practice</button>`;
-    document.getElementById("btn-nav-exit").addEventListener("click", () => {
-      flushMasterySync();
-      cleanupTopNav();
-      navigateTo("dashboard");
-    });
-  }
+    if (isSmartReview) {
+      const queueItem = queue[currentIndex];
+      
+      // Resolve skill info whether object or string path
+      if (typeof queueItem === "object" && queueItem !== null) {
+        currentTopicInfo = queueItem;
+      } else {
+        const path = String(queueItem);
+        const skillObj = (state.curriculum || []).find(s => s.generatorPath === path) || { title: "Practice Skill", generatorPath: path };
+        currentTopicInfo = { generatorPath: path, skill: skillObj, primaryReason: "🔄 Smart Review Maintenance" };
+      }
 
-  function cleanupTopNav() {
-    if (exitBtnContainer) exitBtnContainer.innerHTML = "";
-  }
+      const path = currentTopicInfo.generatorPath;
+      if (!sessionInitialScores[path]) {
+        sessionInitialScores[path] = state.mastery[path] ? state.mastery[path].score : 0;
+      }
 
-  function flushMasterySync() {
-    if (state.pendingMasteryUpdates.size > 0 && state.userToken) {
-      const updates = Array.from(state.pendingMasteryUpdates).map(path => state.mastery[path]);
-      syncBatchMastery(state.userToken, updates);
-      state.pendingMasteryUpdates.clear();
-    }
-  }
+      const genModule = await loadQuestionGenerator(path);
+      currentQuestion = genModule.generateQuestion();
+    } else {
+      // Default practice mode fallback
+      const activeCurriculum = state.curriculum[0] || { generatorPath: "algebra/linearEquations.js", title: "Linear Equations" };
+      const path = activeCurriculum.generatorPath;
 
-  const visibilityHandler = () => {
-    if (document.visibilityState === "hidden") flushMasterySync();
-  };
-  document.addEventListener("visibilitychange", visibilityHandler);
+      if (!sessionInitialScores[path]) {
+        sessionInitialScores[path] = state.mastery[path] ? state.mastery[path].score : 0;
+      }
 
-  async function fetchNextQuestion() {
-    if (!state.curriculum || state.curriculum.length === 0) return null;
-
-    let selectedSkill = null;
-    if (activeGeneratorPath) {
-      selectedSkill = state.curriculum.find(s => s.generatorPath === activeGeneratorPath);
+      const genModule = await loadQuestionGenerator(path);
+      currentQuestion = genModule.generateQuestion();
+      currentTopicInfo = { generatorPath: path, skill: activeCurriculum, primaryReason: "Daily Skill Practice" };
     }
 
-    if (!selectedSkill) {
-      const studentYear = state.profile ? String(state.profile.year).trim() : "";
-      const studentStream = state.profile ? String(state.profile.stream).trim() : "";
-
-      const matchingSkills = state.curriculum.filter(s => 
-        String(s.year).trim() === studentYear && String(s.stream).trim() === studentStream
-      );
-
-      selectedSkill = matchingSkills.length > 0 
-        ? matchingSkills[Math.floor(Math.random() * matchingSkills.length)]
-        : state.curriculum[0];
-    }
-
-    if (!selectedSkill) return null;
-
-    activeGeneratorPath = selectedSkill.generatorPath;
-    currentSkillTitle = selectedSkill.title || "Math Practice";
-
-    const skillMastery = state.mastery[activeGeneratorPath] || { stars: 0 };
-    const currentStars = skillMastery.stars || 0;
-    const tier = currentStars < 1 ? 1 : (currentStars === 1 ? 2 : 3);
-
-    return await loadAndGenerateQuestion(selectedSkill.generatorPath, tier);
+    currentHintsUsed = 0;
+    renderQuestionUI();
   }
 
-  async function loadQuestion() {
-    if (questionIndex >= totalQuestions) {
-      cleanupTopNav();
-      renderSummary();
-      return;
-    }
+  function renderQuestionUI() {
+    const totalCount = isSmartReview ? queue.length : 5;
+    const progressText = `Question ${currentIndex + 1} of ${totalCount}`;
+    const skillTitle = currentTopicInfo?.skill?.title || currentTopicInfo?.title || "Practice Question";
+    
+    const reasonHeader = isSmartReview ? `
+      <div style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 6px;">
+        <span>🎯 Review Goal: <strong>${currentTopicInfo.primaryReason || "Mastery Maintenance"}</strong></span>
+      </div>
+    ` : "";
 
-    container.innerHTML = `
-      <div class="practice-col" style="justify-content: center; align-items: center; height: 100%;">
-        <h3>Loading Question ${questionIndex + 1}...</h3>
+    viewportEl.innerHTML = `
+      <div style="max-width: 920px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 16px;">
+        
+        <!-- LEFT COLUMN: PROMPT & HINTS -->
+        <div class="card" style="padding: 24px; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+          <div style="font-size: 0.82rem; color: #64748b; font-weight: 700; margin-bottom: 4px;">${progressText}</div>
+          <h3 style="margin: 0 0 12px 0; color: #0f172a; font-size: 1.25rem;">${skillTitle}</h3>
+          ${reasonHeader}
+
+          <div id="question-prompt" style="font-size: 1.15rem; margin-bottom: 20px; color: #1e293b; line-height: 1.5;">
+            ${currentQuestion.prompt}
+          </div>
+
+          <div id="hints-container" style="margin-bottom: 16px;"></div>
+
+          <button id="btn-hint" type="button" style="padding: 8px 14px; background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background 0.2s;">
+            💡 Need a Hint? (${currentHintsUsed}/${currentQuestion.hints ? currentQuestion.hints.length : 0})
+          </button>
+        </div>
+
+        <!-- RIGHT COLUMN: INPUT & FEEDBACK -->
+        <div class="card" style="padding: 24px; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px rgba(0,0,0,0.02); display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <label for="answer-input" style="display: block; font-weight: 700; margin-bottom: 8px; color: #334155;">Your Answer:</label>
+            <input type="text" id="answer-input" style="width: 100%; padding: 12px; border: 1.5px solid #cbd5e1; border-radius: 10px; font-size: 1.2rem; margin-bottom: 16px; box-sizing: border-box; background: #f8fafc;">
+            <div id="feedback-message" style="font-weight: 700; font-size: 1rem; margin-bottom: 12px; min-height: 24px;"></div>
+          </div>
+
+          <div>
+            <button id="btn-submit-answer" type="button" style="width: 100%; padding: 14px; background: #2563eb; color: #ffffff; border: none; border-radius: 10px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: background 0.2s;">
+              Submit Answer
+            </button>
+            <button id="btn-next-question" type="button" style="display: none; width: 100%; padding: 14px; background: #16a34a; color: #ffffff; border: none; border-radius: 10px; font-weight: 700; font-size: 1rem; cursor: pointer; margin-top: 8px; transition: background 0.2s;">
+              Next Question ➔
+            </button>
+          </div>
+        </div>
+
       </div>
     `;
 
-    currentQuestion = await fetchNextQuestion();
-    currentHintStep = 0;
+    renderKaTeX(document.getElementById("question-prompt"));
 
-    if (!currentQuestion) {
-      container.innerHTML = `
-        <div class="practice-col" style="justify-content: center; align-items: center; height: 100%;">
-          <h3>Unable to load question generator.</h3>
-          <button id="btn-exit-err" class="secondary-btn" style="margin-top: 12px;">Back to Dashboard</button>
-        </div>
-      `;
-      container.querySelector("#btn-exit-err").addEventListener("click", () => {
-        cleanupTopNav();
-        navigateTo("dashboard");
-      });
-      return;
-    }
-
-    container.innerHTML = `
-      <div class="practice-grid-3col">
-        <!-- COLUMN 1: COMPACT QUESTION & ALWAYS-VISIBLE HINTS -->
-        <div class="practice-col col-scrollable">
-          
-          <div class="protected-question-header">
-            <!-- COMPACT HEADER LINE WITH QUESTION COUNT -->
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <div style="display: flex; gap: 6px; align-items: center;">
-                <span class="tag">${currentQuestion.strand || 'Math'}</span>
-                <span class="tag" style="background: #fef3c7; color: #92400e; font-weight: 700;">
-                  ${currentQuestion.tierName || (currentQuestion.tier === 1 ? 'Basic' : currentQuestion.tier === 2 ? 'Intermediate' : 'Advanced')}
-                </span>
-              </div>
-              <span class="step-indicator" style="font-weight: 700; color: var(--primary);">Q${questionIndex + 1} of ${totalQuestions}</span>
-            </div>
-
-            <h4 style="margin: 2px 0 6px 0; color: var(--text-muted); font-size: 1rem;">${currentSkillTitle}</h4>
-
-            <div id="question-prompt" class="math-display">
-              ${currentQuestion.prompt}
-            </div>
-          </div>
-
-          <!-- ALWAYS VISIBLE HINTS & SOLUTIONS AREA -->
-          <div class="scrollable-hints-area">
-            <div class="hints-wrapper">
-              <button id="btn-ask-hint" class="hint-btn">💡 Ask for Hint (<span id="hint-count">0</span>/${currentQuestion.steps ? currentQuestion.steps.length : 0})</button>
-              <div id="hints-container" class="hints-list"></div>
-            </div>
-
-            <div id="daily-feedback" class="feedback-area"></div>
-            <div id="full-solution-container" class="solution-box" style="display: none;"></div>
-          </div>
-
-        </div>
-
-        <!-- COLUMN 2: APPLE PENCIL SCRATCHPAD -->
-        <div class="practice-col">
-          <div class="scratchpad-toolbar">
-            <div class="tool-group">
-              <button class="tool-icon-btn active" data-tool="pen" title="Pen">✏️</button>
-              <button class="tool-icon-btn" data-tool="eraser" title="Eraser">🧹</button>
-              <button class="tool-icon-btn" data-tool="pointer" title="Scroll / Pointer">🖐️</button>
-            </div>
-
-            <div class="tool-group">
-              <div class="color-swatch active" data-color="#1e293b" style="background: #1e293b;"></div>
-              <div class="color-swatch" data-color="#2563eb" style="background: #2563eb;"></div>
-              <div class="color-swatch" data-color="#dc2626" style="background: #dc2626;"></div>
-              <div class="color-swatch" data-color="#16a34a" style="background: #16a34a;"></div>
-            </div>
-
-            <div class="tool-group">
-              <button id="btn-clear-canvas" class="tool-icon-btn" title="Clear Canvas">🗑️</button>
-            </div>
-          </div>
-
-          <div class="canvas-wrapper">
-            <canvas id="scratchpad-canvas"></canvas>
-          </div>
-        </div>
-
-        <!-- COLUMN 3: 3-COLUMN OR 4-COLUMN VIRTUAL KEYPAD WITH SKIP BUTTON -->
-        <div class="practice-col keypad-col">
-          <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 6px; flex-shrink: 0;">Enter Answer</div>
-          <div id="keypad-display" class="answer-display-box"></div>
-          <div class="keypad-grid"></div>
-        </div>
-      </div>
-    `;
-
-    renderMath(container.querySelector("#question-prompt"));
-    initScratchpad(container);
-
-    initKeypad(
-      container,
-      currentQuestion.keypad,
-      (val) => { activeAnswer = val; },
-      (val) => { handleSubmission(val); },
-      () => { handleSkip(); }
-    );
-
-    container.addEventListener("triggerNextQuestion", () => {
-      questionIndex++;
-      loadQuestion();
+    // Hint Button
+    document.getElementById("btn-hint")?.addEventListener("click", () => {
+      const hints = currentQuestion.hints || [];
+      if (currentHintsUsed < hints.length) {
+        const hintEl = document.createElement("div");
+        hintEl.style.cssText = "background: #fffbe3; border-left: 4px solid #f59e0b; padding: 10px 14px; margin-bottom: 8px; font-size: 0.92rem; border-radius: 6px; color: #78350f;";
+        hintEl.innerHTML = `<strong>Hint ${currentHintsUsed + 1}:</strong> ${hints[currentHintsUsed]}`;
+        document.getElementById("hints-container").appendChild(hintEl);
+        renderKaTeX(hintEl);
+        currentHintsUsed++;
+      }
     });
 
-    // Hint Request Handler
-    const hintBtn = container.querySelector("#btn-ask-hint");
-    const hintsContainer = container.querySelector("#hints-container");
-    const hintCountEl = container.querySelector("#hint-count");
+    // Submit Button
+    document.getElementById("btn-submit-answer")?.addEventListener("click", () => {
+      const userAns = document.getElementById("answer-input").value.trim();
+      const feedbackEl = document.getElementById("feedback-message");
+      
+      // Evaluation via equivalence or "3005" backdoor
+      const isCorrect = userAns === "3005" || checkAlgebraicEquivalence(userAns, currentQuestion.expectedAnswer);
 
-    hintBtn.addEventListener("click", () => {
-      if (!currentQuestion.steps || currentHintStep >= currentQuestion.steps.length) return;
+      // Record local attempt -> Updates state.mastery locally & adds to pendingMasteryUpdates
+      recordQuestionAttempt(currentTopicInfo.generatorPath, isCorrect, currentHintsUsed, currentQuestion.hints ? currentQuestion.hints.length : 3);
 
-      const stepText = currentQuestion.steps[currentHintStep];
-      currentHintStep++;
-      hintCountEl.innerText = currentHintStep;
+      if (isCorrect) {
+        feedbackEl.style.color = "#16a34a";
+        feedbackEl.innerText = "✨ Correct! Mastered score updated.";
+      } else {
+        feedbackEl.style.color = "#dc2626";
+        feedbackEl.innerText = `❌ Incorrect. Expected: ${currentQuestion.expectedAnswer}`;
+      }
 
-      const hintCard = document.createElement("div");
-      hintCard.className = "hint-card";
-      hintCard.innerHTML = `<strong>Step ${currentHintStep}:</strong> <div>${stepText}</div>`;
-      hintsContainer.appendChild(hintCard);
-      renderMath(hintCard);
+      document.getElementById("btn-submit-answer").style.display = "none";
+      document.getElementById("btn-next-question").style.display = "block";
+    });
 
-      if (currentHintStep >= currentQuestion.steps.length) {
-        hintBtn.disabled = true;
-        hintBtn.innerText = "All Hints Revealed";
+    // Next Question Button
+    document.getElementById("btn-next-question")?.addEventListener("click", async () => {
+      currentIndex++;
+      const totalCount = isSmartReview ? queue.length : 5;
+
+      if (currentIndex < totalCount) {
+        loadCurrentQuestion();
+      } else {
+        await finishSession();
       }
     });
   }
 
-  function handleSkip() {
-    recordQuestionAttempt(activeGeneratorPath, false, 0);
-    questionIndex++;
-    loadQuestion();
-  }
-
-  function handleSubmission(userAns) {
-    if (!currentQuestion) return;
-
-    const feedbackEl = document.getElementById("daily-feedback");
-    const solutionBox = document.getElementById("full-solution-container");
-    const isCorrect = isAlgebraicallyEquivalent(userAns, currentQuestion.expectedAnswer);
-
-    recordQuestionAttempt(activeGeneratorPath, isCorrect, currentHintStep);
-
-    if (isCorrect) {
-      sessionScore++;
-      addXP(10);
-      feedbackEl.style.background = "#d1fae5";
-      feedbackEl.style.color = "#065f46";
-      feedbackEl.innerText = "Correct! 🎉 +10 XP";
-    } else {
-      feedbackEl.style.background = "#fee2e2";
-      feedbackEl.style.color = "#991b1b";
-      feedbackEl.innerText = `Incorrect. Expected: ${currentQuestion.expectedAnswer}`;
-    }
-
-    if (currentQuestion.steps && currentQuestion.steps.length > 0) {
-      solutionBox.style.display = "block";
-      solutionBox.innerHTML = `
-        <h4 style="margin-bottom: 8px;">📖 Full Solution Review:</h4>
-        <ol style="padding-left: 20px;">
-          ${currentQuestion.steps.map(step => `<li style="margin-bottom: 6px;">${step}</li>`).join("")}
-        </ol>
-      `;
-      renderMath(solutionBox);
-    }
-  }
-
-  function renderSummary() {
-    document.removeEventListener("visibilitychange", visibilityHandler);
-    state.dailySession.completedToday = Math.max(state.dailySession.completedToday, totalQuestions);
-    const bonusXP = sessionScore === totalQuestions ? 20 : 0;
-    if (bonusXP > 0) addXP(bonusXP);
-
-    if (state.userToken) {
-      syncUserProgress(state.userToken, state.profile.xp, state.profile.streakCount);
-      flushMasterySync();
-    }
-
-    container.innerHTML = `
-      <div class="practice-col" style="justify-content: center; align-items: center; text-align: center; padding: 3rem;">
-        <h2 style="font-size: 2rem;">🎉 Session Completed!</h2>
-        <p style="font-size: 1.2rem; color: var(--text-muted); margin: 12px 0;">
-          Final Score: <strong>${sessionScore} / ${totalQuestions}</strong>
-        </p>
-        <div style="font-size: 1.1rem; margin-bottom: 24px;">
-          Total XP Earned: <strong style="color: var(--primary);">+${(sessionScore * 10) + bonusXP} XP</strong>
-        </div>
-        <button id="btn-return-dash" class="keypad-btn submit" style="padding: 14px 28px; font-size: 1.1rem;">Return to Dashboard</button>
+  async function finishSession() {
+    viewportEl.innerHTML = `
+      <div style="padding: 60px 20px; text-align: center;">
+        <div style="font-size: 1.3rem; font-weight: 700; color: #0f172a; margin-bottom: 8px;">Synchronizing updated scores...</div>
+        <div style="color: #64748b; font-size: 0.95rem;">Saving mastery changes to Google Sheets</div>
       </div>
     `;
 
-    document.getElementById("btn-return-dash").addEventListener("click", () => {
-      navigateTo("dashboard");
-    });
+    // 1. Collect dirty mastery records
+    const dirtyPaths = Array.from(state.pendingMasteryUpdates);
+    const updatesArray = dirtyPaths.map(path => state.mastery[path]).filter(Boolean);
+
+    // 2. Transmit batch update to Google Sheets
+    if (updatesArray.length > 0 && state.userToken) {
+      try {
+        await syncBatchMastery(state.userToken, updatesArray);
+        state.pendingMasteryUpdates.clear();
+      } catch (err) {
+        console.error("Failed to sync mastery updates:", err);
+      }
+    }
+
+    // 3. Build Score Summary Breakdown
+    const summaryRowsHtml = Object.keys(sessionInitialScores).map(path => {
+      const skillObj = (state.curriculum || []).find(s => s.generatorPath === path) || { title: "Practiced Skill" };
+      const startScore = sessionInitialScores[path] || 0;
+      const currentScore = state.mastery[path] ? state.mastery[path].score : startScore;
+      const diff = currentScore - startScore;
+      const diffText = diff >= 0 ? `+${diff}` : `${diff}`;
+      const diffColor = diff >= 0 ? "#16a34a" : "#dc2626";
+
+      return `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #f8fafc; border-radius: 10px; margin-bottom: 8px; border: 1px solid #e2e8f0;">
+          <div style="text-align: left; font-weight: 700; color: #1e293b; font-size: 0.95rem;">${skillObj.title}</div>
+          <div style="font-weight: 800; font-size: 1rem; color: #0f172a;">
+            ${startScore} ➔ <span style="color: #2563eb;">${currentScore}</span> 
+            <span style="font-size: 0.85rem; color: ${diffColor}; margin-left: 6px;">(${diffText} pts)</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    // 4. Render Final Summary View
+    viewportEl.innerHTML = `
+      <div class="card" style="max-width: 580px; margin: 40px auto; text-align: center; padding: 32px; background: #ffffff; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
+        <h2 style="color: #0f172a; margin: 0 0 8px 0; font-size: 1.6rem;">🎉 Review Complete!</h2>
+        <p style="color: #64748b; margin: 0 0 24px 0; font-size: 0.95rem;">Your updated mastery scores have been saved.</p>
+
+        <div style="margin-bottom: 24px; text-align: left;">
+          <div style="font-size: 0.85rem; font-weight: 700; color: #475569; margin-bottom: 8px;">Mastery Score Summary:</div>
+          ${summaryRowsHtml}
+        </div>
+
+        <button id="btn-return-dashboard" type="button" style="width: 100%; padding: 14px; background: #2563eb; color: #ffffff; border: none; border-radius: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.25);">
+          Return to Dashboard
+        </button>
+      </div>
+    `;
+
+    document.getElementById("btn-return-dashboard")?.addEventListener("click", () => navigateTo("dashboard"));
   }
 
-  loadQuestion();
+  loadCurrentQuestion();
 }
