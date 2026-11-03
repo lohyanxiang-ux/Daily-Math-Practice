@@ -3,6 +3,8 @@ import { registry } from "../questions/registry.js";
 import { navigateTo } from "../router.js";
 import { initScratchpad } from "../components/scratchpad.js";
 import { initKeypad } from "../components/keypad.js";
+import { renderMath } from "../utils/katexHelper.js";
+import { isAlgebraicallyEquivalent } from "../utils/mathEquivalence.js";
 
 export function renderDailyPractice(container) {
   let questionIndex = 0;
@@ -10,11 +12,11 @@ export function renderDailyPractice(container) {
   let sessionScore = 0;
   let currentQuestion = null;
   let activeAnswer = "";
-  let keypadInstance = null;
+  let currentHintStep = 0;
 
   const activeSkillId = (state.curriculum && state.curriculum.length > 0)
     ? state.curriculum[0].skillId
-    : "sec1_g1_alg_linear";
+    : "sec2_g3_alg_quad";
 
   function loadQuestion() {
     if (questionIndex >= totalQuestions) {
@@ -23,11 +25,12 @@ export function renderDailyPractice(container) {
     }
 
     currentQuestion = registry.generateQuestion(activeSkillId, "basic");
+    currentHintStep = 0;
 
     container.innerHTML = `
       <div class="practice-grid-3col">
-        <!-- COLUMN 1: QUESTION & STATUS -->
-        <div class="practice-col">
+        <!-- COLUMN 1: QUESTION, HINTS, & SOLUTION REVIEW -->
+        <div class="practice-col col-scrollable">
           <div class="question-header">
             <button id="btn-exit-dashboard" class="secondary-btn">← Dashboard</button>
             <span class="step-indicator">Q${questionIndex + 1} of ${totalQuestions}</span>
@@ -35,14 +38,24 @@ export function renderDailyPractice(container) {
 
           <div class="skill-header">
             <span class="tag">${currentQuestion ? currentQuestion.strand : 'Algebra'}</span>
-            <h4 style="margin-top: 6px; color: var(--text-muted);">${activeSkillId}</h4>
+            <h4 style="margin-top: 6px; color: var(--text-muted);">${currentQuestion.skillTitle || activeSkillId}</h4>
           </div>
 
           <div id="question-prompt" class="math-display">
-            ${currentQuestion ? currentQuestion.prompt : 'Loading prompt...'}
+            ${currentQuestion ? currentQuestion.prompt : 'Loading question...'}
           </div>
 
+          <!-- HINTS SECTION -->
+          <div class="hints-wrapper">
+            <div class="hints-header">
+              <button id="btn-ask-hint" class="hint-btn">💡 Ask for Hint (<span id="hint-count">0</span>/${currentQuestion.steps ? currentQuestion.steps.length : 0})</button>
+            </div>
+            <div id="hints-container" class="hints-list"></div>
+          </div>
+
+          <!-- FEEDBACK & FULL SOLUTION REVIEW -->
           <div id="daily-feedback" class="feedback-area"></div>
+          <div id="full-solution-container" class="solution-box" style="display: none;"></div>
         </div>
 
         <!-- COLUMN 2: APPLE PENCIL SCRATCHPAD -->
@@ -56,63 +69,68 @@ export function renderDailyPractice(container) {
           </div>
         </div>
 
-        <!-- COLUMN 3: CUSTOM ON-SCREEN KEYPAD -->
+        <!-- COLUMN 3: DYNAMIC FLEXIBLE KEYPAD -->
         <div class="practice-col">
           <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 8px;">Enter Answer</div>
-          
           <div id="keypad-display" class="answer-display-box"></div>
-
-          <div class="keypad-grid">
-            <button class="keypad-btn" data-val="7">7</button>
-            <button class="keypad-btn" data-val="8">8</button>
-            <button class="keypad-btn" data-val="9">9</button>
-            <button class="keypad-btn action" data-action="backspace">⌫</button>
-
-            <button class="keypad-btn" data-val="4">4</button>
-            <button class="keypad-btn" data-val="5">5</button>
-            <button class="keypad-btn" data-val="6">6</button>
-            <button class="keypad-btn operator" data-val="+">+</button>
-
-            <button class="keypad-btn" data-val="1">1</button>
-            <button class="keypad-btn" data-val="2">2</button>
-            <button class="keypad-btn" data-val="3">3</button>
-            <button class="keypad-btn operator" data-val="-">-</button>
-
-            <button class="keypad-btn" data-val="0">0</button>
-            <button class="keypad-btn operator" data-val=".">.</button>
-            <button class="keypad-btn operator" data-val="x">x</button>
-            <button class="keypad-btn operator" data-val="/">/</button>
-
-            <button class="keypad-btn action" data-action="clear">C</button>
-            <button class="keypad-btn operator" data-val="-">(-)</button>
-            <button class="keypad-btn submit" data-action="submit">Submit ➔</button>
-          </div>
+          <div class="keypad-grid"></div>
         </div>
       </div>
     `;
 
-    // Initialize Canvas Scratchpad & Virtual Keypad components
-    initScratchpad(container);
+    // Render KaTeX Math in question prompt
+    renderMath(container.querySelector("#question-prompt"));
 
-    keypadInstance = initKeypad(
+    // Initialize Canvas Scratchpad & Keypad
+    initScratchpad(container);
+    initKeypad(
       container,
+      currentQuestion.keypad,
       (val) => { activeAnswer = val; },
       (val) => { handleSubmission(val); }
     );
+
+    // Event Listener for Progressive Hints
+    const hintBtn = container.querySelector("#btn-ask-hint");
+    const hintsContainer = container.querySelector("#hints-container");
+    const hintCountEl = container.querySelector("#hint-count");
+
+    hintBtn.addEventListener("click", () => {
+      if (!currentQuestion.steps || currentHintStep >= currentQuestion.steps.length) return;
+
+      const stepText = currentQuestion.steps[currentHintStep];
+      currentHintStep++;
+      hintCountEl.innerText = currentHintStep;
+
+      const hintCard = document.createElement("div");
+      hintCard.className = "hint-card";
+      hintCard.innerHTML = `<strong>Step ${currentHintStep}:</strong> <div>${stepText}</div>`;
+      hintsContainer.appendChild(hintCard);
+
+      // Render KaTeX for newly revealed hint
+      renderMath(hintCard);
+
+      if (currentHintStep >= currentQuestion.steps.length) {
+        hintBtn.disabled = true;
+        hintBtn.innerText = "All Hints Revealed";
+      }
+    });
 
     document.getElementById("btn-exit-dashboard").addEventListener("click", () => {
       navigateTo("dashboard");
     });
   }
 
-  function handleSubmission(ans) {
+  function handleSubmission(userAns) {
     if (!currentQuestion) return;
 
-    const userAns = ans.replace(/\s+/g, '').toLowerCase();
-    const expected = String(currentQuestion.expectedAnswer).replace(/\s+/g, '').toLowerCase();
     const feedbackEl = document.getElementById("daily-feedback");
+    const solutionBox = document.getElementById("full-solution-container");
+    
+    // Perform Algebraic Equivalence Check
+    const isCorrect = isAlgebraicallyEquivalent(userAns, currentQuestion.expectedAnswer);
 
-    if (userAns === expected) {
+    if (isCorrect) {
       sessionScore++;
       addXP(10);
       feedbackEl.style.background = "#d1fae5";
@@ -124,10 +142,22 @@ export function renderDailyPractice(container) {
       feedbackEl.innerText = `Incorrect. Expected: ${currentQuestion.expectedAnswer}`;
     }
 
+    // Display Full Step-by-Step Solution Review
+    if (currentQuestion.steps && currentQuestion.steps.length > 0) {
+      solutionBox.style.display = "block";
+      solutionBox.innerHTML = `
+        <h4 style="margin-bottom: 8px;">📖 Full Solution Review:</h4>
+        <ol style="padding-left: 20px;">
+          ${currentQuestion.steps.map(step => `<li style="margin-bottom: 6px;">${step}</li>`).join("")}
+        </ol>
+      `;
+      renderMath(solutionBox);
+    }
+
     setTimeout(() => {
       questionIndex++;
       loadQuestion();
-    }, 1500);
+    }, 4000); // 4-second review pause before loading next question
   }
 
   function renderSummary() {
