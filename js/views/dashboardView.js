@@ -1,68 +1,35 @@
-import { state } from "../state.js";
 import { navigateTo } from "../router.js";
+import { state } from "../state.js";
 
 export function renderDashboard(container) {
-  const dailyDone = state.dailySession.completedToday;
-  const dailyTarget = state.dailySession.targetQuestions;
-  const isDailyComplete = dailyDone >= dailyTarget;
-
   container.innerHTML = `
     <div class="dashboard-grid">
       <!-- DAILY QUEST CARD -->
-      <div class="card mode-card ${isDailyComplete ? 'completed' : 'active'}" id="btn-mode-daily">
-        <div class="mode-header">
-          <span class="mode-icon">📅</span>
-          <div>
-            <h3>Daily Self-Practice</h3>
-            <p>${isDailyComplete ? 'Completed for today!' : '5 quick questions to keep your streak alive.'}</p>
-          </div>
+      <div id="card-daily" class="mode-card active">
+        <div>
+          <span class="tag">Recommended</span>
+          <h2 style="margin-top: 10px;">⚡ Daily Quest</h2>
+          <p style="color: var(--text-muted); margin-top: 6px;">
+            Target: 5 Questions | Complete to maintain your daily streak!
+          </p>
         </div>
-        <div class="progress-bar-container">
-          <div class="progress-bar" style="width: ${Math.min(100, (dailyDone / dailyTarget) * 100)}%;"></div>
-        </div>
-        <div class="mode-footer">
-          <span>${dailyDone} / ${dailyTarget} Done</span>
-          <button class="action-btn">${isDailyComplete ? 'Practice Again' : 'Start Daily Quest'}</button>
-        </div>
+        <button class="btn-next-question" style="margin-top: 20px;">Start Daily Quest ➔</button>
       </div>
 
-      <!-- PLACEHOLDER MODES FOR FUTURE EXPANSION -->
-      <div class="card mode-card disabled">
-        <div class="mode-header">
-          <span class="mode-icon">📋</span>
-          <div>
-            <h3>Teacher Assignments</h3>
-            <p>Homework assigned by your math teacher.</p>
-          </div>
+      <!-- SKILL TREE CARD -->
+      <div id="card-skill-tree" class="mode-card active">
+        <div>
+          <span class="tag" style="background: #e0f2fe; color: #0369a1;">Self-Paced</span>
+          <h2 style="margin-top: 10px;">🗺️ Skill Tree</h2>
+          <p style="color: var(--text-muted); margin-top: 6px;">
+            Browse all math skills, earn 3-Star mastery ratings, and target specific topics.
+          </p>
         </div>
-        <span class="badge">Coming Soon</span>
-      </div>
-
-      <div class="card mode-card disabled">
-        <div class="mode-header">
-          <span class="mode-icon">🎯</span>
-          <div>
-            <h3>Skill Tree Practice</h3>
-            <p>Pick specific topics to master at your own pace.</p>
-          </div>
-        </div>
-        <span class="badge">Coming Soon</span>
-      </div>
-
-      <div class="card mode-card disabled">
-        <div class="mode-header">
-          <span class="mode-icon">⚡</span>
-          <div>
-            <h3>Speed Blitz</h3>
-            <p>Solve as many questions as you can in 60 seconds!</p>
-          </div>
-        </div>
-        <span class="badge">Coming Soon</span>
+        <button class="btn-next-question" style="margin-top: 20px; background: #0284c7;">Explore Skills ➔</button>
       </div>
     </div>
   `;
 
-  document.getElementById("btn-mode-daily").addEventListener("click", () => {
-    navigateTo("daily");
-  });
+  container.querySelector("#card-daily").addEventListener("click", () => navigateTo("daily"));
+  container.querySelector("#card-skill-tree").addEventListener("click", () => navigateTo("skillTree"));
 }
