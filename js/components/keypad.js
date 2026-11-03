@@ -3,21 +3,21 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
   const gridEl = container.querySelector(".keypad-grid");
   let isSubmitted = false;
 
-  // Mount MathLive interactive field
-  displayContainer.innerHTML = `<math-field id="math-input" style="display: block; width: 100%;"></math-field>`;
+  // Mount MathLive interactive input field
+  displayContainer.innerHTML = `<math-field id="math-input" style="width: 100%; display: block;"></math-field>`;
   const mathField = displayContainer.querySelector("#math-input");
 
-  // Disable iPad soft keyboard so only our custom virtual keypad is active
   if (mathField) {
+    // Disable iPad system soft keyboard so custom keypad is used
     mathField.mathVirtualKeyboardPolicy = "manual";
 
-    // Broadcast input changes to parent
+    // Broadcast change to parent
     mathField.addEventListener("input", () => {
-      const latexVal = mathField.value || "";
-      onInputChange(latexVal);
+      onInputChange(mathField.value || "");
     });
   }
 
+  // Base Keypad Layout
   const defaultKeys = [
     "x", "y", "(", ")",
     "7", "8", "9", "/",
@@ -27,20 +27,24 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
     "←", "→", "Clear", "Submit"
   ];
 
-  const keysToRender = layoutKeys && layoutKeys.length > 0 ? [...layoutKeys] : defaultKeys;
+  let keysToRender = layoutKeys && layoutKeys.length > 0 ? [...layoutKeys] : defaultKeys;
 
+  // Ensure navigation keys (←, →) are included
   if (!keysToRender.includes("←")) {
     const clearIdx = keysToRender.indexOf("Clear");
     if (clearIdx !== -1) {
       keysToRender.splice(clearIdx, 0, "←", "→");
+    } else {
+      keysToRender.push("←", "→");
     }
   }
 
+  // Ensure Submit button is included
   if (!keysToRender.includes("Submit")) {
     keysToRender.push("Submit");
   }
 
-  // Render Keypad Buttons
+  // Render Grid Buttons
   gridEl.innerHTML = keysToRender.map(key => {
     if (key === "Submit") {
       return `<button id="btn-keypad-submit" class="keypad-btn submit">${isSubmitted ? 'Next Question ➔' : 'Submit'}</button>`;
@@ -54,12 +58,10 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
     return `<button class="keypad-btn" data-key="${key}">${key}</button>`;
   }).join("");
 
-  // Attach Event Listeners
+  // Attach Input Handlers
   gridEl.querySelectorAll(".keypad-btn").forEach(btn => {
-    // PREVENT FOCUS LOSS: Prevent button click from stealing focus away from MathLive field
-    btn.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-    });
+    // Prevent button tap from stealing focus away from Mathfield
+    btn.addEventListener("pointerdown", (e) => e.preventDefault());
 
     btn.addEventListener("click", (e) => {
       e.preventDefault();
@@ -68,7 +70,7 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
       // Handle Submit / Next Question Flow
       if (btn.id === "btn-keypad-submit") {
         if (!isSubmitted) {
-          const val = mathField.value || "";
+          const val = mathField ? (mathField.value || "") : "";
           if (!val.trim()) return;
           isSubmitted = true;
           onSubmit(val);
@@ -80,27 +82,21 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
         return;
       }
 
-      if (isSubmitted) return;
+      if (isSubmitted || !mathField) return;
 
-      // Ensure focus remains inside MathLive field for cursor positioning
+      // Maintain active caret focus inside Mathfield
       mathField.focus();
 
-      // MATHLIVE TEMPLATE INJECTION HANDLERS
+      // MATHLIVE TEMPLATE INJECTION WITH FORMAT LATEX
       if (key === "/") {
         // Inserts stacked fraction with active numerator placeholder
-        if (typeof mathField.insert === "function") {
-          mathField.insert("\\frac{#?}{#?}");
-        }
+        mathField.insert("\\frac{#?}{#?}", { format: "latex", selectionMode: "placeholder" });
       } else if (key === "^") {
-        // Inserts superscript exponent box with active placeholder
-        if (typeof mathField.insert === "function") {
-          mathField.insert("^{#?}");
-        }
+        // Inserts superscript exponent slot with placeholder
+        mathField.insert("^{#?}", { format: "latex", selectionMode: "placeholder" });
       } else if (key === "√") {
-        // Inserts square root with radical top bar over placeholder
-        if (typeof mathField.insert === "function") {
-          mathField.insert("\\sqrt{#?}");
-        }
+        // Inserts square root with top bar covering slot
+        mathField.insert("\\sqrt{#?}", { format: "latex", selectionMode: "placeholder" });
       } else if (key === "←") {
         if (typeof mathField.executeCommand === "function") {
           mathField.executeCommand("moveBackward");
@@ -114,19 +110,11 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
           mathField.executeCommand("deleteBackward");
         }
       } else if (key === "Clear") {
-        if (typeof mathField.setValue === "function") {
-          mathField.setValue("");
-        } else {
-          mathField.value = "";
-        }
+        mathField.value = "";
       } else if (key === "(-)") {
-        if (typeof mathField.insert === "function") {
-          mathField.insert("-");
-        }
+        mathField.insert("-");
       } else {
-        if (typeof mathField.insert === "function") {
-          mathField.insert(key);
-        }
+        mathField.insert(key);
       }
 
       onInputChange(mathField.value || "");
