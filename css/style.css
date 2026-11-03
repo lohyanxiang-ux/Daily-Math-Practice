@@ -1,61 +1,226 @@
+:root {
+  --bg-main: #f0f4f9;
+  --card-bg: #ffffff;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --accent: #10b981;
+  --text-main: #1f2937;
+  --text-muted: #6b7280;
+  --border: #e5e7eb;
+  --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+  user-select: none;
+}
+
 body {
-  font-family: system-ui, -apple-system, sans-serif;
-  background-color: #f4f6f8;
-  color: #333;
-  max-width: 700px;
-  margin: 2rem auto;
-  padding: 0 1rem;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  height: 100vh;
+  overflow: hidden; /* Lock viewport for iPad landscape app feel */
 }
-.card {
-  background: white;
-  padding: 1.5rem;
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-  margin-bottom: 1.5rem;
+
+/* AUTHENTICATION CONTAINER */
+#auth-card {
+  max-width: 420px;
+  margin: 80px auto;
+  padding: 2.5rem;
+  background: var(--card-bg);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  text-align: center;
 }
-.profile-bar {
+
+/* APP SHELL */
+#app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 12px 18px;
+  gap: 12px;
+}
+
+/* NAV BAR */
+.top-nav {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: var(--card-bg);
+  padding: 10px 24px;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  height: 60px;
 }
-.badge {
-  background: #e9ecef;
-  padding: 0.3rem 0.6rem;
-  border-radius: 4px;
-  font-size: 0.85rem;
-}
-.stats-group {
-  display: flex;
-  gap: 1rem;
-}
-.stat {
-  font-size: 1.1rem;
-}
-.math-display {
-  font-size: 1.4rem;
-  padding: 1.5rem 0;
-  text-align: center;
-}
-.answer-section {
-  display: flex;
-  gap: 0.5rem;
-}
-input[type="text"] {
+
+.nav-user h3 { font-size: 1.1rem; font-weight: 700; color: var(--text-main); }
+.nav-user .badge { font-size: 0.8rem; background: #eeef8; color: var(--primary); padding: 3px 8px; border-radius: 6px; }
+
+.nav-stats { display: flex; gap: 20px; }
+.stat { font-size: 0.95rem; font-weight: 600; }
+.stat b { color: var(--primary); }
+
+/* MAIN VIEWPORT */
+#app-viewport {
   flex: 1;
-  padding: 0.6rem;
-  font-size: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  height: calc(100vh - 96px);
 }
-button {
-  padding: 0.6rem 1.2rem;
-  font-size: 1rem;
-  background: #2563eb;
-  color: white;
-  border: none;
-  border-radius: 6px;
+
+/* DASHBOARD GRID */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+  height: 100%;
+}
+
+.mode-card {
+  background: var(--card-bg);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
   cursor: pointer;
 }
-button:hover { background: #1d4ed8; }
-.feedback { margin-top: 1rem; font-weight: bold; }
-.tag { background: #dbeafe; color: #1e40af; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
+
+.mode-card.active:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.mode-card.disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* 3-COLUMN PRACTICE LAYOUT (LANDSCAPE IPAD OPTIMIZED) */
+.practice-grid-3col {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr 1.1fr;
+  gap: 16px;
+  height: 100%;
+}
+
+.practice-col {
+  background: var(--card-bg);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* COL 1: QUESTION DISPLAY & FEEDBACK */
+.question-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.tag { background: #e0e7ff; color: var(--primary); font-size: 0.85rem; font-weight: 700; padding: 4px 10px; border-radius: 8px; }
+
+.math-display {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 20px 0;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 12px;
+  border-left: 4px solid var(--primary);
+  min-height: 100px;
+}
+
+.feedback-area {
+  margin-top: auto;
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* COL 2: APPLE PENCIL SCRATCHPAD */
+.scratchpad-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.canvas-wrapper {
+  flex: 1;
+  background: #fafafa;
+  border: 2px dashed #d1d5db;
+  border-radius: 12px;
+  position: relative;
+  overflow-y: auto;
+  touch-action: none; /* Prevents page scroll while drawing */
+}
+
+canvas#scratchpad-canvas {
+  display: block;
+  width: 100%;
+  background: transparent;
+}
+
+/* COL 3: KEYPAD & INPUT DISPLAY */
+.answer-display-box {
+  background: #f3f4f6;
+  border: 2px solid var(--primary);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 1.6rem;
+  font-weight: 700;
+  text-align: right;
+  min-height: 56px;
+  margin-bottom: 16px;
+  color: var(--text-main);
+  letter-spacing: 1px;
+}
+
+.keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  flex: 1;
+}
+
+.keypad-btn {
+  background: #f3f4f6;
+  border: none;
+  border-radius: 12px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-main);
+  box-shadow: 0 4px 0 #d1d5db;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.keypad-btn:active {
+  transform: translateY(4px);
+  box-shadow: none;
+}
+
+.keypad-btn.operator { background: #e0e7ff; color: var(--primary); box-shadow: 0 4px 0 #c7d2fe; }
+.keypad-btn.action { background: #fee2e2; color: #ef4444; box-shadow: 0 4px 0 #fca5a5; }
+.keypad-btn.submit {
+  grid-column: span 2;
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 4px 0 #059669;
+}
+
+.secondary-btn {
+  background: #f3f4f6;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
