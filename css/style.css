@@ -601,3 +601,47 @@ math-field::part(virtual-keyboard-toggle) {
   transform: translateY(2px);
   box-shadow: none;
 }
+
+/* =========================================================
+   MASTERY SCORE BADGES & PILLS
+   ========================================================= */
+.mastery-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mastery-score-number {
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+/* TIER COLOR CLASSES */
+.mastery-tier-basic {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.mastery-tier-intermediate {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+.mastery-tier-advanced {
+  background: #f5f3ff;
+  color: #7c3aed;
+  border: 1px solid #ddd6fe;
+}
+
+.mastery-tier-mastered {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
