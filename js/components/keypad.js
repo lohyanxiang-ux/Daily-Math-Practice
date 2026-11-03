@@ -1,3 +1,8 @@
+// Globally disable MathLive error beep audio alerts
+if (window.MathfieldElement) {
+  window.MathfieldElement.soundsDirectory = null;
+}
+
 export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
   const displayContainer = container.querySelector("#keypad-display");
   const gridEl = container.querySelector(".keypad-grid");
@@ -87,34 +92,30 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
       // Maintain active caret focus inside Mathfield
       mathField.focus();
 
-      // MATHLIVE TEMPLATE INJECTION WITH FORMAT LATEX
+      // NATIVE MATHLIVE EXECUTE COMMANDS
       if (key === "/") {
-        // Inserts stacked fraction with active numerator placeholder
-        mathField.insert("\\frac{#?}{#?}", { format: "latex", selectionMode: "placeholder" });
+        // Automatically moves preceding typed text into numerator (#0) & moves cursor to denominator (#?)
+        mathField.executeCommand(["insert", "\\frac{#0}{#?}"]);
       } else if (key === "^") {
-        // Inserts superscript exponent slot with placeholder
-        mathField.insert("^{#?}", { format: "latex", selectionMode: "placeholder" });
+        // Inserts exponent slot
+        mathField.executeCommand(["insert", "^{#?}"]);
       } else if (key === "√") {
-        // Inserts square root with top bar covering slot
-        mathField.insert("\\sqrt{#?}", { format: "latex", selectionMode: "placeholder" });
+        // Inserts square root with radical bar over slot
+        mathField.executeCommand(["insert", "\\sqrt{#?}"]);
       } else if (key === "←") {
-        if (typeof mathField.executeCommand === "function") {
-          mathField.executeCommand("moveBackward");
-        }
+        // FIX: Correct MathLive command for Left Navigation
+        mathField.executeCommand("moveToPreviousChar");
       } else if (key === "→") {
-        if (typeof mathField.executeCommand === "function") {
-          mathField.executeCommand("moveForward");
-        }
+        // FIX: Correct MathLive command for Right Navigation
+        mathField.executeCommand("moveToNextChar");
       } else if (key === "⌫") {
-        if (typeof mathField.executeCommand === "function") {
-          mathField.executeCommand("deleteBackward");
-        }
+        mathField.executeCommand("deleteBackward");
       } else if (key === "Clear") {
-        mathField.value = "";
+        mathField.setValue("");
       } else if (key === "(-)") {
-        mathField.insert("-");
+        mathField.executeCommand(["insert", "-"]);
       } else {
-        mathField.insert(key);
+        mathField.executeCommand(["insert", key]);
       }
 
       onInputChange(mathField.value || "");
