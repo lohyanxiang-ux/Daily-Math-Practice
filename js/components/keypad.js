@@ -3,7 +3,7 @@ if (window.MathfieldElement) {
   window.MathfieldElement.soundsDirectory = null;
 }
 
-export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
+export function initKeypad(container, layoutKeys, onInputChange, onSubmit, onSkip) {
   const displayContainer = container.querySelector("#keypad-display");
   const gridEl = container.querySelector(".keypad-grid");
   let isSubmitted = false;
@@ -13,28 +13,43 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
   const mathField = displayContainer.querySelector("#math-input");
 
   if (mathField) {
-    // Disable iPad system soft keyboard so custom keypad is used
     mathField.mathVirtualKeyboardPolicy = "manual";
-
-    // Broadcast change to parent
     mathField.addEventListener("input", () => {
       onInputChange(mathField.value || "");
     });
   }
 
-  // Base Keypad Layout
-  const defaultKeys = [
+  // 1. DETERMINE IF KEYPAD SHOULD BE 3-COLUMN (NUMERIC) OR 4-COLUMN (ALGEBRAIC)
+  const isAlgebraic = layoutKeys && layoutKeys.some(k => ["x", "y", "/", "^", "√", "(", ")"].includes(k));
+  const is3Col = !isAlgebraic;
+
+  // Configure grid layout class
+  gridEl.className = is3Col ? "keypad-grid numeric-3col" : "keypad-grid algebraic-4col";
+
+  // Default key sets
+  const defaultNumericKeys = [
+    "7", "8", "9",
+    "4", "5", "6",
+    "1", "2", "3",
+    "0", ".", "⌫",
+    "←", "→", "Clear"
+  ];
+
+  const defaultAlgebraicKeys = [
     "x", "y", "(", ")",
     "7", "8", "9", "/",
     "4", "5", "6", "+",
     "1", "2", "3", "-",
     "0", "^", "√", "⌫",
-    "←", "→", "Clear", "Submit"
+    "←", "→", "Clear"
   ];
 
-  let keysToRender = layoutKeys && layoutKeys.length > 0 ? [...layoutKeys] : defaultKeys;
+  let keysToRender = layoutKeys && layoutKeys.length > 0 ? [...layoutKeys] : (is3Col ? defaultNumericKeys : defaultAlgebraicKeys);
 
-  // Ensure navigation keys (←, →) are included
+  // Clean out any old Submit/Skip entries from key list so they render exclusively in the bottom action row
+  keysToRender = keysToRender.filter(k => k !== "Submit" && k !== "Skip");
+
+  // Ensure navigation keys exist
   if (!keysToRender.includes("←")) {
     const clearIdx = keysToRender.indexOf("Clear");
     if (clearIdx !== -1) {
@@ -44,16 +59,8 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
     }
   }
 
-  // Ensure Submit button is included
-  if (!keysToRender.includes("Submit")) {
-    keysToRender.push("Submit");
-  }
-
-  // Render Grid Buttons
-  gridEl.innerHTML = keysToRender.map(key => {
-    if (key === "Submit") {
-      return `<button id="btn-keypad-submit" class="keypad-btn submit">${isSubmitted ? 'Next Question ➔' : 'Submit'}</button>`;
-    }
+  // Render keypad grid with Submit + Skip in the bottom row
+  const gridHTML = keysToRender.map(key => {
     if (key === "Clear" || key === "⌫") {
       return `<button class="keypad-btn action" data-key="${key}">${key}</button>`;
     }
@@ -63,16 +70,24 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
     return `<button class="keypad-btn" data-key="${key}">${key}</button>`;
   }).join("");
 
-  // Attach Input Handlers
+  // Bottom action row: Submit (Primary) + Skip (Secondary)
+  const submitSpanClass = is3Col ? "span-2" : "span-3";
+  const actionRowHTML = `
+    <button id="btn-keypad-submit" class="keypad-btn submit ${submitSpanClass}">${isSubmitted ? 'Next Question ➔' : 'Submit'}</button>
+    <button id="btn-keypad-skip" class="keypad-btn skip">Skip ⏭️</button>
+  `;
+
+  gridEl.innerHTML = gridHTML + actionRowHTML;
+
+  // Attach Input & Event Handlers
   gridEl.querySelectorAll(".keypad-btn").forEach(btn => {
-    // Prevent button tap from stealing focus away from Mathfield
     btn.addEventListener("pointerdown", (e) => e.preventDefault());
 
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       const key = btn.getAttribute("data-key");
 
-      // Handle Submit / Next Question Flow
+      // Handle Submit / Next Action
       if (btn.id === "btn-keypad-submit") {
         if (!isSubmitted) {
           const val = mathField ? (mathField.value || "") : "";
@@ -87,26 +102,26 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
         return;
       }
 
+      // Handle Skip Action
+      if (btn.id === "btn-keypad-skip") {
+        if (typeof onSkip === "function") onSkip();
+        return;
+      }
+
       if (isSubmitted || !mathField) return;
 
-      // Maintain active caret focus inside Mathfield
       mathField.focus();
 
-      // NATIVE MATHLIVE EXECUTE COMMANDS
+      // MathLive command handlers
       if (key === "/") {
-        // Automatically moves preceding typed text into numerator (#0) & moves cursor to denominator (#?)
         mathField.executeCommand(["insert", "\\frac{#0}{#?}"]);
       } else if (key === "^") {
-        // Inserts exponent slot
         mathField.executeCommand(["insert", "^{#?}"]);
       } else if (key === "√") {
-        // Inserts square root with radical bar over slot
         mathField.executeCommand(["insert", "\\sqrt{#?}"]);
       } else if (key === "←") {
-        // FIX: Correct MathLive command for Left Navigation
         mathField.executeCommand("moveToPreviousChar");
       } else if (key === "→") {
-        // FIX: Correct MathLive command for Right Navigation
         mathField.executeCommand("moveToNextChar");
       } else if (key === "⌫") {
         mathField.executeCommand("deleteBackward");
