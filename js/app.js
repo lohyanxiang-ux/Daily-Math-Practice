@@ -4,8 +4,8 @@ import { registry } from "./questions/registry.js";
 let currentQuestion = null;
 let currentProfile = null;
 
-// Explicitly attach to window so the Google HTML SDK can find it
-window.handleCredentialResponse = async (response) => {
+// Connect to the stub function in index.html
+window.processGoogleSignIn = async (response) => {
   document.getElementById("auth-status").innerText = "Loading profile from Google Sheets...";
   
   try {
@@ -27,6 +27,11 @@ window.handleCredentialResponse = async (response) => {
     document.getElementById("auth-status").innerText = "Network Error: " + err;
   }
 };
+
+// Check if a login payload arrived while app.js was loading
+if (window.pendingGoogleResponse) {
+  window.processGoogleSignIn(window.pendingGoogleResponse);
+}
 
 function renderProfile(profile) {
   document.getElementById("profile-name").innerText = profile.displayName;
