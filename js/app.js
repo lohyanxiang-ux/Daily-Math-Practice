@@ -1,15 +1,15 @@
 import { fetchUserData } from "./services/backend.js";
-import { state, updateState } from "./state.js";
+import { updateState } from "./state.js";
 import { navigateTo } from "./router.js";
 
 window.processGoogleSignIn = async (response) => {
   const statusEl = document.getElementById("auth-status");
-  statusEl.innerText = "Loading profile from Google Sheets...";
+  if (statusEl) statusEl.innerText = "Loading profile from Google Sheets...";
   
   const token = (typeof response === "string") ? response : (response && response.credential);
 
   if (!token) {
-    statusEl.innerText = "Error: Failed to read token from Google response.";
+    if (statusEl) statusEl.innerText = "Error: Failed to read token from Google response.";
     return;
   }
 
@@ -17,22 +17,23 @@ window.processGoogleSignIn = async (response) => {
     const res = await fetchUserData(token);
     
     if (res.status === "success") {
-      updateState("profile", res.profile);
-      updateState("curriculum", res.curriculum || []);
-      updateState("config", res.config || {});
+      // Passes full payload (profile, curriculum, mastery data, and userToken) into central state
+      updateState(res);
 
       renderTopNav(res.profile);
       
-      document.getElementById("auth-card").style.display = "none";
-      document.getElementById("app-container").style.display = "block";
+      const authCard = document.getElementById("auth-card");
+      const appContainer = document.getElementById("app-container");
+      if (authCard) authCard.style.display = "none";
+      if (appContainer) appContainer.style.display = "block";
 
       // Launch Dashboard View
       navigateTo("dashboard");
     } else {
-      statusEl.innerText = "Error: " + res.message;
+      if (statusEl) statusEl.innerText = "Error: " + res.message;
     }
   } catch (err) {
-    statusEl.innerText = "Network Error: " + err.message;
+    if (statusEl) statusEl.innerText = "Network Error: " + err.message;
   }
 };
 
@@ -42,8 +43,13 @@ if (window.pendingGoogleResponse) {
 }
 
 function renderTopNav(profile) {
-  document.getElementById("nav-profile-name").innerText = profile.displayName;
-  document.getElementById("nav-profile-meta").innerText = `${profile.class} - ${profile.year} (${profile.stream})`;
-  document.getElementById("nav-profile-xp").innerText = profile.xp;
-  document.getElementById("nav-profile-streak").innerText = profile.streakCount;
+  const nameEl = document.getElementById("nav-profile-name");
+  const metaEl = document.getElementById("nav-profile-meta");
+  const xpEl = document.getElementById("nav-profile-xp");
+  const streakEl = document.getElementById("nav-profile-streak");
+
+  if (nameEl) nameEl.innerText = profile.displayName || "Student";
+  if (metaEl) metaEl.innerText = `${profile.class || ''} - ${profile.year || ''} (${profile.stream || ''})`;
+  if (xpEl) xpEl.innerText = profile.xp || 0;
+  if (streakEl) streakEl.innerText = profile.streakCount || 0;
 }
