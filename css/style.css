@@ -645,3 +645,16 @@ math-field::part(virtual-keyboard-toggle) {
   color: #059669;
   border: 1px solid #a7f3d0;
 }
+
+/* Teacher Matrix Table Hover & Sticky States */
+.student-matrix-row:hover {
+  background-color: #f1f5f9 !important;
+}
+
+.student-matrix-row:hover td:first-child {
+  background-color: #f1f5f9 !important;
+}
+
+.teacher-dashboard-container select:focus {
+  outline: 2px solid var(--primary);
+}
