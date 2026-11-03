@@ -17,14 +17,18 @@ export const state = {
 };
 
 /**
- * Initializes state from backend payload.
+ * Initializes/updates state from backend payload.
  */
 export function setStateData(payload) {
+  if (!payload) return;
   if (payload.profile) state.profile = { ...state.profile, ...payload.profile };
   if (payload.curriculum) state.curriculum = payload.curriculum;
   if (payload.mastery) state.mastery = payload.mastery;
   if (payload.token) state.userToken = payload.token;
 }
+
+// Export alias so app.js imports work seamlessly
+export const updateState = setStateData;
 
 export function addXP(amount) {
   state.profile.xp = (state.profile.xp || 0) + amount;
@@ -34,7 +38,6 @@ export function addXP(amount) {
 
 /**
  * Local-First Question Attempt Recorder.
- * Calculates rolling accuracy (last 10 attempts) & 3-Star Mastery rating.
  */
 export function recordQuestionAttempt(generatorPath, isCorrect, hintsUsed = 0) {
   if (!generatorPath) return;
@@ -68,9 +71,6 @@ export function recordQuestionAttempt(generatorPath, isCorrect, hintsUsed = 0) {
   skillData.accuracy = totalRolling > 0 ? Math.round((correctRolling / totalRolling) * 100) : 0;
 
   // Star Calculation Logic
-  // ⭐ Star 1: At least 5 attempts with >= 60% accuracy
-  // ⭐⭐ Star 2: At least 5 attempts with >= 80% accuracy & <= 1 hint total in history
-  // ⭐⭐⭐ Star 3: Last 5 consecutive attempts 100% correct with 0 hints used
   const hintsInHistory = skillData.rollingHistory.reduce((sum, h) => sum + h.hints, 0);
   const last5 = skillData.rollingHistory.slice(-5);
   const last5Perfect = last5.length === 5 && last5.every(h => h.correct && h.hints === 0);
