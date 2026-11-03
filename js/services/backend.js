@@ -1,8 +1,5 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwEsVnKapmwUFuv0vyG1wFvyAXoFKQMrpsNxibUqYh891PHXzFgmBThnT62lGoEPo_xiQ/exec";
 
-/**
- * Sends authentication token to fetch user profile & curriculum.
- */
 export async function fetchUserData(tokenInput) {
   let idToken = typeof tokenInput === "object" ? tokenInput.credential || tokenInput.token : tokenInput;
 
@@ -16,12 +13,9 @@ export async function fetchUserData(tokenInput) {
   return await response.json();
 }
 
-/**
- * Writes updated XP and Streak values back to Google Sheets.
- */
 export async function syncUserProgress(idToken, xp, streakCount) {
   try {
-    const response = await fetch(APPS_SCRIPT_URL, {
+    await fetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({
@@ -31,8 +25,29 @@ export async function syncUserProgress(idToken, xp, streakCount) {
         streakCount: streakCount
       })
     });
+  } catch (err) {
+    console.error("Failed to sync progress:", err);
+  }
+}
+
+/**
+ * Transmits dirty skill mastery records in a single batch request.
+ */
+export async function syncBatchMastery(idToken, updatesArray) {
+  if (!updatesArray || updatesArray.length === 0) return;
+
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        token: idToken,
+        action: "batchUpdateMastery",
+        updates: updatesArray
+      })
+    });
     return await response.json();
   } catch (err) {
-    console.error("Failed to sync progress to Google Sheet:", err);
+    console.error("Failed to sync batch mastery to Google Sheets:", err);
   }
 }
