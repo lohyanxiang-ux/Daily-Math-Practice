@@ -8,7 +8,7 @@ function randInt(min, max, excludeZero = false) {
 
 export const linearEquations = {
   generate: (tier = 1) => {
-    // TIER 1: Basic ax + b = c (Positive numbers)
+    // TIER 1: Basic
     if (tier === 1) {
       const a = randInt(2, 5);
       const x = randInt(1, 8);
@@ -17,18 +17,20 @@ export const linearEquations = {
       
       return {
         strand: "Algebra",
-        skillTitle: "Linear Equations (Tier 1)",
+        tier: 1,
+        tierName: "Basic",
+        skillTitle: "Linear Equations",
         prompt: `Solve for $x$:\n\n$$${a}x + ${b} = ${c}$$`,
         expectedAnswer: String(x),
         keypad: ["7", "8", "9", "/", "4", "5", "6", "*", "1", "2", "3", "-", "0", ".", "(-)", "⌫", "Clear"],
         steps: [
           `Subtract $${b}$ from both sides:\n\n$$${a}x = ${c - b}$$`,
-          `Divide by $${a}$:\n\n$$x = ${x}$$`
+          `Divide both sides by $${a}$:\n\n$$x = ${x}$$`
         ]
       };
     }
 
-    // TIER 2: Intermediate ax + b = c (Includes negative coefficients)
+    // TIER 2: Intermediate
     if (tier === 2) {
       const a = randInt(-6, 6, true);
       const x = randInt(-9, 9, true);
@@ -38,7 +40,9 @@ export const linearEquations = {
 
       return {
         strand: "Algebra",
-        skillTitle: "Linear Equations (Tier 2)",
+        tier: 2,
+        tierName: "Intermediate",
+        skillTitle: "Linear Equations",
         prompt: `Solve for $x$:\n\n$$${a}x ${bStr} = ${c}$$`,
         expectedAnswer: String(x),
         keypad: ["7", "8", "9", "/", "4", "5", "6", "*", "1", "2", "3", "-", "0", ".", "(-)", "⌫", "Clear"],
@@ -49,9 +53,9 @@ export const linearEquations = {
       };
     }
 
-    // TIER 3: Advanced ax + b = cx + d (Variables on both sides)
+    // TIER 3: Advanced
     const a = randInt(4, 8);
-    const cCoeff = randInt(1, 3); // Ensures a != c
+    const cCoeff = randInt(1, 3);
     const x = randInt(-8, 8, true);
     const b = randInt(-10, 10, true);
     const d = (a - cCoeff) * x + b;
@@ -61,13 +65,15 @@ export const linearEquations = {
 
     return {
       strand: "Algebra",
-      skillTitle: "Linear Equations (Tier 3)",
+      tier: 3,
+      tierName: "Advanced",
+      skillTitle: "Linear Equations",
       prompt: `Solve for $x$:\n\n$$${a}x ${bStr} = ${cCoeff}x ${dStr}$$`,
       expectedAnswer: String(x),
       keypad: ["7", "8", "9", "/", "4", "5", "6", "*", "1", "2", "3", "-", "0", ".", "(-)", "⌫", "Clear"],
       steps: [
         `Subtract $${cCoeff}x$ from both sides:\n\n$$${a - cCoeff}x ${bStr} = ${d}$$`,
-        `Isolate term with $x$:\n\n$$${a - cCoeff}x = ${d - b}$$`,
+        `Isolate the term with $x$:\n\n$$${a - cCoeff}x = ${d - b}$$`,
         `Divide by $${a - cCoeff}$:\n\n$$x = ${x}$$`
       ]
     };
