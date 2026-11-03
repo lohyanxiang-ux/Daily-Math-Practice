@@ -1,19 +1,19 @@
 import { state } from "../state.js";
 import { renderQuestionView } from "./questionView.js";
-import { buildDailyQuestQueue } from "../utils/srsEngine.js";
+import { buildDailyQuestQueue } from "../utils/dailyQuestEngine.js";
 import { navigateTo } from "../router.js";
 
 export function renderDailyPractice(container, params = {}) {
-  // Build 5-question Bento Box Queue
+  // Use Daily Quest Engine to construct the 5-question Bento Box queue
   let dailyQueue = Array.isArray(params.queue) && params.queue.length > 0
     ? params.queue
     : (typeof buildDailyQuestQueue === "function" ? buildDailyQuestQueue(state) : []);
 
-  if (dailyQueue.length === 0 && state.curriculum) {
+  if (dailyQueue.length === 0 && state.curriculum && state.curriculum.length > 0) {
     dailyQueue = state.curriculum.slice(0, 5).map(s => s.generatorPath);
   }
 
-  // Activate Question View for 5 Questions
+  // Launch Question View for 5 Questions
   renderQuestionView(container, {
     mode: "dailyQuest",
     queue: dailyQueue,
