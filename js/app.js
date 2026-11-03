@@ -89,8 +89,8 @@ function renderTopNav(profile) {
   if (streakEl) streakEl.innerText = profile.streakCount || 0;
 }
 
-// UI EVENT LISTENERS FOR TAB TOGGLE, KEYPAD & LOGOUT
-document.addEventListener("DOMContentLoaded", () => {
+// ATTACH EVENT LISTENERS SAFELY (PREVENTS IOS SAFARI ES MODULE RACE CONDITIONS)
+function initAuthListeners() {
   const tabStudent = document.getElementById("tab-student-mode");
   const tabTeacher = document.getElementById("tab-teacher-mode");
   const studentSec = document.getElementById("student-login-section");
@@ -106,9 +106,10 @@ document.addEventListener("DOMContentLoaded", () => {
     btnLogout.addEventListener("click", handleLogout);
   }
 
-  // Tab Toggle Logic
+  // Role Tab Toggle Logic
   if (tabStudent && tabTeacher) {
-    tabStudent.addEventListener("click", () => {
+    tabStudent.addEventListener("click", (e) => {
+      e.preventDefault();
       tabStudent.style.background = "#ffffff";
       tabStudent.style.color = "#0f172a";
       tabStudent.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
@@ -117,12 +118,13 @@ document.addEventListener("DOMContentLoaded", () => {
       tabTeacher.style.color = "#64748b";
       tabTeacher.style.boxShadow = "none";
 
-      studentSec.style.display = "block";
-      teacherSec.style.display = "none";
+      if (studentSec) studentSec.style.display = "block";
+      if (teacherSec) teacherSec.style.display = "none";
       if (statusEl) statusEl.innerText = "";
     });
 
-    tabTeacher.addEventListener("click", () => {
+    tabTeacher.addEventListener("click", (e) => {
+      e.preventDefault();
       tabTeacher.style.background = "#ffffff";
       tabTeacher.style.color = "#0f172a";
       tabTeacher.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
@@ -131,15 +133,19 @@ document.addEventListener("DOMContentLoaded", () => {
       tabStudent.style.color = "#64748b";
       tabStudent.style.boxShadow = "none";
 
-      teacherSec.style.display = "block";
-      studentSec.style.display = "none";
+      if (teacherSec) teacherSec.style.display = "block";
+      if (studentSec) studentSec.style.display = "none";
       if (statusEl) statusEl.innerText = "";
     });
   }
 
-  // Keypad Button Clicks
-  document.querySelectorAll(".keypad-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
+  // Keypad Event Delegation (Ensures iPad taps register instantly)
+  const keypad = document.getElementById("pin-keypad");
+  if (keypad) {
+    keypad.addEventListener("click", (e) => {
+      const btn = e.target.closest(".keypad-btn");
+      if (!btn || !pinInput) return;
+
       const val = btn.getAttribute("data-val");
       let currentPin = pinInput.value;
 
@@ -151,11 +157,13 @@ document.addEventListener("DOMContentLoaded", () => {
         pinInput.value = currentPin + val;
       }
     });
-  });
+  }
 
   // Submit PIN
   if (btnSubmitPin) {
-    btnSubmitPin.addEventListener("click", async () => {
+    btnSubmitPin.addEventListener("click", async (e) => {
+      e.preventDefault();
+      if (!pinInput) return;
       const pin = pinInput.value.trim();
 
       if (pin.length !== 4) {
@@ -173,4 +181,11 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
-});
+}
+
+// Execute immediately if DOM is already loaded; otherwise wait for event
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initAuthListeners);
+} else {
+  initAuthListeners();
+}
