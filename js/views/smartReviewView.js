@@ -1,6 +1,7 @@
 import { state } from "../state.js";
 import { navigateTo } from "../router.js";
 import { getSmartReviewQueue } from "../utils/srsEngine.js";
+import { renderQuestionView } from "./questionView.js";
 
 export function renderSmartReviewSetup(container) {
   let selectedLength = 10;
@@ -8,11 +9,9 @@ export function renderSmartReviewSetup(container) {
   let selectedStrand = "All";
 
   const studentYear = state.profile ? state.profile.year : "Sec 1";
-
-  // Available strands derived from curriculum
   const availableStrands = ["All", ...new Set((state.curriculum || []).map(s => s.strand).filter(Boolean))];
 
-  function render() {
+  function renderSetup() {
     const previewQueue = getSmartReviewQueue({
       questionCount: selectedLength,
       includePriorYears,
@@ -27,7 +26,6 @@ export function renderSmartReviewSetup(container) {
           const { title, strand, topic } = item.skill;
           const score = item.effectiveScore;
 
-          // Tier Color Pill Formatting
           let badgeBg = "#eff6ff";
           let badgeColor = "#1d4ed8";
           if (score < 40) { badgeBg = "#fef2f2"; badgeColor = "#b91c1c"; }
@@ -57,7 +55,6 @@ export function renderSmartReviewSetup(container) {
       <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100%; padding: 20px;">
         <div style="background: #ffffff; border-radius: 24px; padding: 32px; max-width: 680px; width: 100%; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
           
-          <!-- HEADER -->
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <div>
               <h2 style="font-size: 1.6rem; color: #0f172a; margin: 0;">🧠 Smart Review (SRS)</h2>
@@ -66,10 +63,8 @@ export function renderSmartReviewSetup(container) {
             <button id="btn-close-srs" style="padding: 8px 16px; background: #f1f5f9; color: #475569; border: none; border-radius: 10px; font-weight: 700; cursor: pointer;">← Back</button>
           </div>
 
-          <!-- SETUP CONFIGURATION -->
           <div style="display: flex; flex-direction: column; gap: 20px;">
             
-            <!-- QUESTION COUNT TOGGLE -->
             <div>
               <label style="font-weight: 700; display: block; margin-bottom: 8px; color: #334155;">Target Questions:</label>
               <div style="display: flex; gap: 10px;">
@@ -84,7 +79,6 @@ export function renderSmartReviewSetup(container) {
               </div>
             </div>
 
-            <!-- STRAND FILTER -->
             <div>
               <label style="font-weight: 700; display: block; margin-bottom: 8px; color: #334155;">Filter by Strand:</label>
               <select id="select-strand" style="width: 100%; padding: 10px; border: 1.5px solid #cbd5e1; border-radius: 10px; font-weight: 600; color: #0f172a;">
@@ -92,7 +86,6 @@ export function renderSmartReviewSetup(container) {
               </select>
             </div>
 
-            <!-- PRIOR YEARS TOGGLE -->
             ${studentYear !== "Sec 1" ? `
               <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 14px 16px; border-radius: 12px; border: 1px solid #e2e8f0;">
                 <div>
@@ -103,7 +96,6 @@ export function renderSmartReviewSetup(container) {
               </div>
             ` : ''}
 
-            <!-- QUEUE PREVIEW SECTION -->
             <div>
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <label style="font-weight: 700; color: #334155;">📋 Review Queue Preview (${previewQueue.length} topics):</label>
@@ -114,7 +106,6 @@ export function renderSmartReviewSetup(container) {
               </div>
             </div>
 
-            <!-- LAUNCH ACTION -->
             <button id="btn-start-srs" ${previewQueue.length === 0 ? 'disabled' : ''} style="
               width: 100%; padding: 14px; font-size: 1.05rem; font-weight: 700; border-radius: 12px; border: none; color: #ffffff; cursor: pointer; transition: all 0.2s;
               background: ${previewQueue.length === 0 ? '#9ca3af' : '#2563eb'};
@@ -128,11 +119,11 @@ export function renderSmartReviewSetup(container) {
       </div>
     `;
 
-    // Event Listeners
+    // Event Handlers
     container.querySelectorAll(".opt-length").forEach(btn => {
       btn.addEventListener("click", () => {
         selectedLength = Number(btn.getAttribute("data-val"));
-        render();
+        renderSetup();
       });
     });
 
@@ -140,7 +131,7 @@ export function renderSmartReviewSetup(container) {
     if (strandSelect) {
       strandSelect.addEventListener("change", (e) => {
         selectedStrand = e.target.value;
-        render();
+        renderSetup();
       });
     }
 
@@ -148,22 +139,64 @@ export function renderSmartReviewSetup(container) {
     if (priorToggle) {
       priorToggle.addEventListener("change", (e) => {
         includePriorYears = e.target.checked;
-        render();
+        renderSetup();
       });
     }
 
-    container.querySelector("#btn-close-srs").addEventListener("click", () => navigateTo("dashboard"));
+    container.querySelector("#btn-close-srs")?.addEventListener("click", () => navigateTo("dashboard"));
 
     const startBtn = container.querySelector("#btn-start-srs");
     if (startBtn && previewQueue.length > 0) {
       startBtn.addEventListener("click", () => {
-        navigateTo("daily", {
+        renderQuestionView(container, {
           mode: "smartReview",
-          queue: previewQueue
+          queue: previewQueue,
+          allowSkip: true,
+          onComplete: (summary) => renderSRSSummary(container, summary, renderSetup),
+          onExit: () => renderSetup()
         });
       });
     }
   }
 
-  render();
+  renderSetup();
+}
+
+function renderSRSSummary(container, summary, onReturnToSetup) {
+  const summaryRowsHtml = Object.keys(summary.sessionInitialScores).map(path => {
+    const skillObj = (state.curriculum || []).find(s => s.generatorPath === path) || { title: "Practice Skill" };
+    const startScore = summary.sessionInitialScores[path] || 0;
+    const currentScore = state.mastery[path] ? state.mastery[path].score : startScore;
+    const diff = currentScore - startScore;
+    const diffText = diff >= 0 ? `+${diff}` : `${diff}`;
+    const diffColor = diff >= 0 ? "#16a34a" : "#dc2626";
+
+    return `
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #f8fafc; border-radius: 10px; margin-bottom: 8px; border: 1px solid #e2e8f0;">
+        <div style="font-weight: 700; color: #1e293b; font-size: 0.92rem;">${skillObj.title}</div>
+        <div style="font-weight: 800; font-size: 0.95rem; color: #0f172a;">
+          ${startScore} ➔ <span style="color: #2563eb;">${currentScore}</span> 
+          <span style="font-size: 0.82rem; color: ${diffColor}; margin-left: 6px;">(${diffText} pts)</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  container.innerHTML = `
+    <div class="card" style="max-width: 540px; margin: 40px auto; text-align: center; padding: 32px; background: #ffffff; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
+      <h2 style="color: #0f172a; margin: 0 0 8px 0; font-size: 1.6rem;">🧠 Smart Review Complete!</h2>
+      <p style="color: #64748b; margin: 0 0 20px 0; font-size: 0.95rem;">Memory refreshed! Overdue topics have been updated.</p>
+      
+      <div style="margin-bottom: 24px; text-align: left;">
+        <div style="font-size: 0.85rem; font-weight: 700; color: #475569; margin-bottom: 8px;">Restored Score Summary:</div>
+        ${summaryRowsHtml || '<div style="color: #64748b; font-size: 0.88rem;">Review complete.</div>'}
+      </div>
+
+      <button id="btn-srs-summary-exit" type="button" style="width: 100%; padding: 14px; background: #2563eb; color: #ffffff; border: none; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer;">
+        Return to Dashboard
+      </button>
+    </div>
+  `;
+
+  container.querySelector("#btn-srs-summary-exit")?.addEventListener("click", () => navigateTo("dashboard"));
 }
