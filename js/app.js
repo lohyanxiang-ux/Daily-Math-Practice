@@ -1,5 +1,5 @@
 import { fetchUserData } from "./services/backend.js";
-import { updateState } from "./state.js";
+import { updateState, state } from "./state.js";
 import { navigateTo } from "./router.js";
 
 window.processGoogleSignIn = async (response) => {
@@ -17,7 +17,7 @@ window.processGoogleSignIn = async (response) => {
     const res = await fetchUserData(token);
     
     if (res.status === "success") {
-      // Passes full payload (profile, curriculum, mastery data, and userToken) into central state
+      // Passes full payload (profile, curriculum, mastery, teacherData, userToken) into central state
       updateState(res);
 
       renderTopNav(res.profile);
@@ -27,8 +27,12 @@ window.processGoogleSignIn = async (response) => {
       if (authCard) authCard.style.display = "none";
       if (appContainer) appContainer.style.display = "block";
 
-      // Launch Dashboard View
-      navigateTo("dashboard");
+      // Role-Based Routing: Redirect teachers/admins to Teacher Dashboard
+      if (res.profile && (res.profile.role === "teacher" || res.profile.role === "admin")) {
+        navigateTo("teacherDashboard");
+      } else {
+        navigateTo("dashboard");
+      }
     } else {
       if (statusEl) statusEl.innerText = "Error: " + res.message;
     }
@@ -48,8 +52,14 @@ function renderTopNav(profile) {
   const xpEl = document.getElementById("nav-profile-xp");
   const streakEl = document.getElementById("nav-profile-streak");
 
-  if (nameEl) nameEl.innerText = profile.displayName || "Student";
-  if (metaEl) metaEl.innerText = `${profile.class || ''} - ${profile.year || ''} (${profile.stream || ''})`;
+  if (nameEl) nameEl.innerText = profile.displayName || "User";
+  if (metaEl) {
+    if (profile.role === "teacher" || profile.role === "admin") {
+      metaEl.innerText = `Teacher • ${profile.displayName || 'Staff'}`;
+    } else {
+      metaEl.innerText = `${profile.class || ''} - ${profile.year || ''} (${profile.stream || ''})`;
+    }
+  }
   if (xpEl) xpEl.innerText = profile.xp || 0;
   if (streakEl) streakEl.innerText = profile.streakCount || 0;
 }
