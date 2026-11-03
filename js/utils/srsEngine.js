@@ -1,16 +1,21 @@
 import { state } from "../state.js";
+import { getDecayedScore } from "./masteryScoreEngine.js";
 
 const YEAR_LEVELS = { "Sec 1": 1, "Sec 2": 2, "Sec 3": 3, "Sec 4": 4 };
 
-const SRS_INTERVALS = {
-  0: 0,   // 0 Stars: 0 days (due immediately)
-  1: 2,   // 1 Star:  2 days
-  2: 6,   // 2 Stars: 6 days
-  3: 21   // 3 Stars: 21 days
-};
+/**
+ * Determines SRS review interval in days based on 0–100 Mastery Score.
+ */
+function getSRSIntervalDays(score) {
+  if (score < 40) return 1;     // Basic Tier: Review daily
+  if (score < 70) return 3;     // Intermediate Tier: Review every 3 days
+  if (score < 90) return 7;     // Advanced Tier: Review weekly
+  return 14;                    // Mastered Tier: Review bi-weekly
+}
 
 /**
- * Builds a prioritized SRS review queue based on user settings.
+ * Builds a prioritized SRS review queue using 0–100 Mastery Scores, time decay,
+ * rolling accuracy, and explicit review reasons.
  */
 export function getSmartReviewQueue(options = {}) {
   const {
@@ -26,56 +31,102 @@ export function getSmartReviewQueue(options = {}) {
   const now = Date.now();
   const candidateSkills = [];
 
-  state.curriculum.forEach(skill => {
-    // Stream matching
-    if (String(skill.stream).trim() !== studentStreamStr) return;
+  (state.curriculum || []).forEach(skill => {
+    // 1. Stream matching
+    if (skill.stream && String(skill.stream).trim() !== studentStreamStr) return;
 
-    // Strand filtering
+    // 2. Strand filtering
     if (selectedStrand !== "All" && skill.strand !== selectedStrand) return;
 
     const skillYearLevel = YEAR_LEVELS[String(skill.year).trim()] || 1;
-    const mastery = state.mastery[skill.generatorPath] || { stars: 0, totalAttempted: 0, lastPracticed: "" };
+    const mastery = state.mastery[skill.generatorPath] || {
+      score: 0,
+      accuracy: 0,
+      totalAttempted: 0,
+      lastPracticed: ""
+    };
 
     const isCurrentYear = skillYearLevel === studentYearLevel;
     const isPriorYear = skillYearLevel < studentYearLevel;
 
-    // RULE 1: Current year skills MUST be attempted at least once
+    // Rule A: Current year skills must have been attempted at least once
     if (isCurrentYear && mastery.totalAttempted < 1) return;
 
-    // RULE 2: Prior year skills included only if student toggles option ON
+    // Rule B: Prior year skills included only if student toggled option ON
     if (isPriorYear && (!includePriorYears || mastery.totalAttempted < 1)) return;
 
-    // RULE 3: Future years excluded
+    // Rule C: Exclude future years
     if (skillYearLevel > studentYearLevel) return;
 
-    // Calculate SRS Urgency
-    const stars = mastery.stars || 0;
-    const intervalDays = SRS_INTERVALS[stars] || 0;
+    // Score Calculations
+    const rawScore = Number(mastery.score) || 0;
+    const effectiveScore = getDecayedScore(rawScore, mastery.lastPracticed, 2);
+    const accuracy = Number(mastery.accuracy) || 0;
+    const totalAttempted = Number(mastery.totalAttempted) || 0;
+
+    // Days Since Last Practiced
     const lastPracticedMs = mastery.lastPracticed ? new Date(mastery.lastPracticed).getTime() : 0;
     const daysSincePracticed = lastPracticedMs > 0 ? (now - lastPracticedMs) / (1000 * 60 * 60 * 24) : 999;
+    const intervalDays = getSRSIntervalDays(rawScore);
     const daysOverdue = daysSincePracticed - intervalDays;
 
+    // Compile Explicit Reasons for Review
+    const reasons = [];
+
+    if (effectiveScore < rawScore) {
+      const drop = rawScore - effectiveScore;
+      reasons.push(`⏳ Time Decay (-${drop} pts since last practice)`);
+    }
+
+    if (rawScore < 40) {
+      reasons.push("🚨 Basic Tier (< 40 Mastery Score)");
+    } else if (rawScore < 70) {
+      reasons.push("⚠️ Intermediate Tier Needs Strengthening");
+    }
+
+    if (accuracy < 60 && totalAttempted >= 3) {
+      reasons.push(`❌ Low Accuracy (${accuracy}% rolling average)`);
+    }
+
+    if (daysOverdue >= 0 && daysSincePracticed < 900) {
+      reasons.push(`📅 Overdue SRS Review (${Math.floor(daysSincePracticed)} days ago)`);
+    }
+
+    const isDue = effectiveScore < rawScore || rawScore < 70 || accuracy < 60 || daysOverdue >= 0;
+
+    // Urgency Priority Score Calculation
+    let priority = 0;
+    if (effectiveScore < rawScore) priority += (rawScore - effectiveScore) * 3;
+    if (rawScore < 40) priority += 50;
+    else if (rawScore < 70) priority += 25;
+    if (accuracy < 60) priority += (100 - accuracy) * 0.5;
+    if (daysOverdue > 0) priority += Math.min(daysOverdue * 2, 30);
+
     candidateSkills.push({
-      ...skill,
-      stars,
-      daysOverdue,
-      isDue: daysOverdue >= 0
+      skill,
+      title: skill.title || "Practice Skill",
+      generatorPath: skill.generatorPath,
+      rawScore,
+      effectiveScore,
+      accuracy,
+      totalAttempted,
+      lastPracticed: mastery.lastPracticed,
+      daysSincePracticed: Math.floor(daysSincePracticed),
+      reasons: reasons.length > 0 ? reasons : ["🔄 Routine Mastery Maintenance"],
+      primaryReason: reasons[0] || "🔄 Routine Mastery Maintenance",
+      isDue,
+      priority
     });
   });
 
-  // Sort queue: Overdue items first (highest overdue score), then lowest stars
-  candidateSkills.sort((a, b) => {
-    if (a.isDue !== b.isDue) return a.isDue ? -1 : 1;
-    if (Math.abs(a.daysOverdue - b.daysOverdue) > 0.1) return b.daysOverdue - a.daysOverdue;
-    return a.stars - b.stars;
-  });
+  // Sort queue: Highest priority score first
+  candidateSkills.sort((a, b) => b.priority - a.priority);
 
-  // Pick target number of questions
   return candidateSkills.slice(0, questionCount);
 }
 
 /**
- * Returns summary metrics for the Dashboard badge.
+ * Returns summary metrics for Dashboard badges.
  */
 export function getSRSMetrics() {
   const dueQueue = getSmartReviewQueue({ questionCount: 100, includePriorYears: true });
