@@ -14,13 +14,13 @@ export async function fetchUserData(tokenInput) {
 }
 
 /**
- * Authenticates students using email and 4-digit PIN (Column L verification).
+ * Authenticates students using 4-digit PIN only (Column L PIN & Column K Active Status verification).
  */
-export async function loginWithPin(email, pin) {
+export async function loginWithPin(pin) {
   const response = await fetch(APPS_SCRIPT_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ action: "pinLogin", email, pin })
+    body: JSON.stringify({ action: "pinLogin", pin })
   });
 
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
