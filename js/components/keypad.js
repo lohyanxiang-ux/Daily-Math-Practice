@@ -3,17 +3,20 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
   const gridEl = container.querySelector(".keypad-grid");
   let isSubmitted = false;
 
-  // Mount MathLive interactive field inside display container
-  displayContainer.innerHTML = `<math-field id="math-input" read-only="false"></math-field>`;
+  // Mount MathLive interactive field
+  displayContainer.innerHTML = `<math-field id="math-input" style="display: block; width: 100%;"></math-field>`;
   const mathField = displayContainer.querySelector("#math-input");
 
-  // Suppress iPad default soft keyboard so only our custom math keypad is used
-  mathField.mathVirtualKeyboardPolicy = "manual";
+  // Disable iPad soft keyboard so only our custom virtual keypad is active
+  if (mathField) {
+    mathField.mathVirtualKeyboardPolicy = "manual";
 
-  // Notify parent on change
-  mathField.addEventListener("input", () => {
-    onInputChange(mathField.getValue("latex"));
-  });
+    // Broadcast input changes to parent
+    mathField.addEventListener("input", () => {
+      const latexVal = mathField.value || "";
+      onInputChange(latexVal);
+    });
+  }
 
   const defaultKeys = [
     "x", "y", "(", ")",
@@ -26,7 +29,6 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
 
   const keysToRender = layoutKeys && layoutKeys.length > 0 ? [...layoutKeys] : defaultKeys;
 
-  // Add navigation keys if missing
   if (!keysToRender.includes("←")) {
     const clearIdx = keysToRender.indexOf("Clear");
     if (clearIdx !== -1) {
@@ -38,6 +40,7 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
     keysToRender.push("Submit");
   }
 
+  // Render Keypad Buttons
   gridEl.innerHTML = keysToRender.map(key => {
     if (key === "Submit") {
       return `<button id="btn-keypad-submit" class="keypad-btn submit">${isSubmitted ? 'Next Question ➔' : 'Submit'}</button>`;
@@ -51,7 +54,13 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
     return `<button class="keypad-btn" data-key="${key}">${key}</button>`;
   }).join("");
 
+  // Attach Event Listeners
   gridEl.querySelectorAll(".keypad-btn").forEach(btn => {
+    // PREVENT FOCUS LOSS: Prevent button click from stealing focus away from MathLive field
+    btn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+    });
+
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       const key = btn.getAttribute("data-key");
@@ -59,7 +68,7 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
       // Handle Submit / Next Question Flow
       if (btn.id === "btn-keypad-submit") {
         if (!isSubmitted) {
-          const val = mathField.getValue("latex");
+          const val = mathField.value || "";
           if (!val.trim()) return;
           isSubmitted = true;
           onSubmit(val);
@@ -73,32 +82,54 @@ export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
 
       if (isSubmitted) return;
 
-      // MATHLIVE COMMAND EXECUTION FOR FRACTIONS, EXPONENTS & CURSOR MOVEMENT
+      // Ensure focus remains inside MathLive field for cursor positioning
+      mathField.focus();
+
+      // MATHLIVE TEMPLATE INJECTION HANDLERS
       if (key === "/") {
-        // Instantly creates stacked fraction and moves cursor into numerator
-        mathField.executeCommand(["insert", "\\frac{#?}{#?}"]);
+        // Inserts stacked fraction with active numerator placeholder
+        if (typeof mathField.insert === "function") {
+          mathField.insert("\\frac{#?}{#?}");
+        }
       } else if (key === "^") {
-        // Instantly creates superscript exponent slot
-        mathField.executeCommand(["insert", "^{#?}"]);
+        // Inserts superscript exponent box with active placeholder
+        if (typeof mathField.insert === "function") {
+          mathField.insert("^{#?}");
+        }
       } else if (key === "√") {
-        // Instantly creates square root with top bar covering slot
-        mathField.executeCommand(["insert", "\\sqrt{#?}"]);
+        // Inserts square root with radical top bar over placeholder
+        if (typeof mathField.insert === "function") {
+          mathField.insert("\\sqrt{#?}");
+        }
       } else if (key === "←") {
-        mathField.executeCommand("moveBackward");
+        if (typeof mathField.executeCommand === "function") {
+          mathField.executeCommand("moveBackward");
+        }
       } else if (key === "→") {
-        mathField.executeCommand("moveForward");
+        if (typeof mathField.executeCommand === "function") {
+          mathField.executeCommand("moveForward");
+        }
       } else if (key === "⌫") {
-        mathField.executeCommand("deleteBackward");
+        if (typeof mathField.executeCommand === "function") {
+          mathField.executeCommand("deleteBackward");
+        }
       } else if (key === "Clear") {
-        mathField.setValue("");
+        if (typeof mathField.setValue === "function") {
+          mathField.setValue("");
+        } else {
+          mathField.value = "";
+        }
       } else if (key === "(-)") {
-        mathField.insert("-");
+        if (typeof mathField.insert === "function") {
+          mathField.insert("-");
+        }
       } else {
-        mathField.insert(key);
+        if (typeof mathField.insert === "function") {
+          mathField.insert(key);
+        }
       }
 
-      mathField.focus();
-      onInputChange(mathField.getValue("latex"));
+      onInputChange(mathField.value || "");
     });
   });
 }
