@@ -7,7 +7,7 @@
   <title>Math Skill Practice</title>
   
   <!-- CSS Stylesheet with Cache-Busting -->
-  <link rel="stylesheet" href="css/style.css?v=1.2">
+  <link rel="stylesheet" href="css/style.css?v=1.3">
   
   <!-- KaTeX CSS & JS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
@@ -16,9 +16,65 @@
   <!-- MathLive Interactive Keypad Input Library -->
   <link rel="stylesheet" href="https://unpkg.com/mathlive@latest/dist/mathlive-static.css">
   <script defer src="https://unpkg.com/mathlive"></script>
-  
-  <!-- Early Google OAuth Callback Queue Handler -->
+
+  <!-- IMMEDIATE GLOBAL INLINE SCRIPT (Guarantees Keypad Functions Exist Before Modules) -->
   <script>
+    window.appendPin = function(digit) {
+      const pinInput = document.getElementById("student-pin-input");
+      if (pinInput && pinInput.value.length < 4) {
+        pinInput.value += digit;
+      }
+    };
+
+    window.clearPin = function() {
+      const pinInput = document.getElementById("student-pin-input");
+      if (pinInput) pinInput.value = "";
+    };
+
+    window.backspacePin = function() {
+      const pinInput = document.getElementById("student-pin-input");
+      if (pinInput) pinInput.value = pinInput.value.slice(0, -1);
+    };
+
+    window.switchAuthTab = function(mode) {
+      const tabStudent = document.getElementById("tab-student-mode");
+      const tabTeacher = document.getElementById("tab-teacher-mode");
+      const studentSec = document.getElementById("student-login-section");
+      const teacherSec = document.getElementById("teacher-login-section");
+      const statusEl = document.getElementById("auth-status");
+
+      if (statusEl) statusEl.innerText = "";
+
+      if (mode === "student") {
+        if (tabStudent) {
+          tabStudent.style.background = "#ffffff";
+          tabStudent.style.color = "#0f172a";
+          tabStudent.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
+        }
+        if (tabTeacher) {
+          tabTeacher.style.background = "transparent";
+          tabTeacher.style.color = "#64748b";
+          tabTeacher.style.boxShadow = "none";
+        }
+        if (studentSec) studentSec.style.display = "block";
+        if (teacherSec) teacherSec.style.display = "none";
+      } else if (mode === "teacher") {
+        if (tabTeacher) {
+          tabTeacher.style.background = "#ffffff";
+          tabTeacher.style.color = "#0f172a";
+          tabTeacher.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
+        }
+        if (tabStudent) {
+          tabStudent.style.background = "transparent";
+          tabStudent.style.color = "#64748b";
+          tabStudent.style.boxShadow = "none";
+        }
+        if (teacherSec) teacherSec.style.display = "block";
+        if (studentSec) studentSec.style.display = "none";
+      }
+    };
+
+    // Early Google OAuth Callback Queue
     window.handleCredentialResponse = function(response) {
       if (typeof window.processGoogleSignIn === 'function') {
         window.processGoogleSignIn(response);
@@ -152,6 +208,6 @@
   </div>
 
   <!-- MAIN JAVASCRIPT MODULE ENTRY POINT -->
-  <script type="module" src="js/app.js?v=1.2"></script>
+  <script type="module" src="js/app.js?v=1.3"></script>
 </body>
 </html>
