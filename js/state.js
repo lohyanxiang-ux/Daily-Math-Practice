@@ -6,11 +6,16 @@ export const state = {
     displayName: "Student",
     year: "Sec 1",
     stream: "G3",
+    role: "student",
     xp: 0,
     streakCount: 0
   },
   curriculum: [],
-  mastery: {}, // Keyed by generatorPath: { score, accuracy, totalAttempted, totalCorrect, rollingHistory, lastPracticed }
+  mastery: {}, // Keyed by generatorPath: { score, effectiveScore, accuracy, totalAttempted, totalCorrect, rollingHistory, lastPracticed }
+  teacherData: {
+    students: [],
+    classMastery: {}
+  },
   pendingMasteryUpdates: new Set(),
   dailySession: {
     targetQuestions: 5,
@@ -25,6 +30,7 @@ export function setStateData(payload) {
   if (!payload) return;
   if (payload.profile) state.profile = { ...state.profile, ...payload.profile };
   if (payload.curriculum) state.curriculum = payload.curriculum;
+  if (payload.teacherData) state.teacherData = payload.teacherData;
   if (payload.mastery) {
     state.mastery = {};
     // Process mastery map and apply decay / legacy conversions
