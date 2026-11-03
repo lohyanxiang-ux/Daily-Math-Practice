@@ -24,6 +24,26 @@ export const state = {
 };
 
 /**
+ * Resets local state when user logs out.
+ */
+export function resetState() {
+  state.userToken = null;
+  state.profile = {
+    displayName: "Student",
+    year: "Sec 1",
+    stream: "G3",
+    role: "student",
+    xp: 0,
+    streakCount: 0
+  };
+  state.curriculum = [];
+  state.mastery = {};
+  state.teacherData = { students: [], classMastery: {} };
+  state.pendingMasteryUpdates.clear();
+  state.dailySession = { targetQuestions: 5, completedToday: 0 };
+}
+
+/**
  * Initializes/updates state from backend payload.
  */
 export function setStateData(payload) {
@@ -68,7 +88,7 @@ export const updateState = setStateData;
 
 export function addXP(amount) {
   state.profile.xp = (state.profile.xp || 0) + amount;
-  const xpEl = document.getElementById("nav-xp-count");
+  const xpEl = document.getElementById("nav-profile-xp");
   if (xpEl) xpEl.innerText = state.profile.xp;
 }
 
