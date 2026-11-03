@@ -1,36 +1,62 @@
-import { state, addXP } from "../state.js";
+import { state, addXP, recordQuestionAttempt } from "../state.js";
 import { loadAndGenerateQuestion } from "../questions/loader.js";
-import { syncUserProgress } from "../services/backend.js";
+import { syncUserProgress, syncBatchMastery } from "../services/backend.js";
 import { navigateTo } from "../router.js";
 import { initScratchpad } from "../components/scratchpad.js";
 import { initKeypad } from "../components/keypad.js";
 import { renderMath } from "../utils/katexHelper.js";
 import { isAlgebraicallyEquivalent } from "../utils/mathEquivalence.js";
 
-export function renderDailyPractice(container) {
+export function renderDailyPractice(container, params = {}) {
   let questionIndex = 0;
   const totalQuestions = state.dailySession.targetQuestions;
   let sessionScore = 0;
   let currentQuestion = null;
   let activeAnswer = "";
   let currentHintStep = 0;
+  let activeGeneratorPath = params.generatorPath || "";
   let currentSkillTitle = "";
+
+  // Helper: Flush pending batch updates to Google Sheets
+  function flushMasterySync() {
+    if (state.pendingMasteryUpdates.size > 0 && state.userToken) {
+      const updates = Array.from(state.pendingMasteryUpdates).map(path => state.mastery[path]);
+      syncBatchMastery(state.userToken, updates);
+      state.pendingMasteryUpdates.clear();
+    }
+  }
+
+  // Background tab switch listener: flush if student hides/switches browser tab
+  const visibilityHandler = () => {
+    if (document.visibilityState === "hidden") flushMasterySync();
+  };
+  document.addEventListener("visibilitychange", visibilityHandler);
 
   async function fetchNextQuestion() {
     if (!state.curriculum || state.curriculum.length === 0) return null;
 
-    const studentYear = state.profile ? String(state.profile.year).trim() : "";
-    const studentStream = state.profile ? String(state.profile.stream).trim() : "";
+    let selectedSkill = null;
 
-    const matchingSkills = state.curriculum.filter(s => 
-      String(s.year).trim() === studentYear &&
-      String(s.stream).trim() === studentStream
-    );
+    if (activeGeneratorPath) {
+      selectedSkill = state.curriculum.find(s => s.generatorPath === activeGeneratorPath);
+    }
 
-    const selectedSkill = matchingSkills.length > 0 
-      ? matchingSkills[Math.floor(Math.random() * matchingSkills.length)]
-      : state.curriculum[0];
+    if (!selectedSkill) {
+      const studentYear = state.profile ? String(state.profile.year).trim() : "";
+      const studentStream = state.profile ? String(state.profile.stream).trim() : "";
 
+      const matchingSkills = state.curriculum.filter(s => 
+        String(s.year).trim() === studentYear && String(s.stream).trim() === studentStream
+      );
+
+      selectedSkill = matchingSkills.length > 0 
+        ? matchingSkills[Math.floor(Math.random() * matchingSkills.length)]
+        : state.curriculum[0];
+    }
+
+    if (!selectedSkill) return null;
+
+    activeGeneratorPath = selectedSkill.generatorPath;
     currentSkillTitle = selectedSkill.title || "Math Practice";
     return await loadAndGenerateQuestion(selectedSkill.generatorPath);
   }
@@ -53,11 +79,14 @@ export function renderDailyPractice(container) {
     if (!currentQuestion) {
       container.innerHTML = `
         <div class="practice-col" style="justify-content: center; align-items: center; height: 100%;">
-          <h3>Unable to load question template.</h3>
+          <h3>Unable to load question generator.</h3>
           <button id="btn-exit-err" class="secondary-btn" style="margin-top: 12px;">Back to Dashboard</button>
         </div>
       `;
-      container.querySelector("#btn-exit-err").addEventListener("click", () => navigateTo("dashboard"));
+      container.querySelector("#btn-exit-err").addEventListener("click", () => {
+        document.removeEventListener("visibilitychange", visibilityHandler);
+        navigateTo("dashboard");
+      });
       return;
     }
 
@@ -66,7 +95,7 @@ export function renderDailyPractice(container) {
         <!-- COLUMN 1: QUESTION, HINTS, & SOLUTION REVIEW -->
         <div class="practice-col col-scrollable">
           <div class="question-header">
-            <button id="btn-exit-dashboard" class="secondary-btn">← Dashboard</button>
+            <button id="btn-exit-dashboard" class="secondary-btn">← Exit Session</button>
             <span class="step-indicator">Q${questionIndex + 1} of ${totalQuestions}</span>
           </div>
 
@@ -79,7 +108,6 @@ export function renderDailyPractice(container) {
             ${currentQuestion.prompt}
           </div>
 
-          <!-- HINTS SECTION -->
           <div class="hints-wrapper">
             <div>
               <button id="btn-ask-hint" class="hint-btn">💡 Ask for Hint (<span id="hint-count">0</span>/${currentQuestion.steps ? currentQuestion.steps.length : 0})</button>
@@ -87,22 +115,19 @@ export function renderDailyPractice(container) {
             <div id="hints-container" class="hints-list"></div>
           </div>
 
-          <!-- FEEDBACK & SOLUTION REVIEW -->
           <div id="daily-feedback" class="feedback-area"></div>
           <div id="full-solution-container" class="solution-box" style="display: none;"></div>
           <div id="next-action-container"></div>
         </div>
 
-        <!-- COLUMN 2: SCRATCHPAD WITH ENHANCED TOOLBAR -->
+        <!-- COLUMN 2: APPLE PENCIL SCRATCHPAD -->
         <div class="practice-col">
           <div class="scratchpad-toolbar">
-            <!-- Mode Selector -->
             <div class="tool-group">
               <button class="tool-btn active" data-tool="pen">✏️ Pen</button>
               <button class="tool-btn" data-tool="eraser">🧹 Eraser</button>
             </div>
 
-            <!-- Color Palette -->
             <div class="tool-group">
               <div class="color-swatch active" data-color="#1e293b" style="background: #1e293b;"></div>
               <div class="color-swatch" data-color="#2563eb" style="background: #2563eb;"></div>
@@ -110,7 +135,6 @@ export function renderDailyPractice(container) {
               <div class="color-swatch" data-color="#16a34a" style="background: #16a34a;"></div>
             </div>
 
-            <!-- Thickness & Clear -->
             <div class="tool-group">
               <select id="scratchpad-size" class="tool-btn" style="padding: 4px;">
                 <option value="1.5">Thin</option>
@@ -135,10 +159,7 @@ export function renderDailyPractice(container) {
       </div>
     `;
 
-    // Render KaTeX Math formatting
     renderMath(container.querySelector("#question-prompt"));
-
-    // Initialize Canvas Scratchpad & Keypad
     initScratchpad(container);
     initKeypad(
       container,
@@ -147,7 +168,6 @@ export function renderDailyPractice(container) {
       (val) => { handleSubmission(val); }
     );
 
-    // Event Listener for Progressive Hints
     const hintBtn = container.querySelector("#btn-ask-hint");
     const hintsContainer = container.querySelector("#hints-container");
     const hintCountEl = container.querySelector("#hint-count");
@@ -163,7 +183,6 @@ export function renderDailyPractice(container) {
       hintCard.className = "hint-card";
       hintCard.innerHTML = `<strong>Step ${currentHintStep}:</strong> <div>${stepText}</div>`;
       hintsContainer.appendChild(hintCard);
-
       renderMath(hintCard);
 
       if (currentHintStep >= currentQuestion.steps.length) {
@@ -173,6 +192,8 @@ export function renderDailyPractice(container) {
     });
 
     document.getElementById("btn-exit-dashboard").addEventListener("click", () => {
+      document.removeEventListener("visibilitychange", visibilityHandler);
+      flushMasterySync();
       navigateTo("dashboard");
     });
   }
@@ -186,14 +207,12 @@ export function renderDailyPractice(container) {
 
     const isCorrect = isAlgebraicallyEquivalent(userAns, currentQuestion.expectedAnswer);
 
+    // RECORD ATTEMPT IN LOCAL STATE (Zero Network Latency)
+    recordQuestionAttempt(activeGeneratorPath, isCorrect, currentHintStep);
+
     if (isCorrect) {
       sessionScore++;
       addXP(10);
-      
-      if (state.userToken) {
-        syncUserProgress(state.userToken, state.profile.xp, state.profile.streakCount);
-      }
-
       feedbackEl.style.background = "#d1fae5";
       feedbackEl.style.color = "#065f46";
       feedbackEl.innerText = "Correct! 🎉 +10 XP";
@@ -203,7 +222,6 @@ export function renderDailyPractice(container) {
       feedbackEl.innerText = `Incorrect. Expected: ${currentQuestion.expectedAnswer}`;
     }
 
-    // Render Step-by-Step Solution Review
     if (currentQuestion.steps && currentQuestion.steps.length > 0) {
       solutionBox.style.display = "block";
       solutionBox.innerHTML = `
@@ -215,7 +233,6 @@ export function renderDailyPractice(container) {
       renderMath(solutionBox);
     }
 
-    // Render Manual "Next Question" Button (replaces timeout)
     nextActionContainer.innerHTML = `
       <button id="btn-next-q" class="btn-next-question">
         ${questionIndex + 1 >= totalQuestions ? 'Finish Practice ➔' : 'Next Question ➔'}
@@ -229,20 +246,21 @@ export function renderDailyPractice(container) {
   }
 
   function renderSummary() {
+    document.removeEventListener("visibilitychange", visibilityHandler);
+
     state.dailySession.completedToday = Math.max(state.dailySession.completedToday, totalQuestions);
     const bonusXP = sessionScore === totalQuestions ? 20 : 0;
-    
-    if (bonusXP > 0) {
-      addXP(bonusXP);
-    }
+    if (bonusXP > 0) addXP(bonusXP);
 
+    // BATCH SYNC ALL ACCUMULATED MASTERY & XP TO GOOGLE SHEETS
     if (state.userToken) {
       syncUserProgress(state.userToken, state.profile.xp, state.profile.streakCount);
+      flushMasterySync();
     }
 
     container.innerHTML = `
       <div class="practice-col" style="justify-content: center; align-items: center; text-align: center; padding: 3rem;">
-        <h2 style="font-size: 2rem;">🎉 Daily Quest Completed!</h2>
+        <h2 style="font-size: 2rem;">🎉 Session Completed!</h2>
         <p style="font-size: 1.2rem; color: var(--text-muted); margin: 12px 0;">
           Final Score: <strong>${sessionScore} / ${totalQuestions}</strong>
         </p>
