@@ -17,7 +17,6 @@ export function renderDailyPractice(container, params = {}) {
   let activeGeneratorPath = params.generatorPath || "";
   let currentSkillTitle = "";
 
-  // Helper: Flush pending batch updates to Google Sheets
   function flushMasterySync() {
     if (state.pendingMasteryUpdates.size > 0 && state.userToken) {
       const updates = Array.from(state.pendingMasteryUpdates).map(path => state.mastery[path]);
@@ -26,21 +25,15 @@ export function renderDailyPractice(container, params = {}) {
     }
   }
 
-  // Flush sync if student switches or closes the browser tab mid-session
   const visibilityHandler = () => {
     if (document.visibilityState === "hidden") flushMasterySync();
   };
   document.addEventListener("visibilitychange", visibilityHandler);
 
-  /**
-   * Selects skill, checks student's earned Stars, calculates difficulty Tier,
-   * and dynamically loads the question generator.
-   */
   async function fetchNextQuestion() {
     if (!state.curriculum || state.curriculum.length === 0) return null;
 
     let selectedSkill = null;
-
     if (activeGeneratorPath) {
       selectedSkill = state.curriculum.find(s => s.generatorPath === activeGeneratorPath);
     }
@@ -63,13 +56,12 @@ export function renderDailyPractice(container, params = {}) {
     activeGeneratorPath = selectedSkill.generatorPath;
     currentSkillTitle = selectedSkill.title || "Math Practice";
 
-    // LOOKUP STUDENT MASTERY STARS TO DETERMINE DIFFICULTY TIER
-    // 0 Stars -> Tier 1 (Basic) | 1 Star -> Tier 2 (Intermediate) | 2-3 Stars -> Tier 3 (Advanced)
     const skillMastery = state.mastery[activeGeneratorPath] || { stars: 0 };
     const currentStars = skillMastery.stars || 0;
+    
+    // Tier Mapping: 0 Stars -> Tier 1 (Basic) | 1 Star -> Tier 2 (Intermediate) | 2-3 Stars -> Tier 3 (Advanced)
     const tier = currentStars < 1 ? 1 : (currentStars === 1 ? 2 : 3);
 
-    // Dynamic import passing target tier
     return await loadAndGenerateQuestion(selectedSkill.generatorPath, tier);
   }
 
@@ -104,7 +96,7 @@ export function renderDailyPractice(container, params = {}) {
 
     container.innerHTML = `
       <div class="practice-grid-3col">
-        <!-- COLUMN 1: QUESTION, TIER BADGE, HINTS, & SOLUTION REVIEW -->
+        <!-- COLUMN 1: QUESTION, DIFFICULTY TAG, HINTS, & SOLUTION REVIEW -->
         <div class="practice-col col-scrollable">
           <div class="question-header">
             <button id="btn-exit-dashboard" class="secondary-btn">← Exit Session</button>
@@ -114,8 +106,9 @@ export function renderDailyPractice(container, params = {}) {
           <div class="skill-header">
             <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px;">
               <span class="tag">${currentQuestion.strand || 'Algebra'}</span>
+              <!-- REPLACED TIER TAGS WITH BASIC, INTERMEDIATE, ADVANCED -->
               <span class="tag" style="background: #fef3c7; color: #92400e; font-weight: 700;">
-                ${currentQuestion.tierName || `Tier ${currentQuestion.tier || 1}`}
+                ${currentQuestion.tierName || (currentQuestion.tier === 1 ? 'Basic' : currentQuestion.tier === 2 ? 'Intermediate' : 'Advanced')}
               </span>
             </div>
             <h4 style="margin-top: 2px; color: var(--text-muted);">${currentSkillTitle}</h4>
@@ -125,7 +118,6 @@ export function renderDailyPractice(container, params = {}) {
             ${currentQuestion.prompt}
           </div>
 
-          <!-- PROGRESSIVE HINTS SECTION -->
           <div class="hints-wrapper">
             <div>
               <button id="btn-ask-hint" class="hint-btn">💡 Ask for Hint (<span id="hint-count">0</span>/${currentQuestion.steps ? currentQuestion.steps.length : 0})</button>
@@ -135,15 +127,15 @@ export function renderDailyPractice(container, params = {}) {
 
           <div id="daily-feedback" class="feedback-area"></div>
           <div id="full-solution-container" class="solution-box" style="display: none;"></div>
-          <div id="next-action-container"></div>
         </div>
 
-        <!-- COLUMN 2: APPLE PENCIL SCRATCHPAD -->
+        <!-- COLUMN 2: APPLE PENCIL SCRATCHPAD WITH POINTER MODE & ICONS -->
         <div class="practice-col">
           <div class="scratchpad-toolbar">
             <div class="tool-group">
-              <button class="tool-btn active" data-tool="pen">✏️ Pen</button>
-              <button class="tool-btn" data-tool="eraser">🧹 Eraser</button>
+              <button class="tool-icon-btn active" data-tool="pen" title="Pen">✏️</button>
+              <button class="tool-icon-btn" data-tool="eraser" title="Eraser">🧹</button>
+              <button class="tool-icon-btn" data-tool="pointer" title="Scroll / Pointer">🖐️</button>
             </div>
 
             <div class="tool-group">
@@ -154,12 +146,7 @@ export function renderDailyPractice(container, params = {}) {
             </div>
 
             <div class="tool-group">
-              <select id="scratchpad-size" class="tool-btn" style="padding: 4px;">
-                <option value="1.5">Thin</option>
-                <option value="2.5" selected>Medium</option>
-                <option value="4.5">Thick</option>
-              </select>
-              <button id="btn-clear-canvas" class="secondary-btn" style="font-size: 0.8rem;">Clear</button>
+              <button id="btn-clear-canvas" class="tool-icon-btn" title="Clear Canvas">🗑️</button>
             </div>
           </div>
 
@@ -168,7 +155,7 @@ export function renderDailyPractice(container, params = {}) {
           </div>
         </div>
 
-        <!-- COLUMN 3: DYNAMIC KEYPAD -->
+        <!-- COLUMN 3: COMPACT VIRTUAL KEYPAD WITH INLINE NEXT BUTTON -->
         <div class="practice-col">
           <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 8px;">Enter Answer</div>
           <div id="keypad-display" class="answer-display-box"></div>
@@ -179,12 +166,19 @@ export function renderDailyPractice(container, params = {}) {
 
     renderMath(container.querySelector("#question-prompt"));
     initScratchpad(container);
+
     initKeypad(
       container,
       currentQuestion.keypad,
       (val) => { activeAnswer = val; },
       (val) => { handleSubmission(val); }
     );
+
+    // Listen for Next Question trigger from Keypad Submit button replacement
+    container.addEventListener("triggerNextQuestion", () => {
+      questionIndex++;
+      loadQuestion();
+    });
 
     const hintBtn = container.querySelector("#btn-ask-hint");
     const hintsContainer = container.querySelector("#hints-container");
@@ -221,11 +215,8 @@ export function renderDailyPractice(container, params = {}) {
 
     const feedbackEl = document.getElementById("daily-feedback");
     const solutionBox = document.getElementById("full-solution-container");
-    const nextActionContainer = document.getElementById("next-action-container");
-
     const isCorrect = isAlgebraicallyEquivalent(userAns, currentQuestion.expectedAnswer);
 
-    // RECORD ATTEMPT IN LOCAL STATE & RE-CALCULATE STARS INSTANTLY
     recordQuestionAttempt(activeGeneratorPath, isCorrect, currentHintStep);
 
     if (isCorrect) {
@@ -250,27 +241,14 @@ export function renderDailyPractice(container, params = {}) {
       `;
       renderMath(solutionBox);
     }
-
-    nextActionContainer.innerHTML = `
-      <button id="btn-next-q" class="btn-next-question">
-        ${questionIndex + 1 >= totalQuestions ? 'Finish Practice ➔' : 'Next Question ➔'}
-      </button>
-    `;
-
-    document.getElementById("btn-next-q").addEventListener("click", () => {
-      questionIndex++;
-      loadQuestion();
-    });
   }
 
   function renderSummary() {
     document.removeEventListener("visibilitychange", visibilityHandler);
-
     state.dailySession.completedToday = Math.max(state.dailySession.completedToday, totalQuestions);
     const bonusXP = sessionScore === totalQuestions ? 20 : 0;
     if (bonusXP > 0) addXP(bonusXP);
 
-    // BATCH SYNC ALL ACCUMULATED MASTERY & XP TO GOOGLE SHEETS
     if (state.userToken) {
       syncUserProgress(state.userToken, state.profile.xp, state.profile.streakCount);
       flushMasterySync();
