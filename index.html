@@ -101,14 +101,22 @@
   <!-- MAIN APP CONTAINER -->
   <div id="app-container" style="display: none;">
     <!-- TOP NAVBAR -->
-    <header class="top-nav card">
+    <header class="top-nav card" style="display: flex; justify-content: space-between; align-items: center;">
       <div class="nav-user">
         <h3 id="nav-profile-name">Student</h3>
         <span id="nav-profile-meta" class="badge">Class - Year (Stream)</span>
       </div>
-      <div class="nav-stats">
-        <div class="stat"><span class="label">XP</span> <b id="nav-profile-xp">0</b></div>
-        <div class="stat"><span class="label">Streak</span> <b id="nav-profile-streak">0</b> 🔥</div>
+      
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <div class="nav-stats">
+          <div class="stat"><span class="label">XP</span> <b id="nav-profile-xp">0</b></div>
+          <div class="stat"><span class="label">Streak</span> <b id="nav-profile-streak">0</b> 🔥</div>
+        </div>
+
+        <!-- GLOBAL LOGOUT BUTTON -->
+        <button id="btn-logout" type="button" style="padding: 6px 14px; background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-radius: 8px; font-size: 0.82rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">
+          🚪 Logout
+        </button>
       </div>
     </header>
 
