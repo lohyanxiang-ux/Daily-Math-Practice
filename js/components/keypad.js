@@ -1,75 +1,113 @@
-export function initKeypad(containerEl, keypadLayout, onValueChange, onSubmit) {
-  let currentValue = "";
+import { renderMath } from "../utils/katexHelper.js";
 
-  const displayEl = containerEl.querySelector("#keypad-display");
-  const keypadGrid = containerEl.querySelector(".keypad-grid");
+/**
+ * Converts user input string into KaTeX formatting for display readout.
+ * e.g., "1/2" -> "\frac{1}{2}", "x^2" -> "x^{2}"
+ */
+function convertInputToLatex(rawInput) {
+  if (!rawInput) return "";
 
-  // Default fallback layout if none provided
-  const keys = keypadLayout || [
-    "x", "y", "(", ")",
-    "7", "8", "9", "/",
-    "4", "5", "6", "+",
-    "1", "2", "3", "-",
-    "0", ".", "^", "⌫",
-    "Clear", "Submit ➔"
-  ];
+  let formatted = rawInput;
 
-  // Render keypad buttons dynamically
-  keypadGrid.innerHTML = keys.map(key => {
-    let btnClass = "keypad-btn";
-    let action = "";
-    let val = key;
-
-    if (key === "Clear") {
-      btnClass += " action";
-      action = "clear";
-      val = "";
-    } else if (key === "⌫" || key === "Backspace") {
-      btnClass += " action";
-      action = "backspace";
-      val = "";
-    } else if (key === "Submit ➔" || key === "Submit") {
-      btnClass += " submit";
-      action = "submit";
-      val = "";
-    } else if (["+", "-", "*", "/", "^"].includes(key)) {
-      btnClass += " operator";
-    } else if (["x", "y", "p", "q", "m", "n", "(", ")"].includes(key)) {
-      btnClass += " variable";
+  // Convert simple division fraction: A/B -> \frac{A}{B}
+  if (formatted.includes("/")) {
+    const parts = formatted.split("/");
+    if (parts.length === 2 && parts[0] && parts[1]) {
+      formatted = `\\frac{${parts[0]}}{${parts[1]}}`;
     }
-
-    return `<button class="${btnClass}" data-val="${val}" data-action="${action}">${key}</button>`;
-  }).join("") + `<button class="keypad-btn submit" data-action="submit">Submit ➔</button>`;
-
-  function updateDisplay() {
-    displayEl.innerText = currentValue || " ";
-    onValueChange(currentValue);
   }
 
-  keypadGrid.querySelectorAll(".keypad-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const val = btn.getAttribute("data-val");
-      const action = btn.getAttribute("data-action");
+  // Convert exponents: x^2 -> x^{2}
+  formatted = formatted.replace(/\^([0-9a-zA-Z\+\-]+)/g, "^{$1}");
 
-      if (action === "clear") {
-        currentValue = "";
-      } else if (action === "backspace") {
-        currentValue = currentValue.slice(0, -1);
-      } else if (action === "submit") {
-        onSubmit(currentValue);
+  // Wrap in inline LaTeX delimiter
+  return `$${formatted}$`;
+}
+
+export function initKeypad(container, layoutKeys, onInputChange, onSubmit) {
+  const displayEl = container.querySelector("#keypad-display");
+  const gridEl = container.querySelector(".keypad-grid");
+  let currentVal = "";
+  let isSubmitted = false;
+
+  const defaultKeys = [
+    "7", "8", "9", "/",
+    "4", "5", "6", "*",
+    "1", "2", "3", "-",
+    "0", ".", "(-)", "⌫",
+    "Clear", "Submit"
+  ];
+
+  const keysToRender = layoutKeys && layoutKeys.length > 0 ? [...layoutKeys] : defaultKeys;
+
+  // Ensure Submit button exists in key array if not explicitly present
+  if (!keysToRender.includes("Submit")) {
+    keysToRender.push("Submit");
+  }
+
+  function updateDisplay() {
+    if (!currentVal) {
+      displayEl.innerHTML = `<span style="color: #94a3b8; font-size: 1rem;">Tap keys to enter answer...</span>`;
+      onInputChange("");
+      return;
+    }
+
+    const latexString = convertInputToLatex(currentVal);
+    displayEl.innerHTML = latexString;
+    renderMath(displayEl);
+    onInputChange(currentVal);
+  }
+
+  gridEl.innerHTML = keysToRender.map(key => {
+    if (key === "Submit") {
+      return `<button id="btn-keypad-submit" class="keypad-btn submit">${isSubmitted ? 'Next Question ➔' : 'Submit'}</button>`;
+    }
+    if (key === "Clear") {
+      return `<button class="keypad-btn action" data-key="Clear">Clear</button>`;
+    }
+    if (key === "⌫") {
+      return `<button class="keypad-btn action" data-key="⌫">⌫</button>`;
+    }
+    return `<button class="keypad-btn" data-key="${key}">${key}</button>`;
+  }).join("");
+
+  updateDisplay();
+
+  gridEl.querySelectorAll(".keypad-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.getAttribute("data-key");
+
+      // Handle Submit / Next Question Action
+      if (btn.id === "btn-keypad-submit") {
+        if (!isSubmitted) {
+          if (!currentVal) return;
+          isSubmitted = true;
+          // Trigger evaluation callback
+          onSubmit(currentVal);
+          // Transform button to Next Question
+          btn.innerText = "Next Question ➔";
+          btn.style.background = "#10b981";
+        } else {
+          // Trigger next question event
+          const nextEvt = new CustomEvent("triggerNextQuestion");
+          container.dispatchEvent(nextEvt);
+        }
         return;
-      } else if (val) {
-        currentValue += val;
+      }
+
+      if (isSubmitted) return; // Lock keypad input after submission
+
+      if (key === "Clear") {
+        currentVal = "";
+      } else if (key === "⌫") {
+        currentVal = currentVal.slice(0, -1);
+      } else if (key === "(-)") {
+        currentVal += "-";
+      } else {
+        currentVal += key;
       }
 
       updateDisplay();
     });
   });
-
-  return {
-    reset: () => {
-      currentValue = "";
-      updateDisplay();
-    }
-  };
 }
