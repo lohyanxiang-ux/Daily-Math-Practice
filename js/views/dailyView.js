@@ -58,8 +58,6 @@ export function renderDailyPractice(container, params = {}) {
 
     const skillMastery = state.mastery[activeGeneratorPath] || { stars: 0 };
     const currentStars = skillMastery.stars || 0;
-    
-    // Tier Mapping: 0 Stars -> Tier 1 (Basic) | 1 Star -> Tier 2 (Intermediate) | 2-3 Stars -> Tier 3 (Advanced)
     const tier = currentStars < 1 ? 1 : (currentStars === 1 ? 2 : 3);
 
     return await loadAndGenerateQuestion(selectedSkill.generatorPath, tier);
@@ -96,40 +94,50 @@ export function renderDailyPractice(container, params = {}) {
 
     container.innerHTML = `
       <div class="practice-grid-3col">
-        <!-- COLUMN 1: QUESTION, DIFFICULTY TAG, HINTS, & SOLUTION REVIEW -->
+        <!-- COLUMN 1: PROTECTED QUESTION & SCROLLABLE HINTS/SOLUTIONS -->
         <div class="practice-col col-scrollable">
-          <div class="question-header">
-            <button id="btn-exit-dashboard" class="secondary-btn">← Exit Session</button>
-            <span class="step-indicator">Q${questionIndex + 1} of ${totalQuestions}</span>
-          </div>
-
-          <div class="skill-header">
-            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px;">
-              <span class="tag">${currentQuestion.strand || 'Algebra'}</span>
-              <!-- REPLACED TIER TAGS WITH BASIC, INTERMEDIATE, ADVANCED -->
-              <span class="tag" style="background: #fef3c7; color: #92400e; font-weight: 700;">
-                ${currentQuestion.tierName || (currentQuestion.tier === 1 ? 'Basic' : currentQuestion.tier === 2 ? 'Intermediate' : 'Advanced')}
-              </span>
+          
+          <!-- FIXED QUESTION BOX (PROTECTED FROM BEING COVERED) -->
+          <div class="protected-question-header">
+            <div class="question-header">
+              <button id="btn-exit-dashboard" class="secondary-btn">← Exit</button>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <button id="btn-skip-question" class="secondary-btn" style="background: #fff7ed; color: #c2410c; border-color: #ffedd5;">Skip ⏭️</button>
+                <span class="step-indicator">Q${questionIndex + 1} of ${totalQuestions}</span>
+              </div>
             </div>
-            <h4 style="margin-top: 2px; color: var(--text-muted);">${currentSkillTitle}</h4>
-          </div>
 
-          <div id="question-prompt" class="math-display">
-            ${currentQuestion.prompt}
-          </div>
-
-          <div class="hints-wrapper">
-            <div>
-              <button id="btn-ask-hint" class="hint-btn">💡 Ask for Hint (<span id="hint-count">0</span>/${currentQuestion.steps ? currentQuestion.steps.length : 0})</button>
+            <div class="skill-header" style="margin-top: 8px;">
+              <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px;">
+                <span class="tag">${currentQuestion.strand || 'Algebra'}</span>
+                <span class="tag" style="background: #fef3c7; color: #92400e; font-weight: 700;">
+                  ${currentQuestion.tierName || (currentQuestion.tier === 1 ? 'Basic' : currentQuestion.tier === 2 ? 'Intermediate' : 'Advanced')}
+                </span>
+              </div>
+              <h4 style="margin-top: 2px; color: var(--text-muted);">${currentSkillTitle}</h4>
             </div>
-            <div id="hints-container" class="hints-list"></div>
+
+            <div id="question-prompt" class="math-display" style="margin-top: 8px;">
+              ${currentQuestion.prompt}
+            </div>
           </div>
 
-          <div id="daily-feedback" class="feedback-area"></div>
-          <div id="full-solution-container" class="solution-box" style="display: none;"></div>
+          <!-- SCROLLABLE HINTS & SOLUTION AREA -->
+          <div class="scrollable-hints-area">
+            <div class="hints-wrapper">
+              <div>
+                <button id="btn-ask-hint" class="hint-btn">💡 Ask for Hint (<span id="hint-count">0</span>/${currentQuestion.steps ? currentQuestion.steps.length : 0})</button>
+              </div>
+              <div id="hints-container" class="hints-list"></div>
+            </div>
+
+            <div id="daily-feedback" class="feedback-area"></div>
+            <div id="full-solution-container" class="solution-box" style="display: none;"></div>
+          </div>
+
         </div>
 
-        <!-- COLUMN 2: APPLE PENCIL SCRATCHPAD WITH POINTER MODE & ICONS -->
+        <!-- COLUMN 2: SCRATCHPAD WITH POINTER & ICONS -->
         <div class="practice-col">
           <div class="scratchpad-toolbar">
             <div class="tool-group">
@@ -155,9 +163,9 @@ export function renderDailyPractice(container, params = {}) {
           </div>
         </div>
 
-        <!-- COLUMN 3: COMPACT VIRTUAL KEYPAD WITH INLINE NEXT BUTTON -->
-        <div class="practice-col">
-          <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 8px;">Enter Answer</div>
+        <!-- COLUMN 3: NO-SCROLL VIRTUAL KEYPAD -->
+        <div class="practice-col keypad-col">
+          <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 6px; flex-shrink: 0;">Enter Answer</div>
           <div id="keypad-display" class="answer-display-box"></div>
           <div class="keypad-grid"></div>
         </div>
@@ -174,12 +182,20 @@ export function renderDailyPractice(container, params = {}) {
       (val) => { handleSubmission(val); }
     );
 
-    // Listen for Next Question trigger from Keypad Submit button replacement
+    // Event Listener: Trigger next question from Keypad Submit button replacement
     container.addEventListener("triggerNextQuestion", () => {
       questionIndex++;
       loadQuestion();
     });
 
+    // Event Listener: Skip Question
+    container.querySelector("#btn-skip-question").addEventListener("click", () => {
+      recordQuestionAttempt(activeGeneratorPath, false, 0); // Count skipped as attempt
+      questionIndex++;
+      loadQuestion();
+    });
+
+    // Event Listener: Hints
     const hintBtn = container.querySelector("#btn-ask-hint");
     const hintsContainer = container.querySelector("#hints-container");
     const hintCountEl = container.querySelector("#hint-count");
