@@ -2,25 +2,27 @@ export function initScratchpad(containerEl) {
   const wrapper = containerEl.querySelector(".canvas-wrapper");
   const canvas = containerEl.querySelector("#scratchpad-canvas");
   const ctx = canvas.getContext("2d");
-  const clearBtn = containerEl.querySelector("#btn-clear-canvas");
 
+  // State controls
   let isDrawing = false;
   let lastX = 0;
   let lastY = 0;
+  let currentMode = "pen"; // 'pen' or 'eraser'
+  let currentColor = "#1e293b"; // Default dark navy/black
+  let currentSize = 2.5;
 
   function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
     const rect = wrapper.getBoundingClientRect();
     
-    // Set actual canvas pixel size (Retina display sharp rendering)
+    // Set actual canvas resolution with extra vertical scrollable height (2000px)
+    const totalHeight = 2000;
     canvas.width = rect.width * dpr;
-    canvas.height = Math.max(rect.height, 800) * dpr; // Extended height for scrolling
+    canvas.height = totalHeight * dpr;
     canvas.style.width = `${rect.width}px`;
-    canvas.style.height = `${Math.max(rect.height, 800)}px`;
+    canvas.style.height = `${totalHeight}px`;
 
     ctx.scale(dpr, dpr);
-    ctx.strokeStyle = "#1e293b";
-    ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
   }
@@ -46,13 +48,23 @@ export function initScratchpad(containerEl) {
 
   function draw(e) {
     if (!isDrawing) return;
-    e.preventDefault(); // Prevents iPad gesture interference
+    e.preventDefault();
 
     const coords = getCoordinates(e);
 
     ctx.beginPath();
     ctx.moveTo(lastX, lastY);
     ctx.lineTo(coords.x, coords.y);
+
+    if (currentMode === "eraser") {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.lineWidth = currentSize * 6; // Make eraser broader than pen
+    } else {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = currentColor;
+      ctx.lineWidth = currentSize;
+    }
+
     ctx.stroke();
 
     lastX = coords.x;
@@ -63,13 +75,52 @@ export function initScratchpad(containerEl) {
     isDrawing = false;
   }
 
-  // Pointer & Touch Listeners for Apple Pencil
+  // Event Listeners for Drawing
   canvas.addEventListener("pointerdown", startDrawing);
   canvas.addEventListener("pointermove", draw);
   canvas.addEventListener("pointerup", stopDrawing);
   canvas.addEventListener("pointerleave", stopDrawing);
 
-  clearBtn.addEventListener("click", () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // --- TOOLBAR CONTROLS SETUP --- //
+
+  // Mode Toggles (Pen / Eraser)
+  containerEl.querySelectorAll("[data-tool]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      containerEl.querySelectorAll("[data-tool]").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentMode = btn.getAttribute("data-tool");
+    });
   });
+
+  // Color Swatches
+  containerEl.querySelectorAll(".color-swatch").forEach(swatch => {
+    swatch.addEventListener("click", () => {
+      containerEl.querySelectorAll(".color-swatch").forEach(s => s.classList.remove("active"));
+      swatch.classList.add("active");
+      currentColor = swatch.getAttribute("data-color");
+      
+      // Auto-switch back to Pen mode when selecting a color
+      currentMode = "pen";
+      const penBtn = containerEl.querySelector("[data-tool='pen']");
+      const eraserBtn = containerEl.querySelector("[data-tool='eraser']");
+      if (penBtn) penBtn.classList.add("active");
+      if (eraserBtn) eraserBtn.classList.remove("active");
+    });
+  });
+
+  // Size Selector
+  const sizeSelect = containerEl.querySelector("#scratchpad-size");
+  if (sizeSelect) {
+    sizeSelect.addEventListener("change", (e) => {
+      currentSize = parseFloat(e.target.value);
+    });
+  }
+
+  // Clear Canvas Button
+  const clearBtn = containerEl.querySelector("#btn-clear-canvas");
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+  }
 }
