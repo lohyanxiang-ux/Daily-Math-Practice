@@ -407,3 +407,98 @@ canvas#scratchpad-canvas {
   transform: translateY(4px);
   box-shadow: none;
 }
+
+/* COMPACT VIRTUAL KEYPAD BUTTONS */
+.answer-display-box {
+  min-height: 52px;
+  background: #ffffff;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  font-weight: 700;
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  word-break: break-all;
+}
+
+.keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.keypad-btn {
+  aspect-ratio: 1.35 / 1; /* Made buttons significantly more compact */
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-main);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 0 #cbd5e1;
+  transition: all 0.1s ease;
+}
+
+.keypad-btn:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+.keypad-btn.action {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.keypad-btn.submit {
+  grid-column: span 4;
+  aspect-ratio: auto;
+  padding: 12px;
+  background: var(--primary);
+  color: white;
+  font-size: 1.1rem;
+  border: none;
+  box-shadow: 0 3px 0 #1d4ed8;
+  margin-top: 4px;
+}
+
+.keypad-btn.submit:active {
+  transform: translateY(3px);
+  box-shadow: none;
+}
+
+/* ICON-BASED SCRATCHPAD TOOLBAR */
+.scratchpad-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.tool-icon-btn {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tool-icon-btn.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
