@@ -5,9 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Math Skill Practice</title>
   <link rel="stylesheet" href="css/style.css">
-  <!-- KaTeX for math rendering -->
+  
+  <!-- KaTeX CSS & JS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  
+  <!-- Google Sign-In SDK -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -16,17 +19,13 @@
   <div id="auth-card" class="card">
     <h2>Student Sign-In</h2>
     <p>Sign in with your school Google account to start practicing.</p>
-    <div id="g_id_onload"
-         data-client_id="874463235708-a7ep34l9ecn43mqvj4nkknn44js6halc.apps.googleusercontent.com"
-         data-callback="handleCredentialResponse">
-    </div>
-    <div class="g_id_signin" data-type="standard"></div>
-    <div id="auth-status"></div>
+    
+    <div id="google-btn-container"></div>
+    <div id="auth-status" style="margin-top: 10px; font-weight: bold;"></div>
   </div>
 
   <!-- MAIN DASHBOARD & PRACTICE INTERFACE -->
   <div id="app-container" style="display: none;">
-    <!-- Profile Header Bar -->
     <header class="profile-bar card">
       <div>
         <h2 id="profile-name">Student</h2>
@@ -38,7 +37,6 @@
       </div>
     </header>
 
-    <!-- Test Question Generator Box -->
     <main class="practice-box card">
       <div class="skill-header">
         <span id="skill-strand" class="tag">Strand</span>
@@ -55,7 +53,6 @@
     </main>
   </div>
 
-  <!-- Load main app entry point as ES6 Module -->
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
