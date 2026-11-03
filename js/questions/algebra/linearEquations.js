@@ -7,32 +7,68 @@ function randInt(min, max, excludeZero = false) {
 }
 
 export const linearEquations = {
-  generate: () => {
-    // Generate ax + b = c linear equations
-    const a = randInt(2, 6);
-    const x = randInt(-9, 9, true);
-    const b = randInt(-12, 12, true);
-    const c = a * x + b;
+  generate: (tier = 1) => {
+    // TIER 1: Basic ax + b = c (Positive numbers)
+    if (tier === 1) {
+      const a = randInt(2, 5);
+      const x = randInt(1, 8);
+      const b = randInt(1, 10);
+      const c = a * x + b;
+      
+      return {
+        strand: "Algebra",
+        skillTitle: "Linear Equations (Tier 1)",
+        prompt: `Solve for $x$:\n\n$$${a}x + ${b} = ${c}$$`,
+        expectedAnswer: String(x),
+        keypad: ["7", "8", "9", "/", "4", "5", "6", "*", "1", "2", "3", "-", "0", ".", "(-)", "⌫", "Clear"],
+        steps: [
+          `Subtract $${b}$ from both sides:\n\n$$${a}x = ${c - b}$$`,
+          `Divide by $${a}$:\n\n$$x = ${x}$$`
+        ]
+      };
+    }
+
+    // TIER 2: Intermediate ax + b = c (Includes negative coefficients)
+    if (tier === 2) {
+      const a = randInt(-6, 6, true);
+      const x = randInt(-9, 9, true);
+      const b = randInt(-15, 15, true);
+      const c = a * x + b;
+      const bStr = b > 0 ? `+ ${b}` : `- ${Math.abs(b)}`;
+
+      return {
+        strand: "Algebra",
+        skillTitle: "Linear Equations (Tier 2)",
+        prompt: `Solve for $x$:\n\n$$${a}x ${bStr} = ${c}$$`,
+        expectedAnswer: String(x),
+        keypad: ["7", "8", "9", "/", "4", "5", "6", "*", "1", "2", "3", "-", "0", ".", "(-)", "⌫", "Clear"],
+        steps: [
+          `Isolate the term $${a}x$:\n\n$$${a}x = ${c - b}$$`,
+          `Divide both sides by $${a}$:\n\n$$x = ${x}$$`
+        ]
+      };
+    }
+
+    // TIER 3: Advanced ax + b = cx + d (Variables on both sides)
+    const a = randInt(4, 8);
+    const cCoeff = randInt(1, 3); // Ensures a != c
+    const x = randInt(-8, 8, true);
+    const b = randInt(-10, 10, true);
+    const d = (a - cCoeff) * x + b;
 
     const bStr = b > 0 ? `+ ${b}` : `- ${Math.abs(b)}`;
-    const step1Rhs = c - b;
+    const dStr = d > 0 ? `+ ${d}` : `- ${Math.abs(d)}`;
 
     return {
       strand: "Algebra",
-      skillTitle: "Linear Equations",
-      prompt: `Solve the linear equation for $x$:\n\n$$${a}x ${bStr} = ${c}$$`,
+      skillTitle: "Linear Equations (Tier 3)",
+      prompt: `Solve for $x$:\n\n$$${a}x ${bStr} = ${cCoeff}x ${dStr}$$`,
       expectedAnswer: String(x),
-      keypad: [
-        "7", "8", "9", "/",
-        "4", "5", "6", "*",
-        "1", "2", "3", "-",
-        "0", ".", "(-)", "⌫",
-        "Clear"
-      ],
+      keypad: ["7", "8", "9", "/", "4", "5", "6", "*", "1", "2", "3", "-", "0", ".", "(-)", "⌫", "Clear"],
       steps: [
-        `Subtract $${b}$ from both sides:\n\n$$${a}x = ${c} - (${b}) = ${step1Rhs}$$`,
-        `Divide both sides by $${a}$:\n\n$$x = \\frac{${step1Rhs}}{${a}}$$`,
-        `Write down the final answer:\n\n$$x = ${x}$$`
+        `Subtract $${cCoeff}x$ from both sides:\n\n$$${a - cCoeff}x ${bStr} = ${d}$$`,
+        `Isolate term with $x$:\n\n$$${a - cCoeff}x = ${d - b}$$`,
+        `Divide by $${a - cCoeff}$:\n\n$$x = ${x}$$`
       ]
     };
   }
