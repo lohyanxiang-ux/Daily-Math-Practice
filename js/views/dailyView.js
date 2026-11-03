@@ -2,7 +2,7 @@ import { loadQuestionGenerator } from "../questions/loader.js";
 import { recordQuestionAttempt, state } from "../state.js";
 import { syncBatchMastery } from "../services/backend.js";
 import { navigateTo } from "../router.js";
-import { renderKaTeX } from "../utils/katexHelper.js";
+import { renderMath } from "../utils/katexHelper.js";
 import { isAlgebraicallyEquivalent } from "../utils/mathEquivalence.js";
 
 export async function renderDailyPractice(viewportEl, params = {}) {
