@@ -10,7 +10,7 @@ import { isAlgebraicallyEquivalent } from "../utils/mathEquivalence.js";
 /**
  * Refined 2-Column Question Practice Runner
  * Left Column: Top Scratchpad Toolbar + Question Prompt + Canvas Overlay
- * Right Column: Scrollable Compact Hints + Unified Standard Keypad
+ * Right Column: Progressive Hints + Dynamic Mastery Feedback + Unified Standard Keypad
  */
 export function renderQuestionView(container, options = {}) {
   const mode = options.mode || "dailyQuest";
@@ -109,7 +109,7 @@ export function renderQuestionView(container, options = {}) {
     }
   }
 
-  // Updates Global Top Header Bar to integrate Exit, Mode, and Progress in one bar
+  // Updates Global Top Header Bar to integrate Exit, Mode, Mastery Score, and Progress
   function updateGlobalTopNav() {
     const topNav = document.querySelector(".top-nav");
     if (!topNav) return;
@@ -130,6 +130,7 @@ export function renderQuestionView(container, options = {}) {
     const displayName = state.profile ? (state.profile.displayName || state.profile.name || "Student") : "Student";
     const userXp = state.profile ? (state.profile.xp || 0) : 0;
     const userStreak = state.profile ? (state.profile.streakCount || 0) : 0;
+    const currentMastery = state.mastery[activeGeneratorPath]?.score || 0;
 
     topNav.innerHTML = `
       <div style="display: flex; align-items: center; gap: 12px;">
@@ -141,7 +142,11 @@ export function renderQuestionView(container, options = {}) {
         ${progressText}
       </div>
 
-      <div style="display: flex; align-items: center; gap: 16px;">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <!-- MASTERY SCORE BADGE -->
+        <span class="stat" style="background: #eff6ff; color: #1d4ed8; padding: 3px 8px; border-radius: 6px; border: 1px solid #bfdbfe; font-size: 0.82rem;">
+          🎯 Mastery <b id="top-nav-mastery-val">${currentMastery}</b>
+        </span>
         <span class="stat">XP <b>${userXp}</b></span>
         <span class="stat">Streak <b>${userStreak}</b> 🔥</span>
         <span style="font-size: 0.85rem; font-weight: 700; color: #475569; background: #f1f5f9; padding: 4px 10px; border-radius: 8px;">${displayName}</span>
@@ -191,7 +196,7 @@ export function renderQuestionView(container, options = {}) {
       return;
     }
 
-    // Update global top nav bar with Exit, Mode, and Progress
+    // Update global top nav bar with Exit, Mode, Mastery, and Progress
     updateGlobalTopNav();
 
     const stepsList = currentQuestion.steps || currentQuestion.hints || [];
@@ -261,17 +266,11 @@ export function renderQuestionView(container, options = {}) {
 
         </section>
 
-<!-- RIGHT COLUMN (45% Width): SCROLLABLE COMPACT HINTS & KEYPAD -->
+        <!-- RIGHT COLUMN (45% Width): PROGRESSIVE HINTS & KEYPAD -->
         <section style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; padding: 10px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
           
           <!-- TOP HALF: SCROLLABLE HINTS & SOLUTION FEEDBACK (HEIGHT: 140px) -->
-          <div style="height: 140px; flex-shrink: 0; overflow-y: auto; padding-right: 4px; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <button id="btn-ask-hint" class="hint-btn" style="padding: 4px 10px; font-size: 0.78rem; font-weight: 700; cursor: pointer;">
-                💡 Ask for Hint (<span id="hint-count">0</span>/${stepsList.length})
-              </button>
-            </div>
-            
+          <div id="hints-scroll-area" style="height: 140px; flex-shrink: 0; overflow-y: auto; padding-right: 4px; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
             <div id="hints-container" class="hints-list"></div>
             <div id="daily-feedback" class="feedback-area" style="margin-top: 4px; font-weight: 700; border-radius: 8px;"></div>
             <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 4px; padding: 6px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;"></div>
@@ -301,17 +300,46 @@ export function renderQuestionView(container, options = {}) {
       (val) => { handleSubmission(val); }
     );
 
-    // Progressive Hints Listener
-    const hintBtn = container.querySelector("#btn-ask-hint");
+    // Progressive Hint Rendering (Hint button appears directly below revealed hints)
     const hintsContainer = container.querySelector("#hints-container");
-    const hintCountEl = container.querySelector("#hint-count");
+    const hintsScrollArea = container.querySelector("#hints-scroll-area");
 
-    hintBtn?.addEventListener("click", () => {
+    function scrollHintsToBottom() {
+      if (hintsScrollArea) {
+        hintsScrollArea.scrollTop = hintsScrollArea.scrollHeight;
+      }
+    }
+
+    function renderHintButton() {
+      // Remove previous inline hint button if it exists
+      const existingBtn = hintsContainer.querySelector(".dynamic-hint-btn");
+      if (existingBtn) existingBtn.remove();
+
+      if (currentHintStep < stepsList.length) {
+        const nextStepNum = currentHintStep + 1;
+        const btn = document.createElement("button");
+        btn.className = "dynamic-hint-btn hint-btn";
+        btn.style.cssText = "margin: 6px 0; padding: 6px 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: block; width: 100%; border-radius: 6px; background: #fffbeb; border: 1px solid #f59e0b; color: #78350f; text-align: center;";
+        btn.innerText = `💡 Ask for Hint (${nextStepNum}/${stepsList.length})`;
+
+        btn.addEventListener("click", () => {
+          revealNextHint();
+        });
+
+        hintsContainer.appendChild(btn);
+        scrollHintsToBottom();
+      }
+    }
+
+    function revealNextHint() {
       if (!stepsList || currentHintStep >= stepsList.length) return;
+
+      // Remove current inline button before placing hint text
+      const existingBtn = hintsContainer.querySelector(".dynamic-hint-btn");
+      if (existingBtn) existingBtn.remove();
 
       const stepText = stepsList[currentHintStep];
       currentHintStep++;
-      if (hintCountEl) hintCountEl.innerText = currentHintStep;
 
       const hintCard = document.createElement("div");
       hintCard.className = "hint-card";
@@ -320,14 +348,18 @@ export function renderQuestionView(container, options = {}) {
       hintsContainer.appendChild(hintCard);
       renderKaTeX(hintCard);
 
-      if (currentHintStep >= stepsList.length) {
-        hintBtn.disabled = true;
-        hintBtn.innerText = "All Hints Revealed";
-      }
-    });
+      // Render next hint button below this new hint
+      renderHintButton();
+      scrollHintsToBottom();
+    }
+
+    // Render initial Hint 1 button if hints are available
+    if (stepsList.length > 0) {
+      renderHintButton();
+    }
   }
 
-  // Submission Evaluator
+  // Submission Evaluator & Dynamic Mastery Tracker
   function handleSubmission(userAns) {
     if (!currentQuestion) return;
 
@@ -337,7 +369,20 @@ export function renderQuestionView(container, options = {}) {
 
     const isCorrect = isAlgebraicallyEquivalent(userAns, currentQuestion.expectedAnswer);
 
+    // Capture score prior to recording attempt
+    const oldScore = state.mastery[activeGeneratorPath]?.score || 0;
+
     recordQuestionAttempt(activeGeneratorPath, isCorrect, currentHintStep, stepsList.length || 3);
+
+    // Calculate mastery score difference
+    const newScore = state.mastery[activeGeneratorPath]?.score || 0;
+    const scoreDiff = newScore - oldScore;
+    const diffBadge = scoreDiff >= 0 ? `+${scoreDiff}` : `${scoreDiff}`;
+    const diffColor = scoreDiff >= 0 ? "#15803d" : "#b91c1c";
+
+    // Live update top banner mastery value
+    const topMasteryEl = document.querySelector("#top-nav-mastery-val");
+    if (topMasteryEl) topMasteryEl.innerText = newScore;
 
     if (isCorrect) {
       sessionScore++;
@@ -346,14 +391,14 @@ export function renderQuestionView(container, options = {}) {
         feedbackEl.style.padding = "8px 12px";
         feedbackEl.style.background = "#d1fae5";
         feedbackEl.style.color = "#065f46";
-        feedbackEl.innerText = isSRS ? "Correct! 🎉 Memory restored." : "Correct! 🎉 +10 XP";
+        feedbackEl.innerHTML = `Correct! 🎉 +10 XP  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span>`;
       }
     } else {
       if (feedbackEl) {
         feedbackEl.style.padding = "8px 12px";
         feedbackEl.style.background = "#fee2e2";
         feedbackEl.style.color = "#991b1b";
-        feedbackEl.innerText = `Incorrect. Expected: ${currentQuestion.expectedAnswer}`;
+        feedbackEl.innerHTML = `Incorrect. Expected: <strong>${currentQuestion.expectedAnswer}</strong>  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span>`;
       }
     }
 
