@@ -8,7 +8,9 @@ import { renderKaTeX } from "../utils/katexHelper.js";
 import { isAlgebraicallyEquivalent } from "../utils/mathEquivalence.js";
 
 /**
- * Enhanced iPad/Landscape 2-Panel Question Workspace Runner
+ * Enhanced 2-Column Question Practice Runner
+ * Left Column: Scrollable Question Prompt + Direct Scratchpad Overlay
+ * Right Column: Scrollable Hints + Strategy C Tabbed Keypad
  */
 export function renderQuestionView(container, options = {}) {
   const mode = options.mode || "dailyQuest";
@@ -20,7 +22,6 @@ export function renderQuestionView(container, options = {}) {
   let activeGeneratorPath = options.generatorPath || "";
 
   const totalQuestions = options.maxQuestions || (isDailyQuest ? 5 : (isSRS ? queue.length || 4 : Infinity));
-  const allowSkip = options.allowSkip ?? (isDailyQuest || isSRS);
   const targetMastery = options.targetMastery || 90;
 
   let questionIndex = 0;
@@ -29,8 +30,7 @@ export function renderQuestionView(container, options = {}) {
   let activeAnswer = "";
   let currentHintStep = 0;
   let currentSkillTitle = "Practice Skill";
-  let activeLayoutMode = "balanced"; // 'balanced', 'diagram-focus', 'canvas-focus'
-  let isKeypadCollapsed = false;
+  let activeKeypadTab = "basic"; // 'basic' or 'math'
   const sessionInitialScores = {};
 
   // Background Mastery Batch Sync on page visibility change
@@ -50,7 +50,7 @@ export function renderQuestionView(container, options = {}) {
   };
   document.addEventListener("visibilitychange", visibilityHandler);
 
-  // Single Next Question Event Handler (Prevents duplicate listener stacking)
+  // Single Next Question Event Handler
   const handleNextQuestionTrigger = () => {
     questionIndex++;
     loadQuestion();
@@ -82,8 +82,7 @@ export function renderQuestionView(container, options = {}) {
 
     const selectedSkill = (state.curriculum || []).find(s => s.generatorPath === activeGeneratorPath) || {
       title: "Practice Skill",
-      generatorPath: activeGeneratorPath,
-      strand: "Algebra"
+      generatorPath: activeGeneratorPath
     };
 
     currentSkillTitle = selectedSkill.title || "Practice Skill";
@@ -99,12 +98,12 @@ export function renderQuestionView(container, options = {}) {
       const genModule = await loadQuestionGenerator(activeGeneratorPath);
       return genModule.generateQuestion(tier);
     } catch (err) {
-      console.error(`Failed to load question generator for path [${activeGeneratorPath}]:`, err);
+      console.error(`Failed to load generator for [${activeGeneratorPath}]:`, err);
       return null;
     }
   }
 
-  // Render Workspace
+  // Render 2-Column Workspace
   async function loadQuestion() {
     if (!isSkillTree && questionIndex >= totalQuestions) {
       finishSession();
@@ -136,118 +135,150 @@ export function renderQuestionView(container, options = {}) {
       return;
     }
 
-    let modeBadge = `<span class="tag" style="background: #e0f2fe; color: #0369a1; font-weight: 700;">📅 Daily Quest</span>`;
-    if (isSkillTree) modeBadge = `<span class="tag" style="background: #f0fdf4; color: #15803d; font-weight: 700;">🌳 Skill Mastery</span>`;
-    if (isSRS) modeBadge = `<span class="tag" style="background: #fef3c7; color: #b45309; font-weight: 700;">🔄 Memory Refresher</span>`;
+    let modeBadge = `<span class="tag" style="background: #e0f2fe; color: #0369a1; font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 0.78rem;">📅 Daily Quest</span>`;
+    if (isSkillTree) modeBadge = `<span class="tag" style="background: #f0fdf4; color: #15803d; font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 0.78rem;">🌳 Skill Mastery</span>`;
+    if (isSRS) modeBadge = `<span class="tag" style="background: #fef3c7; color: #b45309; font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 0.78rem;">🔄 Memory Refresher</span>`;
 
     const progressText = isSkillTree ? `Question ${questionIndex + 1}` : `Q${questionIndex + 1} of ${totalQuestions}`;
-    const skipBtnHtml = allowSkip ? `<button id="btn-skip-question" class="secondary-btn" style="background: #fff7ed; color: #c2410c; border-color: #ffedd5;">Skip ⏭️</button>` : "";
     const exitBtnText = isSkillTree ? "💾 Save & Exit" : "← Exit";
     const stepsList = currentQuestion.steps || currentQuestion.hints || [];
 
+    // Student Profile Info String (Name | Class/Year)
+    const displayName = state.profile ? (state.profile.displayName || state.profile.name || "Student") : "Student";
+    const classInfo = state.profile ? `${state.profile.year || ''} ${state.profile.stream || ''}`.trim() : "";
+    const studentInfoStr = classInfo ? `${displayName} (${classInfo})` : displayName;
+
     const diagramSvgContent = currentQuestion.diagramSvg || currentQuestion.svg || "";
     const diagramHtml = (diagramSvgContent || currentQuestion.imageUrl) ? `
-      <div id="diagram-viewport" style="margin-top: 8px; width: 100%; max-height: 230px; display: flex; justify-content: center; align-items: center; background: #fafafa; border: 1px solid #e2e8f0; border-radius: 10px; padding: 6px; box-sizing: border-box; overflow: hidden;">
-        ${diagramSvgContent || `<img src="${currentQuestion.imageUrl}" style="max-width: 100%; max-height: 210px; object-fit: contain;">`}
+      <div id="diagram-viewport" style="margin-top: 10px; width: 100%; max-height: 240px; display: flex; justify-content: center; align-items: center; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; box-sizing: border-box; overflow: hidden;">
+        ${diagramSvgContent || `<img src="${currentQuestion.imageUrl}" style="max-width: 100%; max-height: 220px; object-fit: contain;">`}
       </div>
     ` : "";
 
-    // 2-PANEL IPAD/LANDSCAPE ADAPTIVE DOM STRUCTURE
+    // Keypad Layout Config for Strategy C
+    const basicKeypadKeys = [
+      ["7", "8", "9", "/"],
+      ["4", "5", "6", "*"],
+      ["1", "2", "3", "-"],
+      ["0", ".", "⌫", "+"]
+    ];
+
+    const mathKeypadKeys = [
+      ["x", "y", "(", ")"],
+      ["x²", "xⁿ", "√", "/"],
+      ["+", "-", "=", "π"],
+      ["0", ".", "⌫", "Clear"]
+    ];
+
+    const currentKeypadLayout = currentQuestion.keypad || basicKeypadKeys;
+
+    // CONSOLIDATED 2-COLUMN DOM STRUCTURE
     container.innerHTML = `
       <div style="display: flex; flex-direction: column; height: 100dvh; width: 100vw; overflow: hidden; background: #f1f5f9; box-sizing: border-box;">
         
-        <!-- TOP TOOLBAR & VIEWPORT CONTROL BAR -->
-        <header style="height: 50px; background: #ffffff; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; padding: 0 16px; flex-shrink: 0; user-select: none;">
+        <!-- SINGLE CONSOLIDATED TOP NAVBAR (44px Height) -->
+        <header style="height: 44px; background: #ffffff; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; padding: 0 14px; flex-shrink: 0; user-select: none;">
+          
+          <!-- LEFT: Exit | Mode Badge | Student Name & Class -->
           <div style="display: flex; align-items: center; gap: 10px;">
-            <button id="btn-exit-dashboard" class="secondary-btn" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 700; cursor: pointer;">${exitBtnText}</button>
+            <button id="btn-exit-dashboard" class="secondary-btn" style="padding: 4px 10px; font-size: 0.82rem; font-weight: 700; cursor: pointer;">${exitBtnText}</button>
             ${modeBadge}
-            <span style="font-weight: 700; color: #64748b; font-size: 0.88rem;">${progressText}</span>
+            <span style="font-weight: 700; color: #475569; font-size: 0.85rem; border-left: 1px solid #cbd5e1; padding-left: 10px;">${studentInfoStr}</span>
           </div>
 
-          <!-- VIEWPORT LAYOUT MODE TOGGLES -->
-          <div style="display: flex; gap: 6px; align-items: center;">
-            <button class="layout-toggle-btn active" data-mode="balanced" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; background: #eff6ff; color: #2563eb; font-weight: 700; font-size: 0.8rem; cursor: pointer;">📐 Split 50/50</button>
-            <button class="layout-toggle-btn" data-mode="diagram-focus" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; color: #475569; font-weight: 700; font-size: 0.8rem; cursor: pointer;">🔍 Focus Diagram</button>
-            <button class="layout-toggle-btn" data-mode="canvas-focus" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; color: #475569; font-weight: 700; font-size: 0.8rem; cursor: pointer;">✏️ Max Working</button>
-            ${diagramSvgContent ? `<button id="btn-trace-diagram" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #bfdbfe; background: #f0fdf4; color: #166534; font-weight: 700; font-size: 0.8rem; cursor: pointer;">🎨 Trace on Canvas</button>` : ''}
+          <!-- CENTER: Progress Indicator -->
+          <div style="font-weight: 800; color: #1e293b; font-size: 0.9rem; background: #f1f5f9; padding: 3px 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+            ${progressText}
+          </div>
+
+          <!-- RIGHT: Integrated Scratchpad Toolbar Controls -->
+          <div class="scratchpad-toolbar" style="margin: 0; padding: 0; background: transparent; border: none; gap: 6px;">
+            <div class="tool-group" style="padding: 2px;">
+              <button class="tool-icon-btn active" data-tool="pen" title="Pen" style="width: 28px; height: 28px; font-size: 0.85rem;">✏️</button>
+              <button class="tool-icon-btn" data-tool="eraser" title="Eraser" style="width: 28px; height: 28px; font-size: 0.85rem;">🧹</button>
+              <button class="tool-icon-btn" data-tool="pointer" title="Pointer" style="width: 28px; height: 28px; font-size: 0.85rem;">🖐️</button>
+            </div>
+
+            <div class="tool-group" style="padding: 2px;">
+              <div class="color-swatch active" data-color="#1e293b" style="background: #1e293b; width: 18px; height: 18px;"></div>
+              <div class="color-swatch" data-color="#2563eb" style="background: #2563eb; width: 18px; height: 18px;"></div>
+              <div class="color-swatch" data-color="#dc2626" style="background: #dc2626; width: 18px; height: 18px;"></div>
+              <div class="color-swatch" data-color="#16a34a" style="background: #16a34a; width: 18px; height: 18px;"></div>
+            </div>
+
+            <div class="tool-group" style="padding: 2px;">
+              <button id="btn-clear-canvas" class="tool-icon-btn" title="Clear Canvas" style="width: 28px; height: 28px; font-size: 0.85rem;">🗑️</button>
+            </div>
           </div>
         </header>
 
-        <!-- MAIN 2-PANEL FLEX WORKSPACE -->
-        <main id="ipad-workspace" style="display: flex; flex: 1; height: calc(100dvh - 50px); overflow: hidden; padding: 10px; gap: 10px; box-sizing: border-box;">
+        <!-- MAIN 2-COLUMN WORKSPACE -->
+        <main style="display: flex; flex: 1; height: calc(100dvh - 44px); overflow: hidden; padding: 8px; gap: 8px; box-sizing: border-box;">
           
-          <!-- LEFT PANEL: PINNED PROMPT/DIAGRAM & INDEPENDENT SCROLL HINTS -->
-          <section id="left-panel" style="flex: 0 0 42%; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; padding: 14px; box-sizing: border-box; overflow: hidden; transition: flex 0.2s ease;">
+          <!-- LEFT COLUMN (55% Width): QUESTION PROMPT + SCROLLABLE CANVAS OVERLAY -->
+          <section id="left-column-workspace" style="flex: 0 0 55%; background: #ffffff; border-radius: 14px; border: 1px solid #cbd5e1; box-sizing: border-box; overflow-y: auto; position: relative;">
             
-            <!-- PINNED TOP AREA (PROMPT & ENLARGED DIAGRAM - NO SCROLL) -->
-            <div style="flex-shrink: 0; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <span class="tag" style="font-size: 0.75rem; font-weight: 700; color: #475569;">${currentQuestion.strand || 'Algebra'}</span>
-                <span style="font-size: 0.88rem; font-weight: 700; color: #1e293b;">${currentSkillTitle}</span>
-              </div>
+            <!-- TALL PAPER WRAPPER (Allows scrolling down for extra scratchpad space) -->
+            <div id="scratchpad-scroll-wrapper" style="position: relative; min-height: 1200px; width: 100%; padding: 16px; box-sizing: border-box;">
               
-              <div id="question-prompt" class="math-display" style="font-size: 1.05rem; line-height: 1.45; color: #0f172a; margin-top: 6px;">
-                ${currentQuestion.prompt}
+              <!-- UNDERLAY: QUESTION PROMPT & DIAGRAM -->
+              <div id="question-underlay" style="position: relative; z-index: 1; pointer-events: none; max-width: 100%;">
+                
+                <!-- SKILL TITLE ONLY (NO STRAND TAG) -->
+                <div style="font-size: 1.1rem; font-weight: 800; color: #0f172a; margin-bottom: 8px;">
+                  ${currentSkillTitle}
+                </div>
+
+                <div id="question-prompt" class="math-display" style="font-size: 1.08rem; line-height: 1.5; color: #1e293b;">
+                  ${currentQuestion.prompt}
+                </div>
+
+                ${diagramHtml}
               </div>
 
-              ${diagramHtml}
-            </div>
+              <!-- OVERLAY: TRANSPARENT SCRATCHPAD CANVAS -->
+              <div class="canvas-wrapper" style="position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; background: transparent;">
+                <canvas id="scratchpad-canvas" style="width: 100%; height: 100%; display: block; touch-action: none;"></canvas>
+              </div>
 
-            <!-- INDEPENDENT BOTTOM SCROLL AREA (HINTS & SOLUTIONS ONLY) -->
-            <div style="flex: 1; overflow-y: auto; padding-top: 10px;">
+            </div>
+          </section>
+
+          <!-- RIGHT COLUMN (45% Width): HINTS/FEEDBACK & STRATEGY C KEYPAD -->
+          <section style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border-radius: 14px; border: 1px solid #cbd5e1; padding: 10px; box-sizing: border-box; overflow: hidden;">
+            
+            <!-- TOP HALF: SCROLLABLE HINTS & SOLUTION FEEDBACK -->
+            <div style="flex: 1; overflow-y: auto; padding-right: 4px; margin-bottom: 8px; border-bottom: 1px solid #f1f5f9;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <button id="btn-ask-hint" class="hint-btn" style="padding: 6px 12px; font-size: 0.82rem; font-weight: 700; cursor: pointer;">
                   💡 Ask for Hint (<span id="hint-count">0</span>/${stepsList.length})
                 </button>
-                ${skipBtnHtml}
               </div>
+              
               <div id="hints-container" class="hints-list"></div>
               <div id="daily-feedback" class="feedback-area" style="margin-top: 8px; font-weight: 700; border-radius: 8px;"></div>
               <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 8px; padding: 10px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;"></div>
             </div>
 
-          </section>
+            <!-- BOTTOM HALF: STRATEGY C TABBED KEYPAD DOCK -->
+            <div id="keypad-dock-section" class="practice-col keypad-col" style="flex-shrink: 0; height: 265px; display: flex; flex-direction: column; justify-content: space-between;">
+              
+              <!-- STRATEGY C SEGMENTED TAB SWITCHER -->
+              <div style="display: flex; gap: 4px; background: #f1f5f9; padding: 3px; border-radius: 8px; margin-bottom: 6px; flex-shrink: 0;">
+                <button type="button" id="tab-keypad-basic" class="keypad-tab-btn active" style="flex: 1; padding: 5px; font-size: 0.78rem; font-weight: 700; border: none; border-radius: 6px; cursor: pointer; background: #2563eb; color: #ffffff;">
+                  🔢 Basic (123)
+                </button>
+                <button type="button" id="tab-keypad-math" class="keypad-tab-btn" style="flex: 1; padding: 5px; font-size: 0.78rem; font-weight: 700; border: none; border-radius: 6px; cursor: pointer; background: transparent; color: #64748b;">
+                  ∛ Math Symbols
+                </button>
+              </div>
 
-          <!-- RIGHT PANEL: SCRATCHPAD CANVAS & KEYPAD DOCK -->
-          <section id="right-panel" style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; padding: 10px; box-sizing: border-box; overflow: hidden; position: relative;">
+              <!-- LIVE ANSWER DISPLAY BOX -->
+              <div id="keypad-display" class="answer-display-box" style="height: 38px; margin-bottom: 6px; flex-shrink: 0;"></div>
+
+              <!-- KEYPAD GRID CONTAINER (FIXED HEIGHT) -->
+              <div class="keypad-grid" style="flex: 1; display: grid; gap: 4px;"></div>
             
-            <!-- SCRATCHPAD WORKSPACE -->
-            <div class="practice-col" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
-              <div class="scratchpad-toolbar" style="margin-bottom: 6px;">
-                <div class="tool-group">
-                  <button class="tool-icon-btn active" data-tool="pen" title="Pen">✏️</button>
-                  <button class="tool-icon-btn" data-tool="eraser" title="Eraser">🧹</button>
-                  <button class="tool-icon-btn" data-tool="pointer" title="Scroll / Pointer">🖐️</button>
-                </div>
-
-                <div class="tool-group">
-                  <div class="color-swatch active" data-color="#1e293b" style="background: #1e293b;"></div>
-                  <div class="color-swatch" data-color="#2563eb" style="background: #2563eb;"></div>
-                  <div class="color-swatch" data-color="#dc2626" style="background: #dc2626;"></div>
-                  <div class="color-swatch" data-color="#16a34a" style="background: #16a34a;"></div>
-                </div>
-
-                <div class="tool-group">
-                  <button id="btn-toggle-keypad-view" class="tool-icon-btn" title="Toggle Keypad Visibility" style="font-size: 0.8rem; font-weight: 700; width: auto; padding: 0 8px;">⌨️ Hide</button>
-                  <button id="btn-clear-canvas" class="tool-icon-btn" title="Clear Canvas">🗑️</button>
-                </div>
-              </div>
-
-              <div class="canvas-wrapper" style="flex: 1; position: relative; border-radius: 10px; overflow: hidden; background: #fafafa; border: 1px dashed #cbd5e1;">
-                <div id="canvas-watermark" style="position: absolute; inset: 0; display: none; opacity: 0.18; pointer-events: none; justify-content: center; align-items: center; padding: 10px;">
-                  ${diagramSvgContent}
-                </div>
-                <canvas id="scratchpad-canvas"></canvas>
-              </div>
-            </div>
-
-            <!-- KEYPAD DOCK SECTION -->
-            <div id="keypad-dock-section" class="practice-col keypad-col" style="flex-shrink: 0; margin-top: 8px; transition: all 0.25s ease;">
-              <div style="font-weight: 700; font-size: 0.82rem; margin-bottom: 4px; flex-shrink: 0; color: #475569; display: flex; justify-content: space-between;">
-                <span>Enter Answer:</span>
-              </div>
-              <div id="keypad-display" class="answer-display-box"></div>
-              <div class="keypad-grid"></div>
             </div>
 
           </section>
@@ -257,70 +288,46 @@ export function renderQuestionView(container, options = {}) {
     `;
 
     renderKaTeX(container.querySelector("#question-prompt"));
+    
+    // Initialize Scratchpad Canvas Component
     initScratchpad(container);
 
-    initKeypad(
-      container,
-      currentQuestion.keypad,
-      (val) => { activeAnswer = val; },
-      (val) => { handleSubmission(val); },
-      () => { handleSkip(); }
-    );
+    // Render Strategy C Keypad Layout Function
+    function renderKeypadLayout(layoutKeys) {
+      initKeypad(
+        container,
+        layoutKeys,
+        (val) => { activeAnswer = val; },
+        (val) => { handleSubmission(val); }
+      );
+    }
 
-    // Layout Viewport Mode Toggles
-    const leftPanel = container.querySelector("#left-panel");
-    const rightPanel = container.querySelector("#right-panel");
+    // Default Keypad Initialization
+    renderKeypadLayout(currentKeypadLayout);
 
-    container.querySelectorAll(".layout-toggle-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        container.querySelectorAll(".layout-toggle-btn").forEach(b => {
-          b.style.background = "#ffffff";
-          b.style.color = "#475569";
-        });
-        btn.style.background = "#eff6ff";
-        btn.style.color = "#2563eb";
+    // Keypad Strategy C Tab Listeners
+    const tabBasic = container.querySelector("#tab-keypad-basic");
+    const tabMath = container.querySelector("#tab-keypad-math");
 
-        activeLayoutMode = btn.getAttribute("data-mode");
-        if (activeLayoutMode === "diagram-focus") {
-          leftPanel.style.flex = "0 0 65%";
-          rightPanel.style.flex = "1";
-        } else if (activeLayoutMode === "canvas-focus") {
-          leftPanel.style.flex = "0 0 28%";
-          rightPanel.style.flex = "1";
-        } else {
-          leftPanel.style.flex = "0 0 42%";
-          rightPanel.style.flex = "1";
-        }
-      });
+    tabBasic?.addEventListener("click", () => {
+      activeKeypadTab = "basic";
+      tabBasic.style.background = "#2563eb";
+      tabBasic.style.color = "#ffffff";
+      tabMath.style.background = "transparent";
+      tabMath.style.color = "#64748b";
+      renderKeypadLayout(basicKeypadKeys);
     });
 
-    // Toggle Keypad Visibility (Reclaims canvas space)
-    const keypadDock = container.querySelector("#keypad-dock-section");
-    const toggleKeypadBtn = container.querySelector("#btn-toggle-keypad-view");
-    toggleKeypadBtn?.addEventListener("click", () => {
-      isKeypadCollapsed = !isKeypadCollapsed;
-      if (isKeypadCollapsed) {
-        keypadDock.style.display = "none";
-        toggleKeypadBtn.innerText = "⌨️ Show";
-      } else {
-        keypadDock.style.display = "flex";
-        toggleKeypadBtn.innerText = "⌨️ Hide";
-      }
+    tabMath?.addEventListener("click", () => {
+      activeKeypadTab = "math";
+      tabMath.style.background = "#2563eb";
+      tabMath.style.color = "#ffffff";
+      tabBasic.style.background = "transparent";
+      tabBasic.style.color = "#64748b";
+      renderKeypadLayout(mathKeypadKeys);
     });
 
-    // Trace Diagram Watermark Toggle
-    const traceBtn = container.querySelector("#btn-trace-diagram");
-    const watermarkEl = container.querySelector("#canvas-watermark");
-    traceBtn?.addEventListener("click", () => {
-      if (watermarkEl) {
-        const isHidden = watermarkEl.style.display === "none";
-        watermarkEl.style.display = isHidden ? "flex" : "none";
-        traceBtn.style.background = isHidden ? "#dcfce7" : "#f0fdf4";
-      }
-    });
-
-    container.querySelector("#btn-skip-question")?.addEventListener("click", () => handleSkip());
-
+    // Progressive Hints Listener
     const hintBtn = container.querySelector("#btn-ask-hint");
     const hintsContainer = container.querySelector("#hints-container");
     const hintCountEl = container.querySelector("#hint-count");
@@ -345,6 +352,7 @@ export function renderQuestionView(container, options = {}) {
       }
     });
 
+    // Exit Button Handler
     container.querySelector("#btn-exit-dashboard")?.addEventListener("click", () => {
       cleanupListeners();
       flushMasterySync();
@@ -356,20 +364,7 @@ export function renderQuestionView(container, options = {}) {
     });
   }
 
-  function handleSkip() {
-    const feedbackEl = container.querySelector("#daily-feedback");
-    if (feedbackEl) {
-      feedbackEl.style.padding = "8px 12px";
-      feedbackEl.style.background = "#f1f5f9";
-      feedbackEl.style.color = "#475569";
-      feedbackEl.innerText = "⏭️ Question skipped (no penalty). Loading next...";
-    }
-    setTimeout(() => {
-      questionIndex++;
-      loadQuestion();
-    }, 500);
-  }
-
+  // Submission Evaluator
   function handleSubmission(userAns) {
     if (!currentQuestion) return;
 
@@ -416,6 +411,7 @@ export function renderQuestionView(container, options = {}) {
     }
   }
 
+  // Session Completion
   function finishSession(isMastered = false) {
     cleanupListeners();
     
