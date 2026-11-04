@@ -14,19 +14,21 @@ export function renderTeacherDashboard(container, onLogout) {
 
   const teacherName = currentUser.displayName || currentUser.name || state.user?.name || "Teacher Account";
 
-  // Filter States
+  // Dashboard Active State
+  let activeTab = "overview"; // 'overview' or 'tagging'
   let selectedClass = "All";
   let selectedLevel = "All";
   let selectedStream = "All";
   let selectedStrand = "All";
   let selectedTopic = "All";
 
-  // Temporary edit buffer for class skill tags
+  // Buffer for holding tag changes before saving to Google Sheets
   let currentClassTagsBuffer = {};
 
   // State for Masked PINs
   const revealedPins = new Set();
 
+  // Helper: Get fallback mastery metadata
   function safeGetMasteryMetadata(score) {
     try {
       const meta = getMasteryMetadata(score);
@@ -41,12 +43,36 @@ export function renderTeacherDashboard(container, onLogout) {
     };
   }
 
+  // Helper: Safe student class name
   function getStudentClass(st) {
     if (!st) return "Unassigned";
     const c = st.class || st.className || st.gradeClass;
     return (c && String(c).trim()) ? String(c).trim() : "Unassigned";
   }
 
+  // Auto-default logic: Earlier years = Past, Current year & later = Future
+  function getAutoDefaultTag(skill, className) {
+    if (!className || className === "All") return "Future";
+    
+    // Extract numeric values from strings (e.g., "Sec 3" -> 3, "Class 2A" -> 2)
+    const classNumMatch = String(className).match(/\d+/);
+    const skillYearMatch = String(skill.year || skill.level || "").match(/\d+/);
+
+    if (classNumMatch && skillYearMatch) {
+      const classLevel = parseInt(classNumMatch[0], 10);
+      const skillLevel = parseInt(skillYearMatch[0], 10);
+
+      if (skillLevel < classLevel) {
+        return "Past";
+      } else if (skillLevel >= classLevel) {
+        return "Future";
+      }
+    }
+
+    return "Future"; // Fallback default
+  }
+
+  // Filter options extraction
   const classes = Array.from(new Set(students.map(getStudentClass))).sort();
   const levels = Array.from(new Set(curriculum.map(c => c.level).filter(Boolean))).sort();
   const streams = Array.from(new Set(curriculum.map(c => c.stream).filter(Boolean))).sort();
@@ -122,11 +148,11 @@ export function renderTeacherDashboard(container, onLogout) {
 
   function syncClassTagsBuffer() {
     if (selectedClass !== "All") {
-      const existing = classSkillTags[selectedClass] || {};
-      currentClassTagsBuffer = { ...existing };
+      const savedTags = classSkillTags[selectedClass] || {};
+      currentClassTagsBuffer = { ...savedTags };
       curriculum.forEach(sk => {
         if (!currentClassTagsBuffer[sk.generatorPath]) {
-          currentClassTagsBuffer[sk.generatorPath] = "Current";
+          currentClassTagsBuffer[sk.generatorPath] = getAutoDefaultTag(sk, selectedClass);
         }
       });
     } else {
@@ -135,6 +161,7 @@ export function renderTeacherDashboard(container, onLogout) {
   }
 
   function render() {
+    // Handling Loading State
     if (state.isLoadingTeacherData) {
       container.innerHTML = `
         <div style="display: flex; justify-content: center; align-items: center; min-height: 60vh; flex-direction: column; gap: 12px; background: #f8fafc; padding: 24px;">
@@ -175,276 +202,303 @@ export function renderTeacherDashboard(container, onLogout) {
     const classAvgScore = totalScoreCount > 0 ? Math.round(totalScoreSum / totalScoreCount) : 0;
     const avgMeta = safeGetMasteryMetadata(classAvgScore);
 
-    container.innerHTML = `
-      <div class="teacher-dashboard-container" style="display: flex; flex-direction: column; gap: 16px; padding: 20px; min-height: 100%; box-sizing: border-box; background: #f8fafc;">
-        
-        <!-- INTEGRATED HEADER -->
-        <header style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 14px 24px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <div style="display: flex; flex-direction: column; gap: 2px;">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <h1 style="font-size: 1.25rem; font-weight: 800; color: #0f172a; margin: 0;">${teacherName}</h1>
-                <span style="background: #2563eb; color: #ffffff; padding: 3px 10px; border-radius: 12px; font-weight: 800; font-size: 0.75rem; letter-spacing: 0.3px;">
-                  🎓 TEACHER DASHBOARD
-                </span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <span style="background: #e0e7ff; color: #3730a3; padding: 2px 8px; border-radius: 10px; font-size: 0.78rem; font-weight: 700;">
-                  👨‍🏫 Educator Portal
-                </span>
-              </div>
-            </div>
-          </div>
+    // Group skills by strand for Tagging Tab view
+    const skillsByStrand = {};
+    filteredSkills.forEach(sk => {
+      const strand = sk.strand || "General Mathematics";
+      if (!skillsByStrand[strand]) skillsByStrand[strand] = [];
+      skillsByStrand[strand].push(sk);
+    });
 
-          <div style="display: flex; align-items: center; gap: 16px;">
-            <div style="display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 0.85rem; font-weight: 600;">
-              <span>🏫 Class Analytics & Diagnostic Mode</span>
+    container.innerHTML = `
+      <div class="teacher-dashboard-container" style="display: flex; flex-direction: column; gap: 16px; padding: 20px; height: 100%; box-sizing: border-box; background: #f8fafc; overflow-y: auto;">
+        
+        <!-- SINGLE TOP BAR (CLASS SELECTOR & LOGOUT) -->
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; background: #ffffff; padding: 16px 24px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; gap: 12px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <h2 style="font-size: 1.35rem; color: #0f172a; margin: 0; font-weight: 800;">🏫 ${teacherName}</h2>
+              <span style="background: #2563eb; color: #ffffff; padding: 3px 10px; border-radius: 12px; font-weight: 800; font-size: 0.75rem;">TEACHER DASHBOARD</span>
             </div>
+            <p style="color: #64748b; font-size: 0.88rem; margin: 2px 0 0 0;">Monitoring <strong>${filteredStudents.length}</strong> students across <strong>${filteredSkills.length}</strong> skills</p>
+          </div>
+          
+          <div style="display: flex; gap: 14px; align-items: center;">
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <label style="font-weight: 700; font-size: 0.88rem; color: #334155;">Class Filter:</label>
+              <select id="select-class-filter" style="padding: 8px 14px; border-radius: 10px; border: 1.5px solid #cbd5e1; font-weight: 700; cursor: pointer; background: #fff; color: #1e293b;">
+                <option value="All">All Classes (${students.length} Students)</option>
+                ${classes.map(c => `<option value="${c}" ${c === selectedClass ? 'selected' : ''}>Class ${c}</option>`).join('')}
+              </select>
+            </div>
+
             <button id="btn-dashboard-logout" style="background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 8px 16px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: background 0.15s;">
               🚪 Logout
             </button>
           </div>
-        </header>
-
-        <!-- TITLE & CLASS SELECTOR -->
-        <div style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 18px 24px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
-          <div>
-            <h2 style="font-size: 1.35rem; color: #1e293b; margin: 0; font-weight: 800;">📊 Student Class Overview</h2>
-            <p style="color: #64748b; font-size: 0.88rem; margin: 4px 0 0 0;">Monitoring <strong>${filteredStudents.length}</strong> students across <strong>${filteredSkills.length}</strong> curriculum skills</p>
-          </div>
-          
-          <div style="display: flex; gap: 12px; align-items: center;">
-            <label style="font-weight: 700; font-size: 0.88rem; color: #334155;">Active Class Filter:</label>
-            <select id="select-class-filter" style="padding: 8px 14px; border-radius: 10px; border: 1.5px solid #cbd5e1; font-weight: 600; cursor: pointer; background: #fff; color: #1e293b;">
-              <option value="All">All Classes (${students.length} Students)</option>
-              ${classes.map(c => `<option value="${c}" ${c === selectedClass ? 'selected' : ''}>Class ${c}</option>`).join('')}
-            </select>
-          </div>
         </div>
 
-        <!-- SYLLABUS SKILL TAGGING CONTROL PANEL (For Selected Class) -->
-        ${selectedClass !== "All" ? `
-          <div style="background: #ffffff; padding: 18px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-              <div>
-                <h3 style="margin: 0; font-size: 1.1rem; color: #0f172a; font-weight: 800; display: flex; align-items: center; gap: 8px;">
-                  📌 Class Syllabus Skill Tagging (Class ${selectedClass})
-                </h3>
-                <p style="margin: 2px 0 0 0; font-size: 0.82rem; color: #64748b;">
-                  Tag skills as <strong>Current</strong> (Daily practice priority), <strong>Past</strong> (Spaced review), or <strong>Future</strong> (Excluded from Daily Quest & greyed out in Skill Tree).
-                </p>
+        <!-- MAIN DASHBOARD NAVIGATION TABS -->
+        <div style="display: flex; gap: 8px; border-bottom: 2px solid #e2e8f0; padding-bottom: 2px;">
+          <button id="tab-btn-overview" style="padding: 10px 20px; border-radius: 12px 12px 0 0; border: none; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 8px; ${activeTab === 'overview' ? 'background: #2563eb; color: #ffffff;' : 'background: #ffffff; color: #64748b; border: 1px solid #e2e8f0; border-bottom: none;'}">
+            📊 Student Class Overview
+          </button>
+          <button id="tab-btn-tagging" style="padding: 10px 20px; border-radius: 12px 12px 0 0; border: none; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 8px; ${activeTab === 'tagging' ? 'background: #2563eb; color: #ffffff;' : 'background: #ffffff; color: #64748b; border: 1px solid #e2e8f0; border-bottom: none;'}">
+            📌 Class Syllabus Skill Tagging ${selectedClass !== 'All' ? `(${selectedClass})` : ''}
+          </button>
+        </div>
+
+        <!-- TAB 1: STUDENT CLASS OVERVIEW CONTENT -->
+        ${activeTab === 'overview' ? `
+          <!-- SUMMARY CARDS -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
+            <div style="background: #fff; padding: 16px; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); border: 1px solid #e2e8f0;">
+              <div style="font-size: 0.82rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Total Students</div>
+              <div style="font-size: 1.8rem; font-weight: 800; color: #0f172a; margin-top: 4px;">${filteredStudents.length}</div>
+            </div>
+
+            <div style="background: #fff; padding: 16px; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); border: 1px solid #e2e8f0;">
+              <div style="font-size: 0.82rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Class Avg Mastery</div>
+              <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                <span style="font-size: 1.8rem; font-weight: 800; color: #0f172a;">${classAvgScore}</span>
+                <span style="${avgMeta.badgeCss} padding: 3px 8px; border-radius: 8px; font-size: 0.75rem; font-weight: 700;">${avgMeta.tierName}</span>
               </div>
-              <button id="btn-save-class-tags" style="background: #2563eb; color: #ffffff; border: none; padding: 8px 18px; border-radius: 10px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);">
-                💾 Save Skill Tags to Google Sheet
-              </button>
             </div>
 
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; max-height: 240px; overflow-y: auto; padding-right: 4px;">
-              ${filteredSkills.map(sk => {
-                const currentTag = currentClassTagsBuffer[sk.generatorPath] || "Current";
-                return `
-                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
-                    <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 8px;">
-                      <div style="font-size: 0.86rem; font-weight: 700; color: #0f172a; text-overflow: ellipsis; overflow: hidden;" title="${sk.title}">${sk.title}</div>
-                      <div style="font-size: 0.74rem; color: #64748b;">${sk.strand || ''}</div>
-                    </div>
+            <div style="background: #fff; padding: 16px; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); border: 1px solid #e2e8f0;">
+              <div style="font-size: 0.82rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Active Today</div>
+              <div style="font-size: 1.8rem; font-weight: 800; color: #10b981; margin-top: 4px;">
+                ${activeTodayCount} <span style="font-size: 0.95rem; color: #64748b; font-weight: 600;">/ ${filteredStudents.length}</span>
+              </div>
+            </div>
 
-                    <div style="display: flex; gap: 4px; flex-shrink: 0;" class="tag-toggle-group" data-path="${sk.generatorPath}">
-                      <button class="btn-tag-toggle ${currentTag === 'Past' ? 'active' : ''}" data-tag="Past" style="padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.75rem; font-weight: 700; cursor: pointer; ${currentTag === 'Past' ? 'background:#0284c7; color:#fff; border-color:#0284c7;' : 'background:#fff; color:#475569;'}">
-                        🔵 Past
-                      </button>
-                      <button class="btn-tag-toggle ${currentTag === 'Current' ? 'active' : ''}" data-tag="Current" style="padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.75rem; font-weight: 700; cursor: pointer; ${currentTag === 'Current' ? 'background:#16a34a; color:#fff; border-color:#16a34a;' : 'background:#fff; color:#475569;'}">
-                        🟢 Current
-                      </button>
-                      <button class="btn-tag-toggle ${currentTag === 'Future' ? 'active' : ''}" data-tag="Future" style="padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.75rem; font-weight: 700; cursor: pointer; ${currentTag === 'Future' ? 'background:#64748b; color:#fff; border-color:#64748b;' : 'background:#fff; color:#475569;'}">
-                        ⚪ Future
-                      </button>
-                    </div>
+            <div style="background: #fff; padding: 16px; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); border: 1px solid #e2e8f0;">
+              <div style="font-size: 0.82rem; color: #64748b; font-weight: 700; text-transform: uppercase;">At-Risk Alerts</div>
+              <div style="font-size: 1.8rem; font-weight: 800; color: ${riskAlerts.length > 0 ? '#dc2626' : '#10b981'}; margin-top: 4px;">
+                ${riskAlerts.length} <span style="font-size: 0.82rem; font-weight: 600;">${riskAlerts.length > 0 ? 'Action Needed' : 'All Clear'}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- RISK ALERTS PANEL -->
+          ${riskAlerts.length > 0 ? `
+            <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 14px; padding: 16px;">
+              <h3 style="font-size: 1rem; color: #9f1239; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px; font-weight: 800;">
+                🚨 Students Needing Attention (${riskAlerts.length})
+              </h3>
+              <div style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto;">
+                ${riskAlerts.map(a => `
+                  <div style="background: #ffffff; padding: 8px 14px; border-radius: 8px; border-left: 4px solid #f43f5e; font-size: 0.86rem; display: flex; align-items: center; justify-content: space-between;">
+                    <div><span style="font-weight: 700; color: #0f172a;">${a.student}</span> (${a.class}): ${a.message}</div>
+                    <span style="font-size: 1.1rem;">${a.icon}</span>
                   </div>
-                `;
-              }).join('')}
+                `).join('')}
+              </div>
             </div>
-          </div>
-        ` : `
-          <div style="background: #fffbebf5; border: 1px solid #fde047; padding: 12px 18px; border-radius: 12px; font-size: 0.86rem; color: #854d0e;">
-            💡 <strong>Syllabus Tagging Tip:</strong> Select a specific Class from the top dropdown filter to configure <strong>Current</strong>, <strong>Past</strong>, and <strong>Future</strong> skill tags for that class.
-          </div>
-        `}
+          ` : ''}
 
-        <!-- SUMMARY CARDS -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
-          <div style="background: #fff; padding: 16px; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); border: 1px solid #e2e8f0;">
-            <div style="font-size: 0.82rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Total Students</div>
-            <div style="font-size: 1.8rem; font-weight: 800; color: #0f172a; margin-top: 4px;">${filteredStudents.length}</div>
-          </div>
-
-          <div style="background: #fff; padding: 16px; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); border: 1px solid #e2e8f0;">
-            <div style="font-size: 0.82rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Class Avg Mastery</div>
-            <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
-              <span style="font-size: 1.8rem; font-weight: 800; color: #0f172a;">${classAvgScore}</span>
-              <span style="${avgMeta.badgeCss} padding: 3px 8px; border-radius: 8px; font-size: 0.75rem; font-weight: 700;">${avgMeta.tierName}</span>
-            </div>
-          </div>
-
-          <div style="background: #fff; padding: 16px; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); border: 1px solid #e2e8f0;">
-            <div style="font-size: 0.82rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Active Today</div>
-            <div style="font-size: 1.8rem; font-weight: 800; color: #10b981; margin-top: 4px;">
-              ${activeTodayCount} <span style="font-size: 0.95rem; color: #64748b; font-weight: 600;">/ ${filteredStudents.length}</span>
-            </div>
-          </div>
-
-          <div style="background: #fff; padding: 16px; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); border: 1px solid #e2e8f0;">
-            <div style="font-size: 0.82rem; color: #64748b; font-weight: 700; text-transform: uppercase;">At-Risk Alerts</div>
-            <div style="font-size: 1.8rem; font-weight: 800; color: ${riskAlerts.length > 0 ? '#dc2626' : '#10b981'}; margin-top: 4px;">
-              ${riskAlerts.length} <span style="font-size: 0.82rem; font-weight: 600;">${riskAlerts.length > 0 ? 'Action Needed' : 'All Clear'}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- RISK ALERTS PANEL -->
-        ${riskAlerts.length > 0 ? `
-          <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 14px; padding: 16px;">
-            <h3 style="font-size: 1rem; color: #9f1239; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px; font-weight: 800;">
-              🚨 Students Needing Attention (${riskAlerts.length})
-            </h3>
-            <div style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto;">
-              ${riskAlerts.map(a => `
-                <div style="background: #ffffff; padding: 8px 14px; border-radius: 8px; border-left: 4px solid #f43f5e; font-size: 0.86rem; display: flex; align-items: center; justify-content: space-between;">
-                  <div><span style="font-weight: 700; color: #0f172a;">${a.student}</span> (${a.class}): ${a.message}</div>
-                  <span style="font-size: 1.1rem;">${a.icon}</span>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
-
-        <!-- SKILL HEATMAP & MATRIX TABLE -->
-        <div style="background: #ffffff; border-radius: 16px; padding: 18px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; flex: 1; display: flex; flex-direction: column; min-height: 420px;">
-          
-          <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px;">
-            <h3 style="font-size: 1.1rem; color: #0f172a; margin: 0; font-weight: 800;">🗺️ Class Skill Mastery Matrix</h3>
+          <!-- SKILL HEATMAP & MATRIX TABLE -->
+          <div style="background: #ffffff; border-radius: 16px; padding: 18px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; display: flex; flex-direction: column; min-height: 420px;">
             
-            <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
-              <select id="filter-level" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 600; background: #fff;">
-                <option value="All">Level: All</option>
-                ${levels.map(l => `<option value="${l}" ${String(l) === String(selectedLevel) ? 'selected' : ''}>${l}</option>`).join('')}
-              </select>
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px;">
+              <h3 style="font-size: 1.1rem; color: #0f172a; margin: 0; font-weight: 800;">🗺️ Class Skill Mastery Matrix</h3>
+              
+              <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                <select id="filter-level" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 600; background: #fff;">
+                  <option value="All">Level: All</option>
+                  ${levels.map(l => `<option value="${l}" ${String(l) === String(selectedLevel) ? 'selected' : ''}>${l}</option>`).join('')}
+                </select>
 
-              <select id="filter-stream" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 600; background: #fff;">
-                <option value="All">Stream: All</option>
-                ${streams.map(s => `<option value="${s}" ${s === selectedStream ? 'selected' : ''}>${s}</option>`).join('')}
-              </select>
+                <select id="filter-stream" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 600; background: #fff;">
+                  <option value="All">Stream: All</option>
+                  ${streams.map(s => `<option value="${s}" ${s === selectedStream ? 'selected' : ''}>${s}</option>`).join('')}
+                </select>
 
-              <select id="filter-strand" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 600; background: #fff;">
-                <option value="All">Strand: All</option>
-                ${strands.map(s => `<option value="${s}" ${s === selectedStrand ? 'selected' : ''}>${s}</option>`).join('')}
-              </select>
+                <select id="filter-strand" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 600; background: #fff;">
+                  <option value="All">Strand: All</option>
+                  ${strands.map(s => `<option value="${s}" ${s === selectedStrand ? 'selected' : ''}>${s}</option>`).join('')}
+                </select>
 
-              <select id="filter-topic" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 600; background: #fff;">
-                <option value="All">Topic: All</option>
-                ${topics.map(t => `<option value="${t}" ${t === selectedTopic ? 'selected' : ''}>${t}</option>`).join('')}
-              </select>
+                <select id="filter-topic" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 600; background: #fff;">
+                  <option value="All">Topic: All</option>
+                  ${topics.map(t => `<option value="${t}" ${t === selectedTopic ? 'selected' : ''}>${t}</option>`).join('')}
+                </select>
+              </div>
             </div>
-          </div>
 
-          <!-- HEATMAP TABLE CONTAINER -->
-          <div style="overflow-x: auto; overflow-y: auto; flex: 1; border: 1px solid #e2e8f0; border-radius: 12px;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left;">
-              <thead>
-                <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
-                  <th style="padding: 12px 16px; position: sticky; left: 0; background: #f8fafc; z-index: 3; min-width: 220px; border-right: 1px solid #e2e8f0;">
-                    Student Profile
-                  </th>
-                  <th style="padding: 12px 10px; text-align: center; background: #f8fafc;">Class</th>
-                  ${filteredSkills.map(sk => {
-                    const tagVal = selectedClass !== "All" ? (currentClassTagsBuffer[sk.generatorPath] || "Current") : "";
-                    const tagBadge = tagVal === "Current" ? "🟢" : (tagVal === "Past" ? "🔵" : (tagVal === "Future" ? "⚪" : ""));
+            <div style="overflow-x: auto; overflow-y: auto; flex: 1; border: 1px solid #e2e8f0; border-radius: 12px; min-height: 320px;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left;">
+                <thead>
+                  <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                    <th style="padding: 12px 16px; position: sticky; left: 0; background: #f8fafc; z-index: 3; min-width: 220px; border-right: 1px solid #e2e8f0;">
+                      Student Profile
+                    </th>
+                    <th style="padding: 12px 10px; text-align: center; background: #f8fafc;">Class</th>
+                    ${filteredSkills.map(sk => {
+                      const tagVal = selectedClass !== "All" ? (currentClassTagsBuffer[sk.generatorPath] || "Current") : "";
+                      const tagBadge = tagVal === "Current" ? "🟢" : (tagVal === "Past" ? "🔵" : (tagVal === "Future" ? "⚪" : ""));
+
+                      return `
+                        <th class="skill-header-cell" data-path="${sk.generatorPath}" data-title="${sk.title}" style="padding: 12px; text-align: center; min-width: 140px; cursor: pointer; user-select: none; background: #f8fafc;" title="Click to preview sample questions">
+                          <div style="display: flex; flex-direction: column; gap: 2px; align-items: center;">
+                            <span style="font-weight: 700; color: #2563eb; text-decoration: underline;">${tagBadge} ${sk.title} 🔍</span>
+                            <span style="font-size: 0.72rem; color: #64748b; font-weight: 500;">${sk.strand || ''}</span>
+                          </div>
+                        </th>
+                      `;
+                    }).join('')}
+                    <th style="padding: 12px 14px; text-align: center; min-width: 110px; background: #f8fafc;">Avg Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${filteredStudents.length === 0 ? `
+                    <tr>
+                      <td colspan="${filteredSkills.length + 3}" style="text-align: center; padding: 40px; color: #64748b;">
+                        No students found for the selected class/filters.
+                      </td>
+                    </tr>
+                  ` : filteredStudents.map(st => {
+                    const emailKey = (st.email || st.id || "").toLowerCase();
+                    const stMastery = emailKey ? (classMastery[emailKey] || {}) : {};
+                    let sumScore = 0;
+                    let countSkills = 0;
+                    const isPinRevealed = revealedPins.has(emailKey);
+                    const pinDisplay = isPinRevealed ? (st.pinCode || st.pin || 'N/A') : '••••';
 
                     return `
-                      <th class="skill-header-cell" data-path="${sk.generatorPath}" data-title="${sk.title}" style="padding: 12px; text-align: center; min-width: 140px; cursor: pointer; user-select: none; background: #f8fafc;" title="Click to preview sample questions">
-                        <div style="display: flex; flex-direction: column; gap: 2px; align-items: center;">
-                          <span style="font-weight: 700; color: #2563eb; text-decoration: underline;">${tagBadge} ${sk.title} 🔍</span>
-                          <span style="font-size: 0.72rem; color: #64748b; font-weight: 500;">${sk.strand || ''}</span>
-                        </div>
-                      </th>
-                    `;
-                  }).join('')}
-                  <th style="padding: 12px 14px; text-align: center; min-width: 110px; background: #f8fafc;">Avg Score</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${filteredStudents.length === 0 ? `
-                  <tr>
-                    <td colspan="${filteredSkills.length + 3}" style="text-align: center; padding: 40px; color: #64748b;">
-                      No students found for the selected class/filters.
-                    </td>
-                  </tr>
-                ` : filteredStudents.map(st => {
-                  const emailKey = (st.email || st.id || "").toLowerCase();
-                  const stMastery = emailKey ? (classMastery[emailKey] || {}) : {};
-                  let sumScore = 0;
-                  let countSkills = 0;
-                  const isPinRevealed = revealedPins.has(emailKey);
-                  const pinDisplay = isPinRevealed ? (st.pinCode || st.pin || 'N/A') : '••••';
-
-                  return `
-                    <tr class="student-matrix-row" data-email="${emailKey}" style="border-bottom: 1px solid #e2e8f0; transition: background 0.15s;">
-                      <td style="padding: 10px 14px; position: sticky; left: 0; background: #ffffff; z-index: 2; border-right: 1px solid #e2e8f0;">
-                        <div style="display: flex; flex-direction: column; gap: 2px;">
-                          <span style="font-weight: 700; color: #0f172a; font-size: 0.9rem;">${st.displayName || st.name || 'Student'}</span>
-                          <div style="display: flex; align-items: center; gap: 8px; font-size: 0.76rem; color: #64748b;">
-                            <span>⭐ ${st.xp || 0} XP</span>
-                            <span>🔥 ${st.streakCount || 0}d</span>
-                            <span class="btn-toggle-pin" data-email="${emailKey}" style="cursor: pointer; background: #f1f5f9; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-weight: 700; user-select: none; border: 1px solid #cbd5e1;" title="Click to reveal/hide PIN">
-                              🔑 ${pinDisplay}
-                            </span>
+                      <tr class="student-matrix-row" data-email="${emailKey}" style="border-bottom: 1px solid #e2e8f0; transition: background 0.15s;">
+                        <td style="padding: 10px 14px; position: sticky; left: 0; background: #ffffff; z-index: 2; border-right: 1px solid #e2e8f0;">
+                          <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <span style="font-weight: 700; color: #0f172a; font-size: 0.9rem;">${st.displayName || st.name || 'Student'}</span>
+                            <div style="display: flex; align-items: center; gap: 8px; font-size: 0.76rem; color: #64748b;">
+                              <span>⭐ ${st.xp || 0} XP</span>
+                              <span>🔥 ${st.streakCount || 0}d</span>
+                              <span class="btn-toggle-pin" data-email="${emailKey}" style="cursor: pointer; background: #f1f5f9; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-weight: 700; user-select: none; border: 1px solid #cbd5e1;" title="Click to reveal/hide PIN">
+                                🔑 ${pinDisplay}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td style="padding: 12px 10px; text-align: center; color: #475569; font-weight: 600;">${getStudentClass(st)}</td>
+                        <td style="padding: 12px 10px; text-align: center; color: #475569; font-weight: 600;">${getStudentClass(st)}</td>
 
-                      ${filteredSkills.map(sk => {
-                        const m = stMastery[sk.generatorPath];
-                        if (m && m.totalAttempted > 0) {
-                          sumScore += m.score;
-                          countSkills++;
-                          const meta = safeGetMasteryMetadata(m.score);
+                        ${filteredSkills.map(sk => {
+                          const m = stMastery[sk.generatorPath];
+                          if (m && m.totalAttempted > 0) {
+                            sumScore += m.score;
+                            countSkills++;
+                            const meta = safeGetMasteryMetadata(m.score);
+                            return `
+                              <td style="padding: 10px; text-align: center;">
+                                <span style="${meta.badgeCss} padding: 4px 8px; border-radius: 10px; font-size: 0.8rem; font-weight: 700;">
+                                  ${meta.score}
+                                </span>
+                              </td>
+                            `;
+                          } else {
+                            return `
+                              <td style="padding: 10px; text-align: center; color: #cbd5e1; font-weight: 600;">
+                                -
+                              </td>
+                            `;
+                          }
+                        }).join('')}
+
+                        ${(() => {
+                          const studentAvg = countSkills > 0 ? Math.round(sumScore / countSkills) : 0;
+                          const avgMeta = safeGetMasteryMetadata(studentAvg);
                           return `
                             <td style="padding: 10px; text-align: center;">
-                              <span style="${meta.badgeCss} padding: 4px 8px; border-radius: 10px; font-size: 0.8rem; font-weight: 700;">
-                                ${meta.score}
+                              <span style="${countSkills > 0 ? avgMeta.badgeCss : 'color:#94a3b8;'} padding: 4px 8px; border-radius: 10px; font-size: 0.82rem; font-weight: 800;">
+                                ${countSkills > 0 ? studentAvg : 'N/A'}
                               </span>
                             </td>
                           `;
-                        } else {
-                          return `
-                            <td style="padding: 10px; text-align: center; color: #cbd5e1; font-weight: 600;">
-                              -
-                            </td>
-                          `;
-                        }
-                      }).join('')}
+                        })()}
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
 
-                      ${(() => {
-                        const studentAvg = countSkills > 0 ? Math.round(sumScore / countSkills) : 0;
-                        const avgMeta = safeGetMasteryMetadata(studentAvg);
-                        return `
-                          <td style="padding: 10px; text-align: center;">
-                            <span style="${countSkills > 0 ? avgMeta.badgeCss : 'color:#94a3b8;'} padding: 4px 8px; border-radius: 10px; font-size: 0.82rem; font-weight: 800;">
-                              ${countSkills > 0 ? studentAvg : 'N/A'}
-                            </span>
-                          </td>
-                        `;
-                      })()}
-                    </tr>
-                  `;
-                }).join('')}
-              </tbody>
-            </table>
           </div>
+        ` : `
+          <!-- TAB 2: SKILL TAGGING TAB CONTENT -->
+          <div style="background: #ffffff; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 16px;">
+            
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 16px;">
+              <div>
+                <h3 style="margin: 0; font-size: 1.2rem; color: #0f172a; font-weight: 800;">
+                  📌 Syllabus Skill Tags for ${selectedClass === 'All' ? 'All Classes' : `Class ${selectedClass}`}
+                </h3>
+                <p style="margin: 4px 0 0 0; font-size: 0.86rem; color: #64748b;">
+                  Tag skills as <strong>Current</strong> (Daily practice priority), <strong>Past</strong> (Spaced review), or <strong>Future</strong> (Excluded from Daily Quest & greyed out in Skill Tree).
+                </p>
+              </div>
 
-        </div>
+              ${selectedClass !== "All" ? `
+                <button id="btn-save-class-tags" style="background: #2563eb; color: #ffffff; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); transition: background 0.15s;">
+                  💾 Save Skill Tags to Google Sheet
+                </button>
+              ` : ''}
+            </div>
+
+            ${selectedClass === "All" ? `
+              <div style="background: #fffbebf5; border: 1px solid #fde047; padding: 16px 20px; border-radius: 12px; font-size: 0.9rem; color: #854d0e; font-weight: 600;">
+                ⚠️ Please select a specific class from the top <strong>Class Filter</strong> dropdown above to configure skill tags for that class.
+              </div>
+            ` : `
+              <!-- GROUPED SKILLS BY STRAND FOR CLEANER WRAPPED UI -->
+              <div style="display: flex; flex-direction: column; gap: 20px;">
+                ${Object.entries(skillsByStrand).map(([strandName, skills]) => `
+                  <div style="border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; background: #fafafa;">
+                    <h4 style="margin: 0 0 12px 0; font-size: 1rem; color: #1e293b; font-weight: 800; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">
+                      📚 ${strandName} (${skills.length} Skills)
+                    </h4>
+
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                      ${skills.map(sk => {
+                        const currentTag = currentClassTagsBuffer[sk.generatorPath] || getAutoDefaultTag(sk, selectedClass);
+
+                        return `
+                          <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 12px 16px; background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0; gap: 12px;">
+                            
+                            <!-- FULL SKILL TITLE WRAPPING -->
+                            <div style="flex: 1; min-width: 240px;">
+                              <div style="font-size: 0.95rem; font-weight: 700; color: #0f172a; line-height: 1.4; word-break: break-word;">
+                                ${sk.title}
+                              </div>
+                              <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
+                                Topic: <strong>${sk.topic || 'General'}</strong> | Level: <strong>${sk.year || sk.level || 'All'}</strong> (${sk.stream || 'Express'})
+                              </div>
+                            </div>
+
+                            <!-- TAG SELECTION BUTTONS -->
+                            <div style="display: flex; gap: 6px; flex-shrink: 0;" class="tag-toggle-group" data-path="${sk.generatorPath}">
+                              <button class="btn-tag-toggle ${currentTag === 'Past' ? 'active' : ''}" data-tag="Past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Past' ? 'background:#0284c7; color:#fff; border-color:#0284c7;' : 'background:#fff; color:#475569;'}">
+                                🔵 Past Topic
+                              </button>
+                              <button class="btn-tag-toggle ${currentTag === 'Current' ? 'active' : ''}" data-tag="Current" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Current' ? 'background:#16a34a; color:#fff; border-color:#16a34a;' : 'background:#fff; color:#475569;'}">
+                                🟢 Current Unit
+                              </button>
+                              <button class="btn-tag-toggle ${currentTag === 'Future' ? 'active' : ''}" data-tag="Future" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Future' ? 'background:#64748b; color:#fff; border-color:#64748b;' : 'background:#fff; color:#475569;'}">
+                                ⚪ Future Unit
+                              </button>
+                            </div>
+
+                          </div>
+                        `;
+                      }).join('')}
+                    </div>
+
+                  </div>
+                `).join('')}
+              </div>
+            `}
+
+          </div>
+        `}
 
       </div>
 
@@ -492,6 +546,17 @@ export function renderTeacherDashboard(container, onLogout) {
 
     // --- ATTACH EVENT LISTENERS ---
 
+    // Top Header & Navigation Tabs
+    container.querySelector("#tab-btn-overview")?.addEventListener("click", () => {
+      activeTab = "overview";
+      render();
+    });
+
+    container.querySelector("#tab-btn-tagging")?.addEventListener("click", () => {
+      activeTab = "tagging";
+      render();
+    });
+
     container.querySelector("#btn-dashboard-logout")?.addEventListener("click", () => {
       if (typeof onLogout === "function") onLogout();
       else if (typeof state.logout === "function") state.logout();
@@ -503,7 +568,7 @@ export function renderTeacherDashboard(container, onLogout) {
       render();
     });
 
-    // Tag Toggle Buttons
+    // Tag Toggle Buttons Handler
     container.querySelectorAll(".btn-tag-toggle").forEach(btn => {
       btn.addEventListener("click", (e) => {
         const group = e.target.closest(".tag-toggle-group");
@@ -517,23 +582,39 @@ export function renderTeacherDashboard(container, onLogout) {
       });
     });
 
-    // Save Class Skill Tags Button Handler
+    // Save Class Skill Tags Handler with Safe URL Fetch Validation
     container.querySelector("#btn-save-class-tags")?.addEventListener("click", async (e) => {
       const saveBtn = e.target;
       saveBtn.disabled = true;
       saveBtn.innerText = "⏳ Saving...";
 
+      // Safe API URL resolution
+      let apiUrl = state.apiUrl || state.config?.apiUrl || state.backendUrl || "";
+
+      // Ensure URL is complete with http/https prefix
+      if (apiUrl && !apiUrl.startsWith("http://") && !apiUrl.startsWith("https://")) {
+        apiUrl = "https://" + apiUrl;
+      }
+
+      if (!apiUrl) {
+        alert("API Endpoint URL is missing in app state. Please ensure state.apiUrl is set.");
+        saveBtn.disabled = false;
+        saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
+        return;
+      }
+
       try {
-        const response = await fetch(state.apiUrl, {
+        const response = await fetch(apiUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "saveClassSkillTags",
-            token: state.userToken,
+            token: state.userToken || "TEACHER_SESSION",
             className: selectedClass,
             tags: currentClassTagsBuffer
           })
         });
+
         const resData = await response.json();
 
         if (resData.status === "success") {
@@ -547,17 +628,20 @@ export function renderTeacherDashboard(container, onLogout) {
           saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
         }
       } catch (err) {
+        console.error("Save class tags error:", err);
         alert("Network error while saving skill tags: " + err.message);
         saveBtn.disabled = false;
         saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
       }
     });
 
+    // Matrix Filters
     container.querySelector("#filter-level")?.addEventListener("change", (e) => { selectedLevel = e.target.value; render(); });
     container.querySelector("#filter-stream")?.addEventListener("change", (e) => { selectedStream = e.target.value; render(); });
     container.querySelector("#filter-strand")?.addEventListener("change", (e) => { selectedStrand = e.target.value; render(); });
     container.querySelector("#filter-topic")?.addEventListener("change", (e) => { selectedTopic = e.target.value; render(); });
 
+    // PIN Mask Toggle Listener
     container.querySelectorAll(".btn-toggle-pin").forEach(btn => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -571,6 +655,7 @@ export function renderTeacherDashboard(container, onLogout) {
       });
     });
 
+    // Row Click Student Drawer Trigger
     container.querySelectorAll(".student-matrix-row").forEach(row => {
       row.addEventListener("click", (e) => {
         if (e.target.classList.contains("btn-toggle-pin")) return;
@@ -584,6 +669,7 @@ export function renderTeacherDashboard(container, onLogout) {
       if (drawerEl) drawerEl.style.display = "none";
     });
 
+    // Skill Sample Preview Modal Trigger
     let activeSkillForModal = null;
     let activeTierForModal = 1;
 
