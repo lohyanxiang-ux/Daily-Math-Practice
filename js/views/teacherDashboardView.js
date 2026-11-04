@@ -1,5 +1,9 @@
 import { state } from "../state.js";
 import { getMasteryMetadata } from "../utils/masteryScoreEngine.js";
+import { loadQuestionGenerator } from "../questions/loader.js";
+
+// Hardcoded Google Apps Script Web App URL
+const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbwEsVnKapmwUFuv0vyG1wFvyAXoFKQMrpsNxibUqYh891PHXzFgmBThnT62lGoEPo_xiQ/exec";
 
 export function renderTeacherDashboard(container, onLogout) {
   if (!container) return;
@@ -29,7 +33,6 @@ export function renderTeacherDashboard(container, onLogout) {
   // State for Masked PINs
   const revealedPins = new Set();
 
-  // Helper: Get fallback mastery metadata
   function safeGetMasteryMetadata(score) {
     try {
       const meta = getMasteryMetadata(score);
@@ -50,7 +53,7 @@ export function renderTeacherDashboard(container, onLogout) {
     return (c && String(c).trim()) ? String(c).trim() : "Unassigned";
   }
 
-  // Default Tag Rule: Earlier years = Past | Current year & future years = Future
+  // DEFAULT TAG RULE: Earlier years = Past | Current year & future years = Future
   function getAutoDefaultTag(skill, className) {
     if (!className || className === "All") return "Future";
     
@@ -64,6 +67,7 @@ export function renderTeacherDashboard(container, onLogout) {
       if (skillLevel < classLevel) {
         return "Past";
       } else {
+        // Current year or future years default to Future
         return "Future";
       }
     }
@@ -71,7 +75,6 @@ export function renderTeacherDashboard(container, onLogout) {
     return "Future";
   }
 
-  // Filter options
   const classes = Array.from(new Set(students.map(getStudentClass))).sort();
   const levels = Array.from(new Set(curriculum.map(c => c.level).filter(Boolean))).sort();
   const streams = Array.from(new Set(curriculum.map(c => c.stream).filter(Boolean))).sort();
@@ -145,7 +148,6 @@ export function renderTeacherDashboard(container, onLogout) {
     return alerts;
   }
 
-  // Synchronize edit buffer only when selected class changes
   function syncClassTagsBufferIfNeeded() {
     if (selectedClass !== lastLoadedClassForBuffer) {
       if (selectedClass !== "All") {
@@ -163,7 +165,7 @@ export function renderTeacherDashboard(container, onLogout) {
     }
   }
 
-  // Multi-key generator function resolver for sample question modal
+  // Robust Multi-key generator function resolver
   function findGeneratorFunction(path) {
     if (!path) return null;
 
@@ -171,21 +173,17 @@ export function renderTeacherDashboard(container, onLogout) {
     const clean = path.trim().replace(/\\/g, '/');
     const filename = clean.split('/').pop().replace(/\.js$/, '');
 
-    // 1. Direct match
     if (typeof generators[clean] === 'function') return generators[clean];
 
-    // 2. Prepend 'js/questions/' if missing
     const withPrefix = clean.startsWith('js/questions/') ? clean : `js/questions/${clean}`;
     if (typeof generators[withPrefix] === 'function') return generators[withPrefix];
 
-    // 3. Match with .js extension
     const withJs = clean.endsWith('.js') ? clean : `${clean}.js`;
     if (typeof generators[withJs] === 'function') return generators[withJs];
 
     const withPrefixAndJs = withPrefix.endsWith('.js') ? withPrefix : `${withPrefix}.js`;
     if (typeof generators[withPrefixAndJs] === 'function') return generators[withPrefixAndJs];
 
-    // 4. Match by filename
     for (const key of Object.keys(generators)) {
       if (typeof generators[key] === 'function') {
         const keyFilename = key.split('/').pop().replace(/\.js$/, '');
@@ -239,7 +237,6 @@ export function renderTeacherDashboard(container, onLogout) {
     const classAvgScore = totalScoreCount > 0 ? Math.round(totalScoreSum / totalScoreCount) : 0;
     const avgMeta = safeGetMasteryMetadata(classAvgScore);
 
-    // Group skills by TOPIC for Tagging Tab view
     const skillsByTopic = {};
     filteredSkills.forEach(sk => {
       const topic = sk.topic || "General Mathematics";
@@ -285,7 +282,7 @@ export function renderTeacherDashboard(container, onLogout) {
           </button>
         </div>
 
-        <!-- TAB 1: OVERVIEW CONTENT -->
+        <!-- TAB 1: OVERVIEW -->
         ${activeTab === 'overview' ? `
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
             <div style="background: #fff; padding: 16px; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); border: 1px solid #e2e8f0;">
@@ -458,7 +455,7 @@ export function renderTeacherDashboard(container, onLogout) {
 
           </div>
         ` : `
-          <!-- TAB 2: CLASS SKILL TAGGING CONTENT (ARRANGED BY TOPIC) -->
+          <!-- TAB 2: SKILL TAGGING CONTENT -->
           <div style="background: #ffffff; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 16px;">
             
             <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 16px;">
@@ -507,7 +504,6 @@ export function renderTeacherDashboard(container, onLogout) {
                               </div>
                             </div>
 
-                            <!-- IN-PLACE TAG BUTTON GROUP -->
                             <div style="display: flex; gap: 6px; flex-shrink: 0;" class="tag-toggle-group" data-path="${sk.generatorPath}">
                               <button type="button" class="btn-tag-toggle ${currentTag === 'Past' ? 'active' : ''}" data-tag="Past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Past' ? 'background:#0284c7; color:#fff; border-color:#0284c7;' : 'background:#fff; color:#475569;'}">
                                 🔵 Past Topic
@@ -614,7 +610,6 @@ export function renderTeacherDashboard(container, onLogout) {
           if (path && selectedTag) {
             currentClassTagsBuffer[path] = selectedTag;
 
-            // Mutate DOM styles directly without re-rendering the whole page
             buttons.forEach(b => {
               const t = b.getAttribute("data-tag");
               if (t === selectedTag) {
@@ -644,31 +639,18 @@ export function renderTeacherDashboard(container, onLogout) {
       });
     });
 
-    // SAVE CLASS TAGS HANDLER WITH FALLBACK URL & PERSISTENCE
+    // SAVE CLASS TAGS HANDLER WITH HARDCODED API URL FALLBACK
     container.querySelector("#btn-save-class-tags")?.addEventListener("click", async (e) => {
       const saveBtn = e.target;
 
-      // Robust URL Resolution
       let apiUrl = state.apiUrl || 
-                     state.config?.apiUrl || 
-                     state.backendUrl || 
-                     state.scriptUrl || 
-                     window.APP_CONFIG?.apiUrl || 
-                     window.API_URL || 
-                     localStorage.getItem("math_app_api_url") || "";
-
-      // Fallback Prompt if API URL is not set in app state
-      if (!apiUrl) {
-        const inputUrl = prompt("Please enter your Google Apps Script Web App URL:");
-        if (inputUrl && inputUrl.trim()) {
-          apiUrl = inputUrl.trim();
-          state.apiUrl = apiUrl;
-          localStorage.setItem("math_app_api_url", apiUrl);
-        } else {
-          alert("Save cancelled: Web App API URL is required.");
-          return;
-        }
-      }
+                   state.config?.apiUrl || 
+                   state.backendUrl || 
+                   state.scriptUrl || 
+                   window.APP_CONFIG?.apiUrl || 
+                   window.API_URL || 
+                   localStorage.getItem("math_app_api_url") || 
+                   DEFAULT_API_URL;
 
       if (apiUrl && !apiUrl.startsWith("http://") && !apiUrl.startsWith("https://")) {
         apiUrl = "https://" + apiUrl;
@@ -706,7 +688,7 @@ export function renderTeacherDashboard(container, onLogout) {
         }
       } catch (err) {
         console.error("Save class tags error:", err);
-        alert("Network error while saving skill tags: " + err.message + "\n\nPlease ensure Google Apps Script is deployed with 'Who has access: Anyone'.");
+        alert("Network error while saving skill tags: " + err.message);
         saveBtn.disabled = false;
         saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
       }
@@ -744,7 +726,7 @@ export function renderTeacherDashboard(container, onLogout) {
       if (drawerEl) drawerEl.style.display = "none";
     });
 
-    // Skill Sample Preview Modal Trigger
+    // Skill Sample Preview Modal
     let activeSkillForModal = null;
     let activeTierForModal = 1;
 
@@ -799,7 +781,8 @@ export function renderTeacherDashboard(container, onLogout) {
       if (skillModalEl) skillModalEl.style.display = "flex";
     }
 
-    function renderSampleQuestion() {
+    // ASYNC SAMPLE QUESTION RENDERER (DYNAMICALLY IMPORTS MISSING GENERATORS)
+    async function renderSampleQuestion() {
       const qContainer = container.querySelector("#modal-question-container");
       if (!qContainer) return;
 
@@ -807,7 +790,17 @@ export function renderTeacherDashboard(container, onLogout) {
 
       try {
         const rawPath = activeSkillForModal.generatorPath || "";
-        const generatorFn = findGeneratorFunction(rawPath);
+        let generatorFn = findGeneratorFunction(rawPath);
+
+        // Dynamically import generator module if not loaded in memory
+        if (!generatorFn && typeof loadQuestionGenerator === "function") {
+          try {
+            await loadQuestionGenerator(rawPath);
+            generatorFn = findGeneratorFunction(rawPath);
+          } catch (loadErr) {
+            console.warn("Dynamic generator module import error:", loadErr);
+          }
+        }
         
         if (typeof generatorFn === "function") {
           const qData = generatorFn(activeTierForModal);
