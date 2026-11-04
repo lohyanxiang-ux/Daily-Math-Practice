@@ -47,17 +47,14 @@ export function isDailyQuestCompletedToday() {
   const todayStr = getTodayDateString();
   const userKey = state.profile?.email || state.profile?.studentEmail || state.profile?.displayName || "guest";
 
-  // 1. Google Sheets Profile Backend Check
   if (state.profile?.lastDailyQuestDate === todayStr) {
     return true;
   }
 
-  // 2. Active Session Memory Check
   if (state.dailySession?.lastCompletedDate === todayStr || state.dailySession?.completedToday) {
     return true;
   }
 
-  // 3. Local Storage Device Fallback
   const savedDate = localStorage.getItem(`daily_quest_date_${userKey}`);
   return savedDate === todayStr;
 }
@@ -74,29 +71,21 @@ export function markDailyQuestCompletedToday() {
 
   const lastDate = state.profile.lastDailyQuestDate;
 
-  // ACCURATE STREAK CALCULATION LOGIC
   if (lastDate === todayStr) {
-    // Already completed today — retain active streak
+    // Retain active streak
   } else if (lastDate === yesterdayStr) {
-    // Consecutive daily completion — increment streak count
     state.profile.streakCount = (state.profile.streakCount || 0) + 1;
   } else {
-    // Missed 1+ days or first quest — reset streak to 1
     state.profile.streakCount = 1;
   }
 
-  // Update last completion date in state
   state.profile.lastDailyQuestDate = todayStr;
-
-  // Local storage backup
   localStorage.setItem(`daily_quest_date_${userKey}`, todayStr);
 
-  // In-memory session state update
   if (!state.dailySession) state.dailySession = {};
   state.dailySession.lastCompletedDate = todayStr;
   state.dailySession.completedToday = true;
 
-  // Sync updated XP, StreakCount, and lastDailyQuestDate to Google Sheets
   if (state.userToken) {
     syncUserProgress(
       state.userToken,
@@ -108,61 +97,69 @@ export function markDailyQuestCompletedToday() {
 }
 
 /**
- * Builds a 5-question Bento Box queue for Daily Quest habit building
+ * Builds a 5-question Bento Box queue for Daily Quest habit building.
+ * Refined to filter out FUTURE skills and pick from CURRENT & PAST skills based on teacher tagging.
  */
 export function buildDailyQuestQueue(userState = state) {
   const curriculum = userState.curriculum || [];
   const mastery = userState.mastery || {};
+  const skillTags = userState.skillTags || {};
   
   const now = Date.now();
   const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 
-  const highScorePool = [];
-  const currentRecentPool = [];
-  const fallbackPool = [];
+  const currentTopicPool = [];
+  const pastTopicPool = [];
+  const fallbackEligiblePool = [];
 
-  curriculum.forEach((skill, index) => {
+  curriculum.forEach((skill) => {
     const path = skill.generatorPath;
+    const tag = (skillTags[path] || "Current").toUpperCase();
+
+    // STRICTLY SKIP FUTURE SKILLS FROM DAILY QUEST
+    if (tag === "FUTURE") {
+      return;
+    }
+
     const record = mastery[path];
     const score = record ? (Number(record.score) || 0) : 0;
-    
     const lastPracticedMs = record && record.lastPracticed ? new Date(record.lastPracticed).getTime() : 0;
-    const isRecent = (now - lastPracticedMs) <= FOURTEEN_DAYS_MS && lastPracticedMs > 0;
-    const isCurriculumFrontier = index < 3 || skill.isCurrentUnit === true;
+    const isRecentlyPracticed = (now - lastPracticedMs) <= FOURTEEN_DAYS_MS && lastPracticedMs > 0;
 
     const queueItem = { generatorPath: path, skill, score, primaryReason: "Daily Quest Practice" };
 
-    if (score >= 70) {
-      highScorePool.push({ ...queueItem, primaryReason: "⭐ High Score Confidence" });
+    if (tag === "CURRENT") {
+      currentTopicPool.push({ ...queueItem, primaryReason: "🟢 Current Unit Practice" });
+    } else if (tag === "PAST") {
+      pastTopicPool.push({ ...queueItem, primaryReason: "🔵 Spaced Repetition (Past Unit)" });
     }
 
-    if (isRecent || isCurriculumFrontier) {
-      currentRecentPool.push({ ...queueItem, primaryReason: "📌 Current/Recent Topic" });
-    }
-
-    fallbackPool.push(queueItem);
+    fallbackEligiblePool.push(queueItem);
   });
 
-  const shuffle = (arr) => arr.sort(() => 0.5 - Math.random());
+  const shuffle = (arr) => [...arr].sort(() => 0.5 - Math.random());
 
   const selectedQueue = [];
   const usedPaths = new Set();
 
-  for (const item of shuffle([...highScorePool])) {
-    if (selectedQueue.length < 2 && !usedPaths.has(item.generatorPath)) {
+  // 1. Pick up to 3 questions from CURRENT skills
+  for (const item of shuffle(currentTopicPool)) {
+    if (selectedQueue.length < 3 && !usedPaths.has(item.generatorPath)) {
       selectedQueue.push(item);
       usedPaths.add(item.generatorPath);
     }
   }
 
-  for (const item of shuffle([...currentRecentPool])) {
+  // 2. Pick up to 2 questions from PAST skills for spaced repetition
+  for (const item of shuffle(pastTopicPool)) {
     if (selectedQueue.length < 5 && !usedPaths.has(item.generatorPath)) {
       selectedQueue.push(item);
       usedPaths.add(item.generatorPath);
     }
   }
 
-  for (const item of shuffle([...fallbackPool])) {
+  // 3. Fallback fill remaining slots from any non-Future eligible skills
+  for (const item of shuffle(fallbackEligiblePool)) {
     if (selectedQueue.length < 5 && !usedPaths.has(item.generatorPath)) {
       selectedQueue.push(item);
       usedPaths.add(item.generatorPath);
