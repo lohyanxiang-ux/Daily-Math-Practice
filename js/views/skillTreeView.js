@@ -8,6 +8,7 @@ export function renderSkillTree(container) {
   const curriculum = state.curriculum || [];
   const studentYear = state.profile?.year ? String(state.profile.year).trim() : "Sec 1";
   const studentStream = state.profile?.stream ? String(state.profile.stream).trim() : "G3";
+  const studentClass = state.profile?.class ? String(state.profile.class).trim() : "";
 
   // Filter & Search States
   let selectedYear = studentYear;
@@ -21,6 +22,59 @@ export function renderSkillTree(container) {
       syncBatchMastery(state.userToken, updates);
       state.pendingMasteryUpdates.clear();
     }
+  }
+
+  // Smart Auto-Default Tag Rule
+  function getAutoDefaultTag(skill, className) {
+    if (!className || className === "All") return "Future";
+    
+    const classNumMatch = String(className).match(/\d+/);
+    const skillYearMatch = String(skill.year || skill.level || "").match(/\d+/);
+
+    if (classNumMatch && skillYearMatch) {
+      const classLevel = parseInt(classNumMatch[0], 10);
+      const skillLevel = parseInt(skillYearMatch[0], 10);
+
+      if (skillLevel < classLevel) {
+        return "Past";
+      } else {
+        return "Future";
+      }
+    }
+    return "Future";
+  }
+
+  // Flexible Path Tag Resolver (Matches truncated paths, missing .js, or folder prefixes)
+  function resolveSkillTag(skill, className) {
+    if (!state.skillTags || Object.keys(state.skillTags).length === 0) {
+      return getAutoDefaultTag(skill, className);
+    }
+
+    const rawPath = (skill.generatorPath || "").trim().replace(/\\/g, '/');
+    if (!rawPath) return getAutoDefaultTag(skill, className);
+
+    const rawFilename = rawPath.split('/').pop().replace(/\.js$/, '');
+
+    // 1. Exact Key Match
+    if (state.skillTags[rawPath]) return state.skillTags[rawPath];
+
+    // 2. Fuzzy / Path Variant Match
+    for (const [key, tag] of Object.entries(state.skillTags)) {
+      const cleanKey = key.trim().replace(/\\/g, '/');
+      const keyFilename = cleanKey.split('/').pop().replace(/\.js$/, '');
+
+      if (
+        cleanKey === rawPath ||
+        cleanKey.endsWith(rawPath) ||
+        rawPath.endsWith(cleanKey) ||
+        (keyFilename && keyFilename === rawFilename)
+      ) {
+        return tag;
+      }
+    }
+
+    // 3. Fallback to Auto-Default Rule
+    return getAutoDefaultTag(skill, className);
   }
 
   // Extract unique options for dropdown filters
@@ -46,7 +100,7 @@ export function renderSkillTree(container) {
     });
   }
 
-  // Card styling resolver: Out-of-grade vs Standard Tags
+  // Card styling resolver: Out-of-grade vs Standard Resolved Tags
   function getSkillCardStyle(skill, isOutOfGrade) {
     if (isOutOfGrade) {
       return {
@@ -58,8 +112,8 @@ export function renderSkillTree(container) {
       };
     }
 
-    const tagRaw = (state.skillTags && state.skillTags[skill.generatorPath]) || "Current";
-    const t = String(tagRaw).toUpperCase();
+    const resolvedTag = resolveSkillTag(skill, studentClass);
+    const t = String(resolvedTag).toUpperCase();
 
     if (t === "CURRENT") {
       return {
@@ -134,7 +188,7 @@ export function renderSkillTree(container) {
               </select>
             </div>
 
-            <!-- Strand Selector (Integrated Header Control) -->
+            <!-- Strand Selector -->
             <div style="display: flex; align-items: center; gap: 4px;">
               <label style="font-size: 0.82rem; font-weight: 700; color: #475569;">Strand:</label>
               <select id="select-tree-strand" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-weight: 700; background: #ffffff; color: #0f172a; cursor: pointer;">
@@ -246,7 +300,7 @@ export function renderSkillTree(container) {
       </div>
     `;
 
-    // --- BIND EVENT LISTENERS WITH FOCUS RETENTION ---
+    // --- BIND EVENT LISTENERS ---
 
     const searchInput = container.querySelector("#input-search-skill");
     if (searchInput) {
@@ -282,7 +336,6 @@ export function renderSkillTree(container) {
       navigateTo("dashboard");
     });
 
-    // Launch Skill Practice via questionView
     container.querySelectorAll(".btn-launch-skill").forEach(btn => {
       btn.addEventListener("click", () => {
         flushSync();
