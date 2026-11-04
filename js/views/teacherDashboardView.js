@@ -24,6 +24,7 @@ export function renderTeacherDashboard(container, onLogout) {
 
   // Buffer for holding tag changes before saving to Google Sheets
   let currentClassTagsBuffer = {};
+  let lastLoadedClassForBuffer = null;
 
   // State for Masked PINs
   const revealedPins = new Set();
@@ -50,11 +51,10 @@ export function renderTeacherDashboard(container, onLogout) {
     return (c && String(c).trim()) ? String(c).trim() : "Unassigned";
   }
 
-  // Auto-default logic: Earlier years = Past, Current year & later = Future
+  // Default Tag Rule: Earlier years = Past | Current year & future years = Future
   function getAutoDefaultTag(skill, className) {
     if (!className || className === "All") return "Future";
     
-    // Extract numeric values from strings (e.g., "Sec 3" -> 3, "Class 2A" -> 2)
     const classNumMatch = String(className).match(/\d+/);
     const skillYearMatch = String(skill.year || skill.level || "").match(/\d+/);
 
@@ -64,12 +64,13 @@ export function renderTeacherDashboard(container, onLogout) {
 
       if (skillLevel < classLevel) {
         return "Past";
-      } else if (skillLevel >= classLevel) {
+      } else {
+        // Current year or future years default to Future
         return "Future";
       }
     }
 
-    return "Future"; // Fallback default
+    return "Future"; // Fallback default for current year/unmatched
   }
 
   // Filter options extraction
@@ -146,22 +147,25 @@ export function renderTeacherDashboard(container, onLogout) {
     return alerts;
   }
 
-  function syncClassTagsBuffer() {
-    if (selectedClass !== "All") {
-      const savedTags = classSkillTags[selectedClass] || {};
-      currentClassTagsBuffer = { ...savedTags };
-      curriculum.forEach(sk => {
-        if (!currentClassTagsBuffer[sk.generatorPath]) {
-          currentClassTagsBuffer[sk.generatorPath] = getAutoDefaultTag(sk, selectedClass);
-        }
-      });
-    } else {
-      currentClassTagsBuffer = {};
+  // Synchronize edit buffer only when selected class changes
+  function syncClassTagsBufferIfNeeded() {
+    if (selectedClass !== lastLoadedClassForBuffer) {
+      if (selectedClass !== "All") {
+        const savedTags = classSkillTags[selectedClass] || {};
+        currentClassTagsBuffer = { ...savedTags };
+        curriculum.forEach(sk => {
+          if (!currentClassTagsBuffer[sk.generatorPath]) {
+            currentClassTagsBuffer[sk.generatorPath] = getAutoDefaultTag(sk, selectedClass);
+          }
+        });
+      } else {
+        currentClassTagsBuffer = {};
+      }
+      lastLoadedClassForBuffer = selectedClass;
     }
   }
 
   function render() {
-    // Handling Loading State
     if (state.isLoadingTeacherData) {
       container.innerHTML = `
         <div style="display: flex; justify-content: center; align-items: center; min-height: 60vh; flex-direction: column; gap: 12px; background: #f8fafc; padding: 24px;">
@@ -173,7 +177,7 @@ export function renderTeacherDashboard(container, onLogout) {
       return;
     }
 
-    syncClassTagsBuffer();
+    syncClassTagsBufferIfNeeded();
 
     const filteredStudents = getFilteredStudents();
     const filteredSkills = getFilteredSkills();
@@ -202,18 +206,18 @@ export function renderTeacherDashboard(container, onLogout) {
     const classAvgScore = totalScoreCount > 0 ? Math.round(totalScoreSum / totalScoreCount) : 0;
     const avgMeta = safeGetMasteryMetadata(classAvgScore);
 
-    // Group skills by strand for Tagging Tab view
-    const skillsByStrand = {};
+    // Group skills by TOPIC for Tagging Tab view
+    const skillsByTopic = {};
     filteredSkills.forEach(sk => {
-      const strand = sk.strand || "General Mathematics";
-      if (!skillsByStrand[strand]) skillsByStrand[strand] = [];
-      skillsByStrand[strand].push(sk);
+      const topic = sk.topic || "General Mathematics";
+      if (!skillsByTopic[topic]) skillsByTopic[topic] = [];
+      skillsByTopic[topic].push(sk);
     });
 
     container.innerHTML = `
       <div class="teacher-dashboard-container" style="display: flex; flex-direction: column; gap: 16px; padding: 20px; height: 100%; box-sizing: border-box; background: #f8fafc; overflow-y: auto;">
         
-        <!-- SINGLE TOP BAR (CLASS SELECTOR & LOGOUT) -->
+        <!-- HEADER BAR -->
         <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; background: #ffffff; padding: 16px 24px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; gap: 12px;">
           <div>
             <div style="display: flex; align-items: center; gap: 10px;">
@@ -238,19 +242,18 @@ export function renderTeacherDashboard(container, onLogout) {
           </div>
         </div>
 
-        <!-- MAIN DASHBOARD NAVIGATION TABS -->
+        <!-- DASHBOARD TABS -->
         <div style="display: flex; gap: 8px; border-bottom: 2px solid #e2e8f0; padding-bottom: 2px;">
           <button id="tab-btn-overview" style="padding: 10px 20px; border-radius: 12px 12px 0 0; border: none; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 8px; ${activeTab === 'overview' ? 'background: #2563eb; color: #ffffff;' : 'background: #ffffff; color: #64748b; border: 1px solid #e2e8f0; border-bottom: none;'}">
             📊 Student Class Overview
           </button>
           <button id="tab-btn-tagging" style="padding: 10px 20px; border-radius: 12px 12px 0 0; border: none; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 8px; ${activeTab === 'tagging' ? 'background: #2563eb; color: #ffffff;' : 'background: #ffffff; color: #64748b; border: 1px solid #e2e8f0; border-bottom: none;'}">
-            📌 Class Syllabus Skill Tagging ${selectedClass !== 'All' ? `(${selectedClass})` : ''}
+            📌 Class Skill Tagging ${selectedClass !== 'All' ? `(${selectedClass})` : ''}
           </button>
         </div>
 
         <!-- TAB 1: STUDENT CLASS OVERVIEW CONTENT -->
         ${activeTab === 'overview' ? `
-          <!-- SUMMARY CARDS -->
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
             <div style="background: #fff; padding: 16px; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); border: 1px solid #e2e8f0;">
               <div style="font-size: 0.82rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Total Students</div>
@@ -280,7 +283,6 @@ export function renderTeacherDashboard(container, onLogout) {
             </div>
           </div>
 
-          <!-- RISK ALERTS PANEL -->
           ${riskAlerts.length > 0 ? `
             <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 14px; padding: 16px;">
               <h3 style="font-size: 1rem; color: #9f1239; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px; font-weight: 800;">
@@ -297,7 +299,6 @@ export function renderTeacherDashboard(container, onLogout) {
             </div>
           ` : ''}
 
-          <!-- SKILL HEATMAP & MATRIX TABLE -->
           <div style="background: #ffffff; border-radius: 16px; padding: 18px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; display: flex; flex-direction: column; min-height: 420px;">
             
             <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px;">
@@ -335,7 +336,7 @@ export function renderTeacherDashboard(container, onLogout) {
                     </th>
                     <th style="padding: 12px 10px; text-align: center; background: #f8fafc;">Class</th>
                     ${filteredSkills.map(sk => {
-                      const tagVal = selectedClass !== "All" ? (currentClassTagsBuffer[sk.generatorPath] || "Current") : "";
+                      const tagVal = selectedClass !== "All" ? (currentClassTagsBuffer[sk.generatorPath] || "Future") : "";
                       const tagBadge = tagVal === "Current" ? "🟢" : (tagVal === "Past" ? "🔵" : (tagVal === "Future" ? "⚪" : ""));
 
                       return `
@@ -424,16 +425,16 @@ export function renderTeacherDashboard(container, onLogout) {
 
           </div>
         ` : `
-          <!-- TAB 2: SKILL TAGGING TAB CONTENT -->
+          <!-- TAB 2: CLASS SKILL TAGGING CONTENT (ARRANGED BY TOPIC) -->
           <div style="background: #ffffff; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 16px;">
             
             <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 16px;">
               <div>
                 <h3 style="margin: 0; font-size: 1.2rem; color: #0f172a; font-weight: 800;">
-                  📌 Syllabus Skill Tags for ${selectedClass === 'All' ? 'All Classes' : `Class ${selectedClass}`}
+                  📌 Class Skill Tagging for ${selectedClass === 'All' ? 'All Classes' : `Class ${selectedClass}`}
                 </h3>
                 <p style="margin: 4px 0 0 0; font-size: 0.86rem; color: #64748b;">
-                  Tag skills as <strong>Current</strong> (Daily practice priority), <strong>Past</strong> (Spaced review), or <strong>Future</strong> (Excluded from Daily Quest & greyed out in Skill Tree).
+                  Tag skills as <strong>Current</strong> (Daily quest priority), <strong>Past</strong> (Spaced review), or <strong>Future</strong> (Excluded from Daily Quest & greyed out in Skill Tree).
                 </p>
               </div>
 
@@ -449,12 +450,12 @@ export function renderTeacherDashboard(container, onLogout) {
                 ⚠️ Please select a specific class from the top <strong>Class Filter</strong> dropdown above to configure skill tags for that class.
               </div>
             ` : `
-              <!-- GROUPED SKILLS BY STRAND FOR CLEANER WRAPPED UI -->
+              <!-- GROUPED SKILLS BY TOPIC -->
               <div style="display: flex; flex-direction: column; gap: 20px;">
-                ${Object.entries(skillsByStrand).map(([strandName, skills]) => `
+                ${Object.entries(skillsByTopic).map(([topicName, skills]) => `
                   <div style="border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; background: #fafafa;">
-                    <h4 style="margin: 0 0 12px 0; font-size: 1rem; color: #1e293b; font-weight: 800; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">
-                      📚 ${strandName} (${skills.length} Skills)
+                    <h4 style="margin: 0 0 12px 0; font-size: 1.05rem; color: #0f172a; font-weight: 800; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">
+                      📂 ${topicName} (${skills.length} Skills)
                     </h4>
 
                     <div style="display: flex; flex-direction: column; gap: 10px;">
@@ -464,25 +465,23 @@ export function renderTeacherDashboard(container, onLogout) {
                         return `
                           <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 12px 16px; background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0; gap: 12px;">
                             
-                            <!-- FULL SKILL TITLE WRAPPING -->
                             <div style="flex: 1; min-width: 240px;">
                               <div style="font-size: 0.95rem; font-weight: 700; color: #0f172a; line-height: 1.4; word-break: break-word;">
                                 ${sk.title}
                               </div>
                               <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
-                                Topic: <strong>${sk.topic || 'General'}</strong> | Level: <strong>${sk.year || sk.level || 'All'}</strong> (${sk.stream || 'Express'})
+                                Strand: <strong>${sk.strand || 'General'}</strong> | Level: <strong>${sk.year || sk.level || 'All'}</strong> (${sk.stream || 'Express'})
                               </div>
                             </div>
 
-                            <!-- TAG SELECTION BUTTONS -->
                             <div style="display: flex; gap: 6px; flex-shrink: 0;" class="tag-toggle-group" data-path="${sk.generatorPath}">
-                              <button class="btn-tag-toggle ${currentTag === 'Past' ? 'active' : ''}" data-tag="Past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Past' ? 'background:#0284c7; color:#fff; border-color:#0284c7;' : 'background:#fff; color:#475569;'}">
+                              <button class="btn-tag-toggle" data-tag="Past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Past' ? 'background:#0284c7; color:#fff; border-color:#0284c7;' : 'background:#fff; color:#475569;'}">
                                 🔵 Past Topic
                               </button>
-                              <button class="btn-tag-toggle ${currentTag === 'Current' ? 'active' : ''}" data-tag="Current" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Current' ? 'background:#16a34a; color:#fff; border-color:#16a34a;' : 'background:#fff; color:#475569;'}">
+                              <button class="btn-tag-toggle" data-tag="Current" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Current' ? 'background:#16a34a; color:#fff; border-color:#16a34a;' : 'background:#fff; color:#475569;'}">
                                 🟢 Current Unit
                               </button>
-                              <button class="btn-tag-toggle ${currentTag === 'Future' ? 'active' : ''}" data-tag="Future" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Future' ? 'background:#64748b; color:#fff; border-color:#64748b;' : 'background:#fff; color:#475569;'}">
+                              <button class="btn-tag-toggle" data-tag="Future" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Future' ? 'background:#64748b; color:#fff; border-color:#64748b;' : 'background:#fff; color:#475569;'}">
                                 ⚪ Future Unit
                               </button>
                             </div>
@@ -546,7 +545,6 @@ export function renderTeacherDashboard(container, onLogout) {
 
     // --- ATTACH EVENT LISTENERS ---
 
-    // Top Header & Navigation Tabs
     container.querySelector("#tab-btn-overview")?.addEventListener("click", () => {
       activeTab = "overview";
       render();
@@ -582,22 +580,27 @@ export function renderTeacherDashboard(container, onLogout) {
       });
     });
 
-    // Save Class Skill Tags Handler with Safe URL Fetch Validation
+    // Save Skill Tags Handler with Multi-Property URL Fallback
     container.querySelector("#btn-save-class-tags")?.addEventListener("click", async (e) => {
       const saveBtn = e.target;
       saveBtn.disabled = true;
       saveBtn.innerText = "⏳ Saving...";
 
-      // Safe API URL resolution
-      let apiUrl = state.apiUrl || state.config?.apiUrl || state.backendUrl || "";
+      // Robust URL resolution
+      let apiUrl = state.apiUrl || 
+                     state.config?.apiUrl || 
+                     state.backendUrl || 
+                     state.scriptUrl || 
+                     window.APP_CONFIG?.apiUrl || 
+                     window.API_URL || 
+                     localStorage.getItem("math_app_api_url") || "";
 
-      // Ensure URL is complete with http/https prefix
       if (apiUrl && !apiUrl.startsWith("http://") && !apiUrl.startsWith("https://")) {
         apiUrl = "https://" + apiUrl;
       }
 
       if (!apiUrl) {
-        alert("API Endpoint URL is missing in app state. Please ensure state.apiUrl is set.");
+        alert("API Endpoint URL is missing. Please ensure state.apiUrl or backendUrl is configured.");
         saveBtn.disabled = false;
         saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
         return;
@@ -641,7 +644,6 @@ export function renderTeacherDashboard(container, onLogout) {
     container.querySelector("#filter-strand")?.addEventListener("change", (e) => { selectedStrand = e.target.value; render(); });
     container.querySelector("#filter-topic")?.addEventListener("change", (e) => { selectedTopic = e.target.value; render(); });
 
-    // PIN Mask Toggle Listener
     container.querySelectorAll(".btn-toggle-pin").forEach(btn => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -655,7 +657,6 @@ export function renderTeacherDashboard(container, onLogout) {
       });
     });
 
-    // Row Click Student Drawer Trigger
     container.querySelectorAll(".student-matrix-row").forEach(row => {
       row.addEventListener("click", (e) => {
         if (e.target.classList.contains("btn-toggle-pin")) return;
@@ -669,7 +670,7 @@ export function renderTeacherDashboard(container, onLogout) {
       if (drawerEl) drawerEl.style.display = "none";
     });
 
-    // Skill Sample Preview Modal Trigger
+    // Skill Sample Preview Modal Trigger with Normalized Generator Path Resolution
     let activeSkillForModal = null;
     let activeTierForModal = 1;
 
@@ -724,6 +725,7 @@ export function renderTeacherDashboard(container, onLogout) {
       if (skillModalEl) skillModalEl.style.display = "flex";
     }
 
+    // Resolves both raw path ("geometry/...") and full path ("js/questions/geometry/...")
     function renderSampleQuestion() {
       const qContainer = container.querySelector("#modal-question-container");
       if (!qContainer) return;
@@ -731,7 +733,13 @@ export function renderTeacherDashboard(container, onLogout) {
       qContainer.innerHTML = `<div style="text-align: center; color: #64748b; padding: 20px;">Generating sample question...</div>`;
 
       try {
-        const generatorFn = state.skillGenerators?.[activeSkillForModal.generatorPath] || activeSkillForModal.generate;
+        const rawPath = activeSkillForModal.generatorPath || "";
+        const fullPath = rawPath.startsWith("js/questions/") ? rawPath : `js/questions/${rawPath}`;
+        
+        // Multi-resolution generator function lookup
+        const generatorFn = state.skillGenerators?.[fullPath] || 
+                            state.skillGenerators?.[rawPath] || 
+                            activeSkillForModal.generate;
         
         if (typeof generatorFn === "function") {
           const qData = generatorFn(activeTierForModal);
@@ -756,7 +764,7 @@ export function renderTeacherDashboard(container, onLogout) {
         } else {
           qContainer.innerHTML = `
             <div style="color: #dc2626; padding: 14px; text-align: center;">
-              Question generator function not found for path: <code>${activeSkillForModal.generatorPath}</code>
+              Question generator module not found for path: <code>${fullPath}</code>
             </div>
           `;
         }
