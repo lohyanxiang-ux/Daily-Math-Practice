@@ -3,15 +3,19 @@ import { getDecayedScore } from "./masteryScoreEngine.js";
 
 const YEAR_LEVELS = { "Sec 1": 1, "Sec 2": 2, "Sec 3": 3, "Sec 4": 4 };
 
-function getSRSIntervalDays(score) {
-  if (score < 40) return 1;     // Basic Tier: Review daily
-  if (score < 70) return 3;     // Intermediate Tier: Review every 3 days
-  if (score < 90) return 7;     // Advanced Tier: Review weekly
-  return 14;                    // Mastered Tier: Review bi-weekly
+/**
+ * Calculates dynamic memory half-life in days based on baseline score & accuracy
+ */
+function getMemoryHalfLife(rawScore, accuracy) {
+  if (rawScore < 40) return 1.5;    // Basic Tier: ~1.5 day half-life
+  if (rawScore < 70) return 4.0;    // Intermediate Tier: ~4 day half-life
+  if (rawScore < 90) return 9.0;    // Advanced Tier: ~9 day half-life
+  return 18.0;                      // Mastered Tier: ~18 day half-life
 }
 
 /**
- * Builds a prioritized SRS review queue for Smart Review (smartReviewView.js)
+ * Builds a cognitive SRS review queue using memory retention modeling,
+ * dynamic urgency scoring, and topic interleaving.
  */
 export function getSmartReviewQueue(options = {}) {
   const {
@@ -28,6 +32,7 @@ export function getSmartReviewQueue(options = {}) {
   const candidateSkills = [];
 
   (state.curriculum || []).forEach(skill => {
+    // 1. Filter stream and strand
     if (skill.stream && String(skill.stream).trim() !== studentStreamStr) return;
     if (selectedStrand !== "All" && skill.strand !== selectedStrand) return;
 
@@ -47,40 +52,43 @@ export function getSmartReviewQueue(options = {}) {
     if (skillYearLevel > studentYearLevel) return;
 
     const rawScore = Number(mastery.score) || 0;
-    const effectiveScore = getDecayedScore(rawScore, mastery.lastPracticed, 2);
     const accuracy = Number(mastery.accuracy) || 0;
     const totalAttempted = Number(mastery.totalAttempted) || 0;
 
+    // Days Since Last Practice
     const lastPracticedMs = mastery.lastPracticed ? new Date(mastery.lastPracticed).getTime() : 0;
-    const daysSincePracticed = lastPracticedMs > 0 ? (now - lastPracticedMs) / (1000 * 60 * 60 * 24) : 999;
-    const intervalDays = getSRSIntervalDays(rawScore);
-    const daysOverdue = daysSincePracticed - intervalDays;
+    const daysElapsed = lastPracticedMs > 0 ? (now - lastPracticedMs) / (1000 * 60 * 60 * 24) : 999;
+    
+    // Cognitive Half-Life & Retention Modeling
+    const halfLife = getMemoryHalfLife(rawScore, accuracy);
+    const retentionProb = daysElapsed === 999 ? 0.3 : Math.pow(2, -daysElapsed / halfLife);
+    const effectiveScore = Math.max(0, Math.round(rawScore * retentionProb));
+    const daysOverdue = daysElapsed - halfLife;
 
+    // Explicit Cognitive Reasons
     const reasons = [];
-    if (effectiveScore < rawScore) {
+    if (retentionProb < 0.75 && rawScore >= 40) {
       const drop = rawScore - effectiveScore;
-      reasons.push(`⏳ Time Decay (-${drop} pts since last practice)`);
+      reasons.push(`⏳ Memory Decay (-${drop} pts retention loss)`);
     }
     if (rawScore < 40) {
-      reasons.push("🚨 Basic Tier (< 40 Mastery Score)");
+      reasons.push("🚨 Basic Concept Recall (< 40 Score)");
     } else if (rawScore < 70) {
-      reasons.push("⚠️ Intermediate Tier Needs Strengthening");
+      reasons.push("⚠️ Intermediate Consolidation Needed");
     }
-    if (accuracy < 60 && totalAttempted >= 3) {
-      reasons.push(`❌ Low Accuracy (${accuracy}% rolling average)`);
+    if (accuracy < 60 && totalAttempted >= 2) {
+      reasons.push(`❌ Low Rolling Accuracy (${accuracy}%)`);
     }
-    if (daysOverdue >= 0 && daysSincePracticed < 900) {
-      reasons.push(`📅 Overdue SRS Review (${Math.floor(daysSincePracticed)} days ago)`);
+    if (daysOverdue >= 0 && daysElapsed < 900) {
+      reasons.push(`📅 Overdue Retrieval (${Math.floor(daysElapsed)} days elapsed)`);
     }
 
     const isDue = effectiveScore < rawScore || rawScore < 70 || accuracy < 60 || daysOverdue >= 0;
 
-    let priority = 0;
-    if (effectiveScore < rawScore) priority += (rawScore - effectiveScore) * 3;
-    if (rawScore < 40) priority += 50;
-    else if (rawScore < 70) priority += 25;
-    if (accuracy < 60) priority += (100 - accuracy) * 0.5;
-    if (daysOverdue > 0) priority += Math.min(daysOverdue * 2, 30);
+    // Urgency Priority Formula
+    let priority = (100 - effectiveScore) * (1 + (daysElapsed / halfLife));
+    if (accuracy < 60 && totalAttempted >= 2) priority += (60 - accuracy) * 1.5;
+    if (rawScore < 40) priority += 35;
 
     candidateSkills.push({
       skill,
@@ -91,16 +99,32 @@ export function getSmartReviewQueue(options = {}) {
       accuracy,
       totalAttempted,
       lastPracticed: mastery.lastPracticed,
-      daysSincePracticed: Math.floor(daysSincePracticed),
-      reasons: reasons.length > 0 ? reasons : ["🔄 Routine Mastery Maintenance"],
-      primaryReason: reasons[0] || "🔄 Routine Mastery Maintenance",
+      daysSincePracticed: Math.floor(daysElapsed),
+      reasons: reasons.length > 0 ? reasons : ["🔄 Routine Memory Maintenance"],
+      primaryReason: reasons[0] || "🔄 Routine Memory Maintenance",
       isDue,
       priority
     });
   });
 
+  // Sort by priority (Highest urgency first)
   candidateSkills.sort((a, b) => b.priority - a.priority);
-  return candidateSkills.slice(0, questionCount);
+
+  // Apply Interleaving across topics
+  const interleavedQueue = [];
+  const pool = candidateSkills.slice(0, Math.max(questionCount * 2, 10));
+  const usedGenerators = new Set();
+
+  while (interleavedQueue.length < questionCount && pool.length > 0) {
+    let selectedIdx = pool.findIndex(item => !usedGenerators.has(item.generatorPath));
+    if (selectedIdx === -1) selectedIdx = 0; // Fallback if repeated
+
+    const item = pool.splice(selectedIdx, 1)[0];
+    interleavedQueue.push(item);
+    usedGenerators.add(item.generatorPath);
+  }
+
+  return interleavedQueue;
 }
 
 export function getSRSMetrics() {
