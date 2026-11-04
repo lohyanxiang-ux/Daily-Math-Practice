@@ -10,7 +10,7 @@ import { isAlgebraicallyEquivalent } from "../utils/mathEquivalence.js";
 /**
  * Refined 2-Column Question Practice Runner
  * Left Column: Top Scratchpad Toolbar + Question Prompt + Canvas Overlay
- * Right Column: Scrollable Hints + Corrected Strategy C Keypad
+ * Right Column: Scrollable Compact Hints + Expanded Strategy C Keypad
  */
 export function renderQuestionView(container, options = {}) {
   const mode = options.mode || "dailyQuest";
@@ -176,6 +176,7 @@ export function renderQuestionView(container, options = {}) {
     currentQuestion = await fetchNextQuestion();
     currentHintStep = 0;
     activeAnswer = "";
+    activeKeypadTab = "basic";
 
     if (!currentQuestion) {
       container.innerHTML = `
@@ -203,21 +204,19 @@ export function renderQuestionView(container, options = {}) {
       </div>
     ` : "";
 
-    // KEYPAD CONFIGURATION FOR STRATEGY C
-    // Basic Tab: Strictly Standard Digits and Arithmetic Operators
+    // KEYPAD LAYOUT DEFINITIONS (Flattened into 1D arrays of individual keys)
     const basicKeypadKeys = [
-      ["7", "8", "9", "/"],
-      ["4", "5", "6", "*"],
-      ["1", "2", "3", "-"],
-      ["0", ".", "⌫", "+"]
+      "7", "8", "9", "/",
+      "4", "5", "6", "*",
+      "1", "2", "3", "-",
+      "0", ".", "⌫", "+"
     ];
 
-    // Math Symbols Tab: Variables (x, y, p, q, m, n), Brackets, Powers, Roots
-    const mathKeypadKeys = currentQuestion.keypad || [
-      ["x", "y", "(", ")"],
-      ["x²", "xⁿ", "√", "="],
-      ["+", "-", "*", "/"],
-      ["0", ".", "⌫", "Clear"]
+    const mathKeypadKeys = currentQuestion.keypad ? currentQuestion.keypad.flat() : [
+      "x", "y", "(", ")",
+      "x²", "xⁿ", "√", "=",
+      "+", "-", "*", "/",
+      "0", ".", "⌫", "Clear"
     ];
 
     // 2-COLUMN DOM STRUCTURE
@@ -279,41 +278,39 @@ export function renderQuestionView(container, options = {}) {
 
         </section>
 
-        <!-- RIGHT COLUMN (45% Width): SCROLLABLE HINTS & STRATEGY C KEYPAD -->
-        <section style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden;">
+        <!-- RIGHT COLUMN (45% Width): SCROLLABLE COMPACT HINTS & EXPANDED KEYPAD -->
+        <section style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
           
-          <!-- TOP HALF: SCROLLABLE HINTS & SOLUTION FEEDBACK -->
-          <div style="flex: 1; overflow-y: auto; padding-right: 4px; margin-bottom: 8px; border-bottom: 1px solid #f1f5f9;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <button id="btn-ask-hint" class="hint-btn" style="padding: 6px 14px; font-size: 0.82rem; font-weight: 700; cursor: pointer;">
+          <!-- TOP HALF: SCROLLABLE COMPACT HINTS & SOLUTION FEEDBACK (HEIGHT: 170px) -->
+          <div style="height: 170px; flex-shrink: 0; overflow-y: auto; padding-right: 4px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <button id="btn-ask-hint" class="hint-btn" style="padding: 5px 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer;">
                 💡 Ask for Hint (<span id="hint-count">0</span>/${stepsList.length})
               </button>
             </div>
             
             <div id="hints-container" class="hints-list"></div>
-            <div id="daily-feedback" class="feedback-area" style="margin-top: 8px; font-weight: 700; border-radius: 8px;"></div>
-            <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 8px; padding: 10px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;"></div>
+            <div id="daily-feedback" class="feedback-area" style="margin-top: 6px; font-weight: 700; border-radius: 8px;"></div>
+            <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 6px; padding: 8px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;"></div>
           </div>
 
-          <!-- BOTTOM HALF: STRATEGY C TABBED KEYPAD DOCK -->
-          <div id="keypad-dock-section" class="practice-col keypad-col" style="flex-shrink: 0; height: 265px; display: flex; flex-direction: column; justify-content: space-between; padding: 0; background: transparent; border: none; box-shadow: none;">
+          <!-- BOTTOM HALF: EXPANDED KEYPAD DOCK SECTION (TAKES REMAINING HEIGHT) -->
+          <div id="keypad-dock-section" style="flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 6px;">
             
-            <!-- STRATEGY C SEGMENTED TAB SWITCHER -->
-            <div style="display: flex; gap: 4px; background: #f1f5f9; padding: 3px; border-radius: 8px; margin-bottom: 6px; flex-shrink: 0;">
-              <button type="button" id="tab-keypad-basic" class="keypad-tab-btn active" style="flex: 1; padding: 6px; font-size: 0.8rem; font-weight: 700; border: none; border-radius: 6px; cursor: pointer; background: #2563eb; color: #ffffff;">
-                🔢 Basic (123)
-              </button>
-              <button type="button" id="tab-keypad-math" class="keypad-tab-btn" style="flex: 1; padding: 6px; font-size: 0.8rem; font-weight: 700; border: none; border-radius: 6px; cursor: pointer; background: transparent; color: #64748b;">
-                ∛ Math Symbols
+            <!-- DISPLAY ROW WITH COMPACT MODE SWITCHER TOGGLE -->
+            <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
+              <!-- LIVE ANSWER DISPLAY BOX -->
+              <div id="keypad-display" class="answer-display-box" style="flex: 1; height: 40px; margin: 0;"></div>
+              
+              <!-- COMPACT KEYPAD TAB TOGGLE BUTTON -->
+              <button type="button" id="btn-toggle-keypad-mode" style="padding: 6px 12px; height: 40px; font-size: 0.78rem; font-weight: 700; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; background: #f1f5f9; color: #1e293b; white-space: nowrap; flex-shrink: 0; display: flex; align-items: center; gap: 4px;">
+                <span id="keypad-mode-label">∛ Math</span>
               </button>
             </div>
 
-            <!-- LIVE ANSWER DISPLAY BOX -->
-            <div id="keypad-display" class="answer-display-box" style="height: 38px; margin-bottom: 6px; flex-shrink: 0;"></div>
+            <!-- KEYPAD GRID CONTAINER (4 COLS x 4 ROWS + SUBMIT BUTTON) -->
+            <div class="keypad-grid" style="flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; min-height: 0;"></div>
 
-            <!-- KEYPAD GRID CONTAINER -->
-            <div class="keypad-grid" style="flex: 1; display: grid; gap: 4px;"></div>
-          
           </div>
 
         </section>
@@ -326,39 +323,40 @@ export function renderQuestionView(container, options = {}) {
     // Initialize Scratchpad Canvas Component
     initScratchpad(container);
 
-    // Render Keypad Layout Function
+    // Keypad Layout Renderer
     function renderKeypadLayout(layoutKeys) {
+      const flatKeys = Array.isArray(layoutKeys) ? layoutKeys.flat() : [];
       initKeypad(
         container,
-        layoutKeys,
+        flatKeys,
         (val) => { activeAnswer = val; },
         (val) => { handleSubmission(val); }
       );
     }
 
-    // Default to Basic (123) tab on load
+    // Default to Basic (123) layout
     renderKeypadLayout(basicKeypadKeys);
 
-    // Keypad Strategy C Tab Listeners
-    const tabBasic = container.querySelector("#tab-keypad-basic");
-    const tabMath = container.querySelector("#tab-keypad-math");
+    // Compact Mode Switcher Event Listener
+    const modeBtn = container.querySelector("#btn-toggle-keypad-mode");
+    const modeLabel = container.querySelector("#keypad-mode-label");
 
-    tabBasic?.addEventListener("click", () => {
-      activeKeypadTab = "basic";
-      tabBasic.style.background = "#2563eb";
-      tabBasic.style.color = "#ffffff";
-      tabMath.style.background = "transparent";
-      tabMath.style.color = "#64748b";
-      renderKeypadLayout(basicKeypadKeys);
-    });
-
-    tabMath?.addEventListener("click", () => {
-      activeKeypadTab = "math";
-      tabMath.style.background = "#2563eb";
-      tabMath.style.color = "#ffffff";
-      tabBasic.style.background = "transparent";
-      tabBasic.style.color = "#64748b";
-      renderKeypadLayout(mathKeypadKeys);
+    modeBtn?.addEventListener("click", () => {
+      if (activeKeypadTab === "basic") {
+        activeKeypadTab = "math";
+        if (modeLabel) modeLabel.innerText = "🔢 Basic";
+        modeBtn.style.background = "#e0f2fe";
+        modeBtn.style.color = "#0369a1";
+        modeBtn.style.borderColor = "#93c5fd";
+        renderKeypadLayout(mathKeypadKeys);
+      } else {
+        activeKeypadTab = "basic";
+        if (modeLabel) modeLabel.innerText = "∛ Math";
+        modeBtn.style.background = "#f1f5f9";
+        modeBtn.style.color = "#1e293b";
+        modeBtn.style.borderColor = "#cbd5e1";
+        renderKeypadLayout(basicKeypadKeys);
+      }
     });
 
     // Progressive Hints Listener
@@ -375,7 +373,7 @@ export function renderQuestionView(container, options = {}) {
 
       const hintCard = document.createElement("div");
       hintCard.className = "hint-card";
-      hintCard.style.cssText = "background: #fffbe3; border-left: 4px solid #f59e0b; padding: 8px 10px; margin-bottom: 6px; border-radius: 6px; color: #78350f; font-size: 0.85rem;";
+      hintCard.style.cssText = "background: #fffbeb; border-left: 4px solid #f59e0b; padding: 8px 10px; margin-bottom: 6px; border-radius: 6px; color: #78350f; font-size: 0.85rem;";
       hintCard.innerHTML = `<strong>Step ${currentHintStep}:</strong> <div>${stepText}</div>`;
       hintsContainer.appendChild(hintCard);
       renderKaTeX(hintCard);
