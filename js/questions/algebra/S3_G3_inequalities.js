@@ -32,20 +32,6 @@ function formatFrac(num, den) {
   return `\\frac{${num}}{${den}}`;
 }
 
-function formatCoeff(coeff, isLhsFirst = true) {
-  if (coeff === 1) return isLhsFirst ? "x" : " + x";
-  if (coeff === -1) return " - x";
-  if (coeff === 0) return "";
-  if (coeff > 0) return isLhsFirst ? `${coeff}x` : ` + ${coeff}x`;
-  return ` - ${Math.abs(coeff)}x`;
-}
-
-function formatConst(val, isLhsFirst = false) {
-  if (val === 0) return "";
-  if (val > 0) return isLhsFirst ? `${val}` : ` + ${val}`;
-  return ` - ${Math.abs(val)}`;
-}
-
 export function generateQuestion(tier = 1) {
   const defaultKeypad = [
     "x", "<", ">", "/",
@@ -73,10 +59,11 @@ export function generateQuestion(tier = 1) {
     const num = (const_val / g) * (coeff < 0 ? -1 : 1);
     const den = Math.abs(coeff / g);
 
-    const symList = [">", "<", "\\ge", "\\le"];
+    // Use LaTeX robust inequality symbols to avoid HTML entity parsing errors (<)
+    const symList = ["\\gt", "\\lt", "\\ge", "\\le"];
     const sym = symList[op_idx - 1];
 
-    const flipMap = { ">": "<", "<": ">", "\\ge": "\\le", "\\le": "\\ge" };
+    const flipMap = { "\\gt": "\\lt", "\\lt": "\\gt", "\\ge": "\\le", "\\le": "\\ge" };
     const ans_sym = coeff < 0 ? flipMap[sym] : sym;
 
     let lhs = `${a === 1 ? 'x' : (a === -1 ? '-x' : a + 'x')}`;
@@ -103,7 +90,7 @@ export function generateQuestion(tier = 1) {
       tier: 1,
       tierName: "Basic",
       skillTitle: "Solving Inequalities",
-      prompt: `Solve the inequality:\n\n$$${lhs} ${sym} ${rhs}$$`,
+      prompt: `Solve the inequality: $\\displaystyle ${lhs} ${sym} ${rhs}$`,
       expectedAnswer: ans,
       keypad: defaultKeypad,
       steps: [
@@ -144,10 +131,10 @@ export function generateQuestion(tier = 1) {
       const num = (const_val / g) * (coeff < 0 ? -1 : 1);
       const den = Math.abs(coeff / g);
 
-      const symList = ["\\ge", "\\le", ">", "<"];
+      const symList = ["\\ge", "\\le", "\\gt", "\\lt"];
       const sym = symList[op_idx - 1];
 
-      const flipMap = { "\\ge": "\\le", "\\le": "\\ge", ">": "<", "<": ">" };
+      const flipMap = { "\\ge": "\\le", "\\le": "\\ge", "\\gt": "\\lt", "\\lt": "\\gt" };
       const ans_sym = coeff < 0 ? flipMap[sym] : sym;
 
       const lhs_num = `${a === 1 ? 'x' : (a === -1 ? '-x' : a + 'x')}${b_val > 0 ? ' + ' + b_val : ' - ' + Math.abs(b_val)}`;
@@ -166,7 +153,7 @@ export function generateQuestion(tier = 1) {
         tier: 2,
         tierName: "Intermediate",
         skillTitle: "Solving Inequalities",
-        prompt: `Solve the inequality:\n\n$$${expr}$$`,
+        prompt: `Solve the inequality: $\\displaystyle ${expr}$`,
         expectedAnswer: ans,
         keypad: defaultKeypad,
         steps: [
@@ -209,15 +196,15 @@ export function generateQuestion(tier = 1) {
       const x1_str = formatFrac(x1_num, x1_den);
       const x2_str = formatFrac(x2_num, x2_den);
 
-      const op1 = op1_type === 1 ? "\\le" : "<";
-      const op2 = op2_type === 1 ? "<" : "\\le";
+      const op1 = op1_type === 1 ? "\\le" : "\\lt";
+      const op2 = op2_type === 1 ? "\\lt" : "\\le";
 
       const mid_expr = `${m === 1 ? 'x' : m + 'x'}${c > 0 ? ' + ' + c : ' - ' + Math.abs(c)}`;
       const expr = `${a_str} ${op1} ${mid_expr} ${op2} ${b_str}`;
 
-      const ineq1 = `${mid_expr} ${op1 === '\\le' ? '\\ge' : '>'} ${a_str}`;
+      const ineq1 = `${mid_expr} ${op1 === '\\le' ? '\\ge' : '\\gt'} ${a_str}`;
       const ineq2 = `${mid_expr} ${op2} ${b_str}`;
-      const sol1 = `x ${op1 === '\\le' ? '\\ge' : '>'} ${x1_str}`;
+      const sol1 = `x ${op1 === '\\le' ? '\\ge' : '\\gt'} ${x1_str}`;
       const sol2 = `x ${op2} ${x2_str}`;
       const ans = `${x1_str} ${op1} x ${op2} ${x2_str}`;
 
@@ -233,7 +220,7 @@ export function generateQuestion(tier = 1) {
         tier: 2,
         tierName: "Intermediate",
         skillTitle: "Solving Inequalities",
-        prompt: `Solve the inequality:\n\n$$${expr}$$`,
+        prompt: `Solve the inequality: $\\displaystyle ${expr}$`,
         expectedAnswer: ans,
         keypad: defaultKeypad,
         steps: [
@@ -275,8 +262,8 @@ export function generateQuestion(tier = 1) {
   const num1 = (const1 / gcd1) * (eff_coeff1 < 0 ? -1 : 1);
   const den1 = Math.abs(eff_coeff1 / gcd1);
 
-  const sym1 = op1_idx === 1 ? "\\ge" : ">";
-  const flipMap = { "\\ge": "\\le", ">": "<", "\\le": "\\ge", "<": ">" };
+  const sym1 = op1_idx === 1 ? "\\ge" : "\\gt";
+  const flipMap = { "\\ge": "\\le", "\\gt": "\\lt", "\\le": "\\ge", "\\lt": "\\gt" };
   const ans_sym1 = eff_coeff1 < 0 ? flipMap[sym1] : sym1;
   const val1_str = formatFrac(num1, den1);
   const v1 = num1 / den1;
@@ -294,7 +281,7 @@ export function generateQuestion(tier = 1) {
   const num2 = v2_raw <= v1 ? num1 + 3 * den1 : num2_raw;
   const den2 = v2_raw <= v1 ? den1 : den2_raw;
 
-  const sym2 = op2_idx === 1 ? "\\le" : "<";
+  const sym2 = op2_idx === 1 ? "\\le" : "\\lt";
   const ans_sym2 = eff_coeff2 < 0 ? flipMap[sym2] : sym2;
   const val2_str = formatFrac(num2, den2);
 
@@ -308,7 +295,7 @@ export function generateQuestion(tier = 1) {
 
   const sol1 = `x ${ans_sym1} ${val1_str}`;
   const sol2 = `x ${ans_sym2} ${val2_str}`;
-  const left_op = ans_sym1 === "\\ge" ? "\\le" : "<";
+  const left_op = ans_sym1 === "\\ge" ? "\\le" : "\\lt";
 
   let ans = "";
   if (eff_coeff1 > 0 && eff_coeff2 > 0) {
@@ -348,7 +335,7 @@ export function generateQuestion(tier = 1) {
     tier: 3,
     tierName: "Advanced",
     skillTitle: "Solving Inequalities",
-    prompt: `Solve the inequalities:\n\n$$${expr1}$$\n$$\\text{and}$$\n$$${expr2}$$`,
+    prompt: `Solve the inequalities:\n\n$\\displaystyle ${expr1}$\n\nand\n\n$\\displaystyle ${expr2}$`,
     expectedAnswer: ans,
     keypad: defaultKeypad,
     steps: [
