@@ -2,11 +2,17 @@ import { state } from "../state.js";
 import { getMasteryMetadata } from "../utils/masteryScoreEngine.js";
 import { loadQuestionGenerator } from "../questions/loader.js";
 
-// Hardcoded Google Apps Script Web App URL
+// Hardcoded Google Apps Script Web App API URL
 const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbwEsVnKapmwUFuv0vyG1wFvyAXoFKQMrpsNxibUqYh891PHXzFgmBThnT62lGoEPo_xiQ/exec";
 
 export function renderTeacherDashboard(container, onLogout) {
   if (!container) return;
+
+  // HIDE REDUNDANT SHELL HEADER BAR (SS2 FIX)
+  const globalShellNav = document.querySelector(".top-nav");
+  if (globalShellNav) {
+    globalShellNav.style.display = "none";
+  }
 
   // Defensive data extraction
   const teacherData = state.teacherData || {};
@@ -21,10 +27,17 @@ export function renderTeacherDashboard(container, onLogout) {
   // Active UI States
   let activeTab = "overview"; // 'overview' or 'tagging'
   let selectedClass = "All";
+  
+  // Matrix Overview Filters
   let selectedLevel = "All";
   let selectedStream = "All";
   let selectedStrand = "All";
   let selectedTopic = "All";
+
+  // Class Skill Tagging Dedicated Filters
+  let tagFilterLevel = "All";
+  let tagFilterStream = "All";
+  let tagFilterStrand = "All";
 
   // Buffer for holding tag edits before saving to Google Sheets
   let currentClassTagsBuffer = {};
@@ -53,7 +66,7 @@ export function renderTeacherDashboard(container, onLogout) {
     return (c && String(c).trim()) ? String(c).trim() : "Unassigned";
   }
 
-  // DEFAULT TAG RULE: Earlier years = Past | Current year & future years = Future
+  // Default Tag Rule: Earlier years = Past | Current year & future years = Future
   function getAutoDefaultTag(skill, className) {
     if (!className || className === "All") return "Future";
     
@@ -67,7 +80,6 @@ export function renderTeacherDashboard(container, onLogout) {
       if (skillLevel < classLevel) {
         return "Past";
       } else {
-        // Current year or future years default to Future
         return "Future";
       }
     }
@@ -76,7 +88,7 @@ export function renderTeacherDashboard(container, onLogout) {
   }
 
   const classes = Array.from(new Set(students.map(getStudentClass))).sort();
-  const levels = Array.from(new Set(curriculum.map(c => c.level).filter(Boolean))).sort();
+  const levels = Array.from(new Set(curriculum.map(c => c.level || c.year).filter(Boolean))).sort();
   const streams = Array.from(new Set(curriculum.map(c => c.stream).filter(Boolean))).sort();
   const strands = Array.from(new Set(curriculum.map(c => c.strand).filter(Boolean))).sort();
   const topics = Array.from(new Set(curriculum.map(c => c.topic).filter(Boolean))).sort();
@@ -87,11 +99,21 @@ export function renderTeacherDashboard(container, onLogout) {
 
   function getFilteredSkills() {
     return curriculum.filter(c => {
-      const matchLevel = selectedLevel === "All" || String(c.level) === String(selectedLevel);
+      const matchLevel = selectedLevel === "All" || String(c.level || c.year) === String(selectedLevel);
       const matchStream = selectedStream === "All" || String(c.stream) === String(selectedStream);
       const matchStrand = selectedStrand === "All" || String(c.strand) === String(selectedStrand);
       const matchTopic = selectedTopic === "All" || String(c.topic) === String(selectedTopic);
       return matchLevel && matchStream && matchStrand && matchTopic;
+    });
+  }
+
+  // Get skills matching Tagging Tab active filters
+  function getTaggingFilteredSkills() {
+    return curriculum.filter(c => {
+      const matchLevel = tagFilterLevel === "All" || String(c.level || c.year) === String(tagFilterLevel);
+      const matchStream = tagFilterStream === "All" || String(c.stream) === String(tagFilterStream);
+      const matchStrand = tagFilterStrand === "All" || String(c.strand) === String(tagFilterStrand);
+      return matchLevel && matchStream && matchStrand;
     });
   }
 
@@ -165,7 +187,7 @@ export function renderTeacherDashboard(container, onLogout) {
     }
   }
 
-  // Robust Multi-key generator function resolver
+  // Multi-key generator function resolver
   function findGeneratorFunction(path) {
     if (!path) return null;
 
@@ -212,6 +234,7 @@ export function renderTeacherDashboard(container, onLogout) {
 
     const filteredStudents = getFilteredStudents();
     const filteredSkills = getFilteredSkills();
+    const taggingSkills = getTaggingFilteredSkills();
     const riskAlerts = analyzeAtRiskStudents(filteredStudents);
 
     let totalScoreSum = 0;
@@ -237,8 +260,9 @@ export function renderTeacherDashboard(container, onLogout) {
     const classAvgScore = totalScoreCount > 0 ? Math.round(totalScoreSum / totalScoreCount) : 0;
     const avgMeta = safeGetMasteryMetadata(classAvgScore);
 
+    // Group skills by Topic for Tagging view
     const skillsByTopic = {};
-    filteredSkills.forEach(sk => {
+    taggingSkills.forEach(sk => {
       const topic = sk.topic || "General Mathematics";
       if (!skillsByTopic[topic]) skillsByTopic[topic] = [];
       skillsByTopic[topic].push(sk);
@@ -247,14 +271,14 @@ export function renderTeacherDashboard(container, onLogout) {
     container.innerHTML = `
       <div class="teacher-dashboard-container" style="display: flex; flex-direction: column; gap: 16px; padding: 20px; height: 100%; box-sizing: border-box; background: #f8fafc; overflow-y: auto;">
         
-        <!-- HEADER BAR -->
+        <!-- SINGLE HEADER BAR -->
         <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; background: #ffffff; padding: 16px 24px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; gap: 12px;">
           <div>
             <div style="display: flex; align-items: center; gap: 10px;">
               <h2 style="font-size: 1.35rem; color: #0f172a; margin: 0; font-weight: 800;">🏫 ${teacherName}</h2>
               <span style="background: #2563eb; color: #ffffff; padding: 3px 10px; border-radius: 12px; font-weight: 800; font-size: 0.75rem;">TEACHER DASHBOARD</span>
             </div>
-            <p style="color: #64748b; font-size: 0.88rem; margin: 2px 0 0 0;">Monitoring <strong>${filteredStudents.length}</strong> students across <strong>${filteredSkills.length}</strong> skills</p>
+            <p style="color: #64748b; font-size: 0.88rem; margin: 2px 0 0 0;">Monitoring <strong>${filteredStudents.length}</strong> students across <strong>${curriculum.length}</strong> total skills</p>
           </div>
           
           <div style="display: flex; gap: 14px; align-items: center;">
@@ -455,7 +479,7 @@ export function renderTeacherDashboard(container, onLogout) {
 
           </div>
         ` : `
-          <!-- TAB 2: SKILL TAGGING CONTENT -->
+          <!-- TAB 2: CLASS SKILL TAGGING WITH FILTERS & MASS TAGGING -->
           <div style="background: #ffffff; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 16px;">
             
             <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 16px;">
@@ -480,9 +504,46 @@ export function renderTeacherDashboard(container, onLogout) {
                 ⚠️ Please select a specific class from the top <strong>Class Filter</strong> dropdown above to configure skill tags for that class.
               </div>
             ` : `
+              <!-- TAGGING CONTROLS: FILTERS & MASS SETTING -->
+              <div style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; background: #f8fafc; padding: 14px 18px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                
+                <!-- Filter Dropdowns -->
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+                  <span style="font-weight: 800; font-size: 0.86rem; color: #0f172a;">Filter Skills:</span>
+
+                  <select id="tag-filter-level" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.84rem; font-weight: 700; background: #ffffff; color: #1e293b; cursor: pointer;">
+                    <option value="All">Level: All</option>
+                    ${levels.map(l => `<option value="${l}" ${String(l) === String(tagFilterLevel) ? 'selected' : ''}>Level ${l}</option>`).join('')}
+                  </select>
+
+                  <select id="tag-filter-stream" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.84rem; font-weight: 700; background: #ffffff; color: #1e293b; cursor: pointer;">
+                    <option value="All">Stream: All</option>
+                    ${streams.map(s => `<option value="${s}" ${s === tagFilterStream ? 'selected' : ''}>${s}</option>`).join('')}
+                  </select>
+
+                  <select id="tag-filter-strand" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.84rem; font-weight: 700; background: #ffffff; color: #1e293b; cursor: pointer;">
+                    <option value="All">Strand: All</option>
+                    ${strands.map(s => `<option value="${s}" ${s === tagFilterStrand ? 'selected' : ''}>${s}</option>`).join('')}
+                  </select>
+                </div>
+
+                <!-- Mass Setting Buttons -->
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                  <span style="font-weight: 800; font-size: 0.82rem; color: #64748b;">Bulk Tag (${taggingSkills.length}):</span>
+                  <button type="button" id="btn-mass-past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #0284c7; background: #e0f2fe; color: #0369a1; font-weight: 700; font-size: 0.82rem; cursor: pointer;">🔵 Set All Past</button>
+                  <button type="button" id="btn-mass-current" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #16a34a; background: #dcfce7; color: #15803d; font-weight: 700; font-size: 0.82rem; cursor: pointer;">🟢 Set All Current</button>
+                  <button type="button" id="btn-mass-future" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #64748b; background: #f1f5f9; color: #475569; font-weight: 700; font-size: 0.82rem; cursor: pointer;">⚪ Set All Future</button>
+                </div>
+
+              </div>
+
               <!-- GROUPED SKILLS BY TOPIC -->
               <div style="display: flex; flex-direction: column; gap: 20px;">
-                ${Object.entries(skillsByTopic).map(([topicName, skills]) => `
+                ${Object.keys(skillsByTopic).length === 0 ? `
+                  <div style="background: #ffffff; padding: 40px; text-align: center; border-radius: 12px; color: #64748b; border: 1px solid #e2e8f0;">
+                    No skills match the selected Level, Stream, or Strand filters.
+                  </div>
+                ` : Object.entries(skillsByTopic).map(([topicName, skills]) => `
                   <div style="border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; background: #fafafa;">
                     <h4 style="margin: 0 0 12px 0; font-size: 1.05rem; color: #0f172a; font-weight: 800; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">
                       📂 ${topicName} (${skills.length} Skills)
@@ -596,6 +657,39 @@ export function renderTeacherDashboard(container, onLogout) {
       render();
     });
 
+    // CLASS SKILL TAGGING DEDICATED FILTERS
+    container.querySelector("#tag-filter-level")?.addEventListener("change", (e) => {
+      tagFilterLevel = e.target.value;
+      render();
+    });
+
+    container.querySelector("#tag-filter-stream")?.addEventListener("change", (e) => {
+      tagFilterStream = e.target.value;
+      render();
+    });
+
+    container.querySelector("#tag-filter-strand")?.addEventListener("change", (e) => {
+      tagFilterStrand = e.target.value;
+      render();
+    });
+
+    // MASS TAGGING BUTTON HANDLERS
+    function applyMassTag(targetTag) {
+      const skillsToTag = getTaggingFilteredSkills();
+      if (skillsToTag.length === 0) {
+        alert("No skills match the current filters.");
+        return;
+      }
+      skillsToTag.forEach(sk => {
+        currentClassTagsBuffer[sk.generatorPath] = targetTag;
+      });
+      render();
+    }
+
+    container.querySelector("#btn-mass-past")?.addEventListener("click", () => applyMassTag("Past"));
+    container.querySelector("#btn-mass-current")?.addEventListener("click", () => applyMassTag("Current"));
+    container.querySelector("#btn-mass-future")?.addEventListener("click", () => applyMassTag("Future"));
+
     // IN-PLACE TAG BUTTON TOGGLE HANDLER (PREVENTS SCROLL JUMP)
     container.querySelectorAll(".tag-toggle-group").forEach(group => {
       const path = group.getAttribute("data-path");
@@ -639,7 +733,7 @@ export function renderTeacherDashboard(container, onLogout) {
       });
     });
 
-    // SAVE CLASS TAGS HANDLER WITH HARDCODED API URL FALLBACK
+    // SAVE CLASS TAGS HANDLER WITH API URL FALLBACK
     container.querySelector("#btn-save-class-tags")?.addEventListener("click", async (e) => {
       const saveBtn = e.target;
 
@@ -781,7 +875,7 @@ export function renderTeacherDashboard(container, onLogout) {
       if (skillModalEl) skillModalEl.style.display = "flex";
     }
 
-    // ASYNC SAMPLE QUESTION RENDERER (DYNAMICALLY IMPORTS MISSING GENERATORS)
+    // ASYNC SAMPLE QUESTION RENDERER (SS1 FIX VIA LOADER.JS)
     async function renderSampleQuestion() {
       const qContainer = container.querySelector("#modal-question-container");
       if (!qContainer) return;
@@ -792,11 +886,23 @@ export function renderTeacherDashboard(container, onLogout) {
         const rawPath = activeSkillForModal.generatorPath || "";
         let generatorFn = findGeneratorFunction(rawPath);
 
-        // Dynamically import generator module if not loaded in memory
+        // Dynamically import generator module using loader.js if not yet in state
         if (!generatorFn && typeof loadQuestionGenerator === "function") {
           try {
-            await loadQuestionGenerator(rawPath);
-            generatorFn = findGeneratorFunction(rawPath);
+            const loadedModule = await loadQuestionGenerator(rawPath);
+            if (loadedModule) {
+              // Extract generator function from loader wrapper
+              const genFn = loadedModule.generate || loadedModule.generateQuestion;
+              if (typeof genFn === "function") {
+                generatorFn = genFn;
+                
+                // Store in state.skillGenerators for caching & lookups
+                if (!state.skillGenerators) state.skillGenerators = {};
+                state.skillGenerators[rawPath] = generatorFn;
+                const clean = rawPath.trim().replace(/^js\/questions\//, '').replace(/^\/+/, '');
+                state.skillGenerators[clean] = generatorFn;
+              }
+            }
           } catch (loadErr) {
             console.warn("Dynamic generator module import error:", loadErr);
           }
