@@ -1,12 +1,13 @@
-import { renderDashboard } from "./views/dashboardView.js";
+import { renderStudentDashboard } from "./views/studentDashboardView.js";
 import { renderDailyPractice } from "./views/dailyView.js";
 import { renderSkillTree } from "./views/skillTreeView.js";
 import { renderSmartReviewSetup } from "./views/smartReviewView.js";
 import { renderTeacherDashboard } from "./views/teacherDashboardView.js";
 
 const routes = {
-  "dashboard": renderDashboard,
+  "dashboard": renderStudentDashboard, // Point to studentDashboardView.js
   "daily": renderDailyPractice,
+  "dailyPractice": renderDailyPractice,
   "skillTree": renderSkillTree,
   "smartReviewSetup": renderSmartReviewSetup,
   "teacherDashboard": renderTeacherDashboard
