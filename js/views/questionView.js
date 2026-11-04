@@ -10,7 +10,7 @@ import { isAlgebraicallyEquivalent } from "../utils/mathEquivalence.js";
 /**
  * Refined 2-Column Question Practice Runner
  * Left Column: Top Scratchpad Toolbar + Question Prompt + Canvas Overlay
- * Right Column: Scrollable Compact Hints + Expanded Strategy C Keypad
+ * Right Column: Scrollable Compact Hints + Unified Standard Keypad
  */
 export function renderQuestionView(container, options = {}) {
   const mode = options.mode || "dailyQuest";
@@ -30,7 +30,6 @@ export function renderQuestionView(container, options = {}) {
   let activeAnswer = "";
   let currentHintStep = 0;
   let currentSkillTitle = "Practice Skill";
-  let activeKeypadTab = "basic"; // 'basic' or 'math'
   const sessionInitialScores = {};
 
   // Background Mastery Batch Sync on page visibility change
@@ -176,7 +175,6 @@ export function renderQuestionView(container, options = {}) {
     currentQuestion = await fetchNextQuestion();
     currentHintStep = 0;
     activeAnswer = "";
-    activeKeypadTab = "basic";
 
     if (!currentQuestion) {
       container.innerHTML = `
@@ -203,21 +201,6 @@ export function renderQuestionView(container, options = {}) {
         ${diagramSvgContent || `<img src="${currentQuestion.imageUrl}" style="max-width: 100%; max-height: 220px; object-fit: contain;">`}
       </div>
     ` : "";
-
-    // KEYPAD LAYOUT DEFINITIONS (Flattened into 1D arrays of individual keys)
-    const basicKeypadKeys = [
-      "7", "8", "9", "/",
-      "4", "5", "6", "*",
-      "1", "2", "3", "-",
-      "0", ".", "⌫", "+"
-    ];
-
-    const mathKeypadKeys = currentQuestion.keypad ? currentQuestion.keypad.flat() : [
-      "x", "y", "(", ")",
-      "x²", "xⁿ", "√", "=",
-      "+", "-", "*", "/",
-      "0", ".", "⌫", "Clear"
-    ];
 
     // 2-COLUMN DOM STRUCTURE
     container.innerHTML = `
@@ -278,7 +261,7 @@ export function renderQuestionView(container, options = {}) {
 
         </section>
 
-        <!-- RIGHT COLUMN (45% Width): SCROLLABLE COMPACT HINTS & EXPANDED KEYPAD -->
+        <!-- RIGHT COLUMN (45% Width): SCROLLABLE COMPACT HINTS & EXPANDED UNIFIED KEYPAD -->
         <section style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
           
           <!-- TOP HALF: SCROLLABLE COMPACT HINTS & SOLUTION FEEDBACK (HEIGHT: 170px) -->
@@ -294,23 +277,10 @@ export function renderQuestionView(container, options = {}) {
             <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 6px; padding: 8px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;"></div>
           </div>
 
-          <!-- BOTTOM HALF: EXPANDED KEYPAD DOCK SECTION (TAKES REMAINING HEIGHT) -->
-          <div id="keypad-dock-section" style="flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 6px;">
-            
-            <!-- DISPLAY ROW WITH COMPACT MODE SWITCHER TOGGLE -->
-            <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
-              <!-- LIVE ANSWER DISPLAY BOX -->
-              <div id="keypad-display" class="answer-display-box" style="flex: 1; height: 40px; margin: 0;"></div>
-              
-              <!-- COMPACT KEYPAD TAB TOGGLE BUTTON -->
-              <button type="button" id="btn-toggle-keypad-mode" style="padding: 6px 12px; height: 40px; font-size: 0.78rem; font-weight: 700; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; background: #f1f5f9; color: #1e293b; white-space: nowrap; flex-shrink: 0; display: flex; align-items: center; gap: 4px;">
-                <span id="keypad-mode-label">∛ Math</span>
-              </button>
-            </div>
-
-            <!-- KEYPAD GRID CONTAINER (4 COLS x 4 ROWS + SUBMIT BUTTON) -->
-            <div class="keypad-grid" style="flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; min-height: 0;"></div>
-
+          <!-- BOTTOM HALF: UNIFIED STANDARDIZED KEYPAD DOCK SECTION -->
+          <div id="keypad-dock-section" style="flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 4px;">
+            <div id="keypad-display" style="width: 100%;"></div>
+            <div class="keypad-grid" style="flex: 1; min-height: 0;"></div>
           </div>
 
         </section>
@@ -323,41 +293,13 @@ export function renderQuestionView(container, options = {}) {
     // Initialize Scratchpad Canvas Component
     initScratchpad(container);
 
-    // Keypad Layout Renderer
-    function renderKeypadLayout(layoutKeys) {
-      const flatKeys = Array.isArray(layoutKeys) ? layoutKeys.flat() : [];
-      initKeypad(
-        container,
-        flatKeys,
-        (val) => { activeAnswer = val; },
-        (val) => { handleSubmission(val); }
-      );
-    }
-
-    // Default to Basic (123) layout
-    renderKeypadLayout(basicKeypadKeys);
-
-    // Compact Mode Switcher Event Listener
-    const modeBtn = container.querySelector("#btn-toggle-keypad-mode");
-    const modeLabel = container.querySelector("#keypad-mode-label");
-
-    modeBtn?.addEventListener("click", () => {
-      if (activeKeypadTab === "basic") {
-        activeKeypadTab = "math";
-        if (modeLabel) modeLabel.innerText = "🔢 Basic";
-        modeBtn.style.background = "#e0f2fe";
-        modeBtn.style.color = "#0369a1";
-        modeBtn.style.borderColor = "#93c5fd";
-        renderKeypadLayout(mathKeypadKeys);
-      } else {
-        activeKeypadTab = "basic";
-        if (modeLabel) modeLabel.innerText = "∛ Math";
-        modeBtn.style.background = "#f1f5f9";
-        modeBtn.style.color = "#1e293b";
-        modeBtn.style.borderColor = "#cbd5e1";
-        renderKeypadLayout(basicKeypadKeys);
-      }
-    });
+    // Initialize Unified Standardized Keypad
+    initKeypad(
+      container,
+      currentQuestion.keypad || null,
+      (val) => { activeAnswer = val; },
+      (val) => { handleSubmission(val); }
+    );
 
     // Progressive Hints Listener
     const hintBtn = container.querySelector("#btn-ask-hint");
