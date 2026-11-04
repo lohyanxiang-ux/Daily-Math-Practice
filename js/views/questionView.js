@@ -10,7 +10,7 @@ import { isAlgebraicallyEquivalent } from "../utils/mathEquivalence.js";
 /**
  * Refined 2-Column Question Practice Runner
  * Left Column: Top Scratchpad Toolbar + Question Prompt + Canvas Overlay
- * Right Column: Progressive Hints + Dynamic Mastery Feedback + Unified Standard Keypad
+ * Right Column: Progressive Hints + Dynamic Mastery & Live XP Sync + Standard Keypad
  */
 export function renderQuestionView(container, options = {}) {
   const mode = options.mode || "dailyQuest";
@@ -109,7 +109,7 @@ export function renderQuestionView(container, options = {}) {
     }
   }
 
-  // Updates Global Top Header Bar to integrate Exit, Mode, Mastery Score, and Progress
+  // Updates Global Top Header Bar to integrate Exit, Mode, Mastery Score, Live XP, and Progress
   function updateGlobalTopNav() {
     const topNav = document.querySelector(".top-nav");
     if (!topNav) return;
@@ -147,7 +147,8 @@ export function renderQuestionView(container, options = {}) {
         <span class="stat" style="background: #eff6ff; color: #1d4ed8; padding: 3px 8px; border-radius: 6px; border: 1px solid #bfdbfe; font-size: 0.82rem;">
           🎯 Mastery <b id="top-nav-mastery-val">${currentMastery}</b>
         </span>
-        <span class="stat">XP <b>${userXp}</b></span>
+        <!-- LIVE XP BADGE -->
+        <span class="stat">XP <b id="top-nav-xp-val">${userXp}</b></span>
         <span class="stat">Streak <b>${userStreak}</b> 🔥</span>
         <span style="font-size: 0.85rem; font-weight: 700; color: #475569; background: #f1f5f9; padding: 4px 10px; border-radius: 8px;">${displayName}</span>
       </div>
@@ -196,7 +197,7 @@ export function renderQuestionView(container, options = {}) {
       return;
     }
 
-    // Update global top nav bar with Exit, Mode, Mastery, and Progress
+    // Update global top nav bar with Exit, Mode, Mastery, XP, and Progress
     updateGlobalTopNav();
 
     const stepsList = currentQuestion.steps || currentQuestion.hints || [];
@@ -311,7 +312,6 @@ export function renderQuestionView(container, options = {}) {
     }
 
     function renderHintButton() {
-      // Remove previous inline hint button if it exists
       const existingBtn = hintsContainer.querySelector(".dynamic-hint-btn");
       if (existingBtn) existingBtn.remove();
 
@@ -334,7 +334,6 @@ export function renderQuestionView(container, options = {}) {
     function revealNextHint() {
       if (!stepsList || currentHintStep >= stepsList.length) return;
 
-      // Remove current inline button before placing hint text
       const existingBtn = hintsContainer.querySelector(".dynamic-hint-btn");
       if (existingBtn) existingBtn.remove();
 
@@ -348,18 +347,16 @@ export function renderQuestionView(container, options = {}) {
       hintsContainer.appendChild(hintCard);
       renderKaTeX(hintCard);
 
-      // Render next hint button below this new hint
       renderHintButton();
       scrollHintsToBottom();
     }
 
-    // Render initial Hint 1 button if hints are available
     if (stepsList.length > 0) {
       renderHintButton();
     }
   }
 
-  // Submission Evaluator & Dynamic Mastery Tracker
+  // Submission Evaluator & Dynamic Mastery/XP Tracker
   function handleSubmission(userAns) {
     if (!currentQuestion) return;
 
@@ -386,7 +383,26 @@ export function renderQuestionView(container, options = {}) {
 
     if (isCorrect) {
       sessionScore++;
+      
+      // 1. AWARD +10 XP IN STATE
       addXP(10);
+
+      // 2. LIVE UPDATE TOP NAV BAR XP DISPLAY
+      const topXpEl = document.querySelector("#top-nav-xp-val");
+      if (topXpEl && state.profile) {
+        topXpEl.innerText = state.profile.xp;
+      }
+
+      // 3. IMMEDIATELY SYNC XP & PROGRESS TO GOOGLE SHEETS BACKEND
+      if (state.userToken && state.profile) {
+        syncUserProgress(
+          state.userToken,
+          state.profile.xp,
+          state.profile.streakCount,
+          state.profile.lastDailyQuestDate
+        );
+      }
+
       if (feedbackEl) {
         feedbackEl.style.padding = "8px 12px";
         feedbackEl.style.background = "#d1fae5";
@@ -428,11 +444,15 @@ export function renderQuestionView(container, options = {}) {
     }
 
     const bonusXP = (!isSkillTree && sessionScore === totalQuestions) ? 20 : 0;
-    if (bonusXP > 0) addXP(bonusXP);
+    if (bonusXP > 0) {
+      addXP(bonusXP);
+      const topXpEl = document.querySelector("#top-nav-xp-val");
+      if (topXpEl && state.profile) topXpEl.innerText = state.profile.xp;
+    }
 
     if (state.userToken) {
       if (state.profile) {
-        syncUserProgress(state.userToken, state.profile.xp, state.profile.streakCount);
+        syncUserProgress(state.userToken, state.profile.xp, state.profile.streakCount, state.profile.lastDailyQuestDate);
       }
       flushMasterySync();
     }
