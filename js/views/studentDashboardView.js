@@ -1,4 +1,4 @@
-import { state, logout } from "../state.js";
+import { state, resetState } from "../state.js";
 import { navigateTo } from "../router.js";
 import { isDailyQuestCompletedToday } from "../utils/dailyQuestEngine.js";
 
@@ -144,18 +144,24 @@ export function renderStudentDashboard(container) {
     </div>
   `;
 
-  // Attach Event Handlers for Navigation Routes & Actions
+  // Attach Event Handlers
   container.querySelector("#btn-dashboard-logout")?.addEventListener("click", () => {
-    logout();
+    if (typeof resetState === "function") {
+      resetState();
+    } else {
+      state.userToken = null;
+      state.profile = null;
+    }
+    localStorage.removeItem("user_token");
     navigateTo("login");
   });
 
   container.querySelector("#btn-start-daily-quest")?.addEventListener("click", () => {
-    navigateTo("dailyPractice");
+    navigateTo("daily");
   });
 
   container.querySelector("#btn-start-smart-review")?.addEventListener("click", () => {
-    navigateTo("smartReview");
+    navigateTo("smartReviewSetup");
   });
 
   container.querySelector("#btn-start-skill-tree")?.addEventListener("click", () => {
