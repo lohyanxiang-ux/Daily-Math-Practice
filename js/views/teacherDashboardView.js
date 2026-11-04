@@ -14,7 +14,7 @@ export function renderTeacherDashboard(container, onLogout) {
 
   const teacherName = currentUser.displayName || currentUser.name || state.user?.name || "Teacher Account";
 
-  // Dashboard Active State
+  // Active UI States
   let activeTab = "overview"; // 'overview' or 'tagging'
   let selectedClass = "All";
   let selectedLevel = "All";
@@ -22,7 +22,7 @@ export function renderTeacherDashboard(container, onLogout) {
   let selectedStrand = "All";
   let selectedTopic = "All";
 
-  // Buffer for holding tag changes before saving to Google Sheets
+  // Buffer for holding tag edits before saving to Google Sheets
   let currentClassTagsBuffer = {};
   let lastLoadedClassForBuffer = null;
 
@@ -44,7 +44,6 @@ export function renderTeacherDashboard(container, onLogout) {
     };
   }
 
-  // Helper: Safe student class name
   function getStudentClass(st) {
     if (!st) return "Unassigned";
     const c = st.class || st.className || st.gradeClass;
@@ -65,15 +64,14 @@ export function renderTeacherDashboard(container, onLogout) {
       if (skillLevel < classLevel) {
         return "Past";
       } else {
-        // Current year or future years default to Future
         return "Future";
       }
     }
 
-    return "Future"; // Fallback default for current year/unmatched
+    return "Future";
   }
 
-  // Filter options extraction
+  // Filter options
   const classes = Array.from(new Set(students.map(getStudentClass))).sort();
   const levels = Array.from(new Set(curriculum.map(c => c.level).filter(Boolean))).sort();
   const streams = Array.from(new Set(curriculum.map(c => c.stream).filter(Boolean))).sort();
@@ -165,6 +163,41 @@ export function renderTeacherDashboard(container, onLogout) {
     }
   }
 
+  // Multi-key generator function resolver for sample question modal
+  function findGeneratorFunction(path) {
+    if (!path) return null;
+
+    const generators = state.skillGenerators || window.skillGenerators || {};
+    const clean = path.trim().replace(/\\/g, '/');
+    const filename = clean.split('/').pop().replace(/\.js$/, '');
+
+    // 1. Direct match
+    if (typeof generators[clean] === 'function') return generators[clean];
+
+    // 2. Prepend 'js/questions/' if missing
+    const withPrefix = clean.startsWith('js/questions/') ? clean : `js/questions/${clean}`;
+    if (typeof generators[withPrefix] === 'function') return generators[withPrefix];
+
+    // 3. Match with .js extension
+    const withJs = clean.endsWith('.js') ? clean : `${clean}.js`;
+    if (typeof generators[withJs] === 'function') return generators[withJs];
+
+    const withPrefixAndJs = withPrefix.endsWith('.js') ? withPrefix : `${withPrefix}.js`;
+    if (typeof generators[withPrefixAndJs] === 'function') return generators[withPrefixAndJs];
+
+    // 4. Match by filename
+    for (const key of Object.keys(generators)) {
+      if (typeof generators[key] === 'function') {
+        const keyFilename = key.split('/').pop().replace(/\.js$/, '');
+        if (keyFilename === filename || key.endsWith(clean)) {
+          return generators[key];
+        }
+      }
+    }
+
+    return null;
+  }
+
   function render() {
     if (state.isLoadingTeacherData) {
       container.innerHTML = `
@@ -252,7 +285,7 @@ export function renderTeacherDashboard(container, onLogout) {
           </button>
         </div>
 
-        <!-- TAB 1: STUDENT CLASS OVERVIEW CONTENT -->
+        <!-- TAB 1: OVERVIEW CONTENT -->
         ${activeTab === 'overview' ? `
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
             <div style="background: #fff; padding: 16px; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); border: 1px solid #e2e8f0;">
@@ -474,14 +507,15 @@ export function renderTeacherDashboard(container, onLogout) {
                               </div>
                             </div>
 
+                            <!-- IN-PLACE TAG BUTTON GROUP -->
                             <div style="display: flex; gap: 6px; flex-shrink: 0;" class="tag-toggle-group" data-path="${sk.generatorPath}">
-                              <button class="btn-tag-toggle" data-tag="Past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Past' ? 'background:#0284c7; color:#fff; border-color:#0284c7;' : 'background:#fff; color:#475569;'}">
+                              <button type="button" class="btn-tag-toggle ${currentTag === 'Past' ? 'active' : ''}" data-tag="Past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Past' ? 'background:#0284c7; color:#fff; border-color:#0284c7;' : 'background:#fff; color:#475569;'}">
                                 🔵 Past Topic
                               </button>
-                              <button class="btn-tag-toggle" data-tag="Current" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Current' ? 'background:#16a34a; color:#fff; border-color:#16a34a;' : 'background:#fff; color:#475569;'}">
+                              <button type="button" class="btn-tag-toggle ${currentTag === 'Current' ? 'active' : ''}" data-tag="Current" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Current' ? 'background:#16a34a; color:#fff; border-color:#16a34a;' : 'background:#fff; color:#475569;'}">
                                 🟢 Current Unit
                               </button>
-                              <button class="btn-tag-toggle" data-tag="Future" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Future' ? 'background:#64748b; color:#fff; border-color:#64748b;' : 'background:#fff; color:#475569;'}">
+                              <button type="button" class="btn-tag-toggle ${currentTag === 'Future' ? 'active' : ''}" data-tag="Future" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Future' ? 'background:#64748b; color:#fff; border-color:#64748b;' : 'background:#fff; color:#475569;'}">
                                 ⚪ Future Unit
                               </button>
                             </div>
@@ -543,7 +577,7 @@ export function renderTeacherDashboard(container, onLogout) {
       </div>
     `;
 
-    // --- ATTACH EVENT LISTENERS ---
+    // --- EVENT LISTENERS ---
 
     container.querySelector("#tab-btn-overview")?.addEventListener("click", () => {
       activeTab = "overview";
@@ -566,27 +600,55 @@ export function renderTeacherDashboard(container, onLogout) {
       render();
     });
 
-    // Tag Toggle Buttons Handler
-    container.querySelectorAll(".btn-tag-toggle").forEach(btn => {
-      btn.addEventListener("click", (e) => {
-        const group = e.target.closest(".tag-toggle-group");
-        const path = group?.getAttribute("data-path");
-        const selectedTag = e.target.getAttribute("data-tag");
+    // IN-PLACE TAG BUTTON TOGGLE HANDLER (PREVENTS SCROLL JUMP)
+    container.querySelectorAll(".tag-toggle-group").forEach(group => {
+      const path = group.getAttribute("data-path");
+      const buttons = group.querySelectorAll(".btn-tag-toggle");
 
-        if (path && selectedTag) {
-          currentClassTagsBuffer[path] = selectedTag;
-          render();
-        }
+      buttons.forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const selectedTag = btn.getAttribute("data-tag");
+
+          if (path && selectedTag) {
+            currentClassTagsBuffer[path] = selectedTag;
+
+            // Mutate DOM styles directly without re-rendering the whole page
+            buttons.forEach(b => {
+              const t = b.getAttribute("data-tag");
+              if (t === selectedTag) {
+                b.classList.add("active");
+                if (t === "Past") {
+                  b.style.background = "#0284c7";
+                  b.style.color = "#ffffff";
+                  b.style.borderColor = "#0284c7";
+                } else if (t === "Current") {
+                  b.style.background = "#16a34a";
+                  b.style.color = "#ffffff";
+                  b.style.borderColor = "#16a34a";
+                } else if (t === "Future") {
+                  b.style.background = "#64748b";
+                  b.style.color = "#ffffff";
+                  b.style.borderColor = "#64748b";
+                }
+              } else {
+                b.classList.remove("active");
+                b.style.background = "#ffffff";
+                b.style.color = "#475569";
+                b.style.borderColor = "#cbd5e1";
+              }
+            });
+          }
+        });
       });
     });
 
-    // Save Skill Tags Handler with Multi-Property URL Fallback
+    // SAVE CLASS TAGS HANDLER WITH FALLBACK URL & PERSISTENCE
     container.querySelector("#btn-save-class-tags")?.addEventListener("click", async (e) => {
       const saveBtn = e.target;
-      saveBtn.disabled = true;
-      saveBtn.innerText = "⏳ Saving...";
 
-      // Robust URL resolution
+      // Robust URL Resolution
       let apiUrl = state.apiUrl || 
                      state.config?.apiUrl || 
                      state.backendUrl || 
@@ -595,16 +657,25 @@ export function renderTeacherDashboard(container, onLogout) {
                      window.API_URL || 
                      localStorage.getItem("math_app_api_url") || "";
 
+      // Fallback Prompt if API URL is not set in app state
+      if (!apiUrl) {
+        const inputUrl = prompt("Please enter your Google Apps Script Web App URL:");
+        if (inputUrl && inputUrl.trim()) {
+          apiUrl = inputUrl.trim();
+          state.apiUrl = apiUrl;
+          localStorage.setItem("math_app_api_url", apiUrl);
+        } else {
+          alert("Save cancelled: Web App API URL is required.");
+          return;
+        }
+      }
+
       if (apiUrl && !apiUrl.startsWith("http://") && !apiUrl.startsWith("https://")) {
         apiUrl = "https://" + apiUrl;
       }
 
-      if (!apiUrl) {
-        alert("API Endpoint URL is missing. Please ensure state.apiUrl or backendUrl is configured.");
-        saveBtn.disabled = false;
-        saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
-        return;
-      }
+      saveBtn.disabled = true;
+      saveBtn.innerText = "⏳ Saving...";
 
       try {
         const response = await fetch(apiUrl, {
@@ -612,7 +683,7 @@ export function renderTeacherDashboard(container, onLogout) {
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "saveClassSkillTags",
-            token: state.userToken || "TEACHER_SESSION",
+            token: state.userToken || state.token || (state.profile?.email ? ("PIN_AUTH_" + state.profile.email) : "TEACHER_SESSION"),
             className: selectedClass,
             tags: currentClassTagsBuffer
           })
@@ -624,7 +695,10 @@ export function renderTeacherDashboard(container, onLogout) {
           if (!state.teacherData.classSkillTags) state.teacherData.classSkillTags = {};
           state.teacherData.classSkillTags[selectedClass] = { ...currentClassTagsBuffer };
           saveBtn.innerText = "✅ Saved Successfully!";
-          setTimeout(() => render(), 1200);
+          setTimeout(() => {
+            saveBtn.disabled = false;
+            saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
+          }, 2000);
         } else {
           alert("Failed to save tags: " + (resData.message || "Unknown error"));
           saveBtn.disabled = false;
@@ -632,7 +706,7 @@ export function renderTeacherDashboard(container, onLogout) {
         }
       } catch (err) {
         console.error("Save class tags error:", err);
-        alert("Network error while saving skill tags: " + err.message);
+        alert("Network error while saving skill tags: " + err.message + "\n\nPlease ensure Google Apps Script is deployed with 'Who has access: Anyone'.");
         saveBtn.disabled = false;
         saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
       }
@@ -670,7 +744,7 @@ export function renderTeacherDashboard(container, onLogout) {
       if (drawerEl) drawerEl.style.display = "none";
     });
 
-    // Skill Sample Preview Modal Trigger with Normalized Generator Path Resolution
+    // Skill Sample Preview Modal Trigger
     let activeSkillForModal = null;
     let activeTierForModal = 1;
 
@@ -725,7 +799,6 @@ export function renderTeacherDashboard(container, onLogout) {
       if (skillModalEl) skillModalEl.style.display = "flex";
     }
 
-    // Resolves both raw path ("geometry/...") and full path ("js/questions/geometry/...")
     function renderSampleQuestion() {
       const qContainer = container.querySelector("#modal-question-container");
       if (!qContainer) return;
@@ -734,12 +807,7 @@ export function renderTeacherDashboard(container, onLogout) {
 
       try {
         const rawPath = activeSkillForModal.generatorPath || "";
-        const fullPath = rawPath.startsWith("js/questions/") ? rawPath : `js/questions/${rawPath}`;
-        
-        // Multi-resolution generator function lookup
-        const generatorFn = state.skillGenerators?.[fullPath] || 
-                            state.skillGenerators?.[rawPath] || 
-                            activeSkillForModal.generate;
+        const generatorFn = findGeneratorFunction(rawPath);
         
         if (typeof generatorFn === "function") {
           const qData = generatorFn(activeTierForModal);
@@ -762,9 +830,17 @@ export function renderTeacherDashboard(container, onLogout) {
             ` : ''}
           `;
         } else {
+          const availableKeys = Object.keys(state.skillGenerators || window.skillGenerators || {});
           qContainer.innerHTML = `
-            <div style="color: #dc2626; padding: 14px; text-align: center;">
-              Question generator module not found for path: <code>${fullPath}</code>
+            <div style="color: #dc2626; padding: 14px; text-align: left; background: #fef2f2; border-radius: 8px; border: 1px solid #fca5a5;">
+              <strong>⚠️ Question Generator Module Not Found</strong>
+              <p style="margin: 6px 0; font-size: 0.85rem;">Target Path: <code>${rawPath}</code></p>
+              <details style="margin-top: 8px; font-size: 0.8rem; color: #7f1d1d;">
+                <summary style="cursor: pointer; font-weight: 700;">View ${availableKeys.length} Loaded Generator Keys</summary>
+                <div style="max-height: 120px; overflow-y: auto; margin-top: 6px; background: #fff; padding: 6px; border-radius: 4px; font-family: monospace;">
+                  ${availableKeys.length > 0 ? availableKeys.map(k => `<div>• ${k}</div>`).join('') : 'No generator functions currently registered in state.skillGenerators.'}
+                </div>
+              </details>
             </div>
           `;
         }
