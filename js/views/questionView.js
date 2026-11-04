@@ -9,16 +9,6 @@ import { isAlgebraicallyEquivalent } from "../utils/mathEquivalence.js";
 
 /**
  * Core 3-Column Question Practice Runner
- * @param {HTMLElement} container - DOM container element
- * @param {Object} options - Configuration parameters:
- *   - mode: 'dailyQuest' | 'skillTree' | 'srsReview' | 'smartReview'
- *   - queue: Array of topic/skill objects or generator paths
- *   - generatorPath: Single generator path (fallback)
- *   - maxQuestions: Max items to present (Infinity for Skill Tree)
- *   - allowSkip: Boolean (true for Daily Quest & SRS)
- *   - targetMastery: Target score to achieve auto-completion (e.g. 90)
- *   - onComplete: Callback function invoked when session finishes
- *   - onExit: Callback function invoked when user exits early
  */
 export function renderQuestionView(container, options = {}) {
   const mode = options.mode || "dailyQuest";
@@ -41,7 +31,7 @@ export function renderQuestionView(container, options = {}) {
   let currentSkillTitle = "Practice Skill";
   const sessionInitialScores = {};
 
-  // Background Mastery Batch Sync on page visibility change / tab hide
+  // Background Mastery Batch Sync on page visibility change
   function flushMasterySync() {
     if (state.pendingMasteryUpdates && state.pendingMasteryUpdates.size > 0 && state.userToken) {
       const dirtyPaths = Array.from(state.pendingMasteryUpdates);
@@ -57,6 +47,20 @@ export function renderQuestionView(container, options = {}) {
     if (document.visibilityState === "hidden") flushMasterySync();
   };
   document.addEventListener("visibilitychange", visibilityHandler);
+
+  // Single Next Question Event Handler (Prevents duplicate event listener stacking)
+  const handleNextQuestionTrigger = () => {
+    questionIndex++;
+    loadQuestion();
+  };
+
+  container.removeEventListener("triggerNextQuestion", handleNextQuestionTrigger);
+  container.addEventListener("triggerNextQuestion", handleNextQuestionTrigger);
+
+  function cleanupListeners() {
+    document.removeEventListener("visibilitychange", visibilityHandler);
+    container.removeEventListener("triggerNextQuestion", handleNextQuestionTrigger);
+  }
 
   // Fetch Next Question from Generator Module
   async function fetchNextQuestion() {
@@ -86,7 +90,6 @@ export function renderQuestionView(container, options = {}) {
       sessionInitialScores[activeGeneratorPath] = state.mastery[activeGeneratorPath] ? state.mastery[activeGeneratorPath].score : 0;
     }
 
-    // Determine Difficulty Tier (SRS capped at Tier 1 for memory refresh)
     const currentScore = state.mastery[activeGeneratorPath]?.score || 0;
     let tier = isSRS ? 1 : (currentScore < 40 ? 1 : (currentScore < 70 ? 2 : 3));
 
@@ -124,14 +127,13 @@ export function renderQuestionView(container, options = {}) {
         </div>
       `;
       container.querySelector("#btn-exit-err")?.addEventListener("click", () => {
-        document.removeEventListener("visibilitychange", visibilityHandler);
+        cleanupListeners();
         if (typeof options.onExit === "function") options.onExit();
         else navigateTo("dashboard");
       });
       return;
     }
 
-    // Mode Header Badges
     let modeBadge = `<span class="tag" style="background: #e0f2fe; color: #0369a1; font-weight: 700;">📅 Daily Quest</span>`;
     if (isSkillTree) modeBadge = `<span class="tag" style="background: #f0fdf4; color: #15803d; font-weight: 700;">🌳 Skill Mastery</span>`;
     if (isSRS) modeBadge = `<span class="tag" style="background: #fef3c7; color: #b45309; font-weight: 700;">🔄 Memory Refresher</span>`;
@@ -141,7 +143,6 @@ export function renderQuestionView(container, options = {}) {
     const exitBtnText = isSkillTree ? "💾 Save & Exit" : "← Exit";
     const stepsList = currentQuestion.steps || currentQuestion.hints || [];
 
-    // 3-COLUMN WORKSPACE HTML DOM
     container.innerHTML = `
       <div class="practice-grid-3col">
         
@@ -231,11 +232,6 @@ export function renderQuestionView(container, options = {}) {
       () => { handleSkip(); }
     );
 
-    container.addEventListener("triggerNextQuestion", () => {
-      questionIndex++;
-      loadQuestion();
-    });
-
     container.querySelector("#btn-skip-question")?.addEventListener("click", () => handleSkip());
 
     const hintBtn = container.querySelector("#btn-ask-hint");
@@ -262,7 +258,7 @@ export function renderQuestionView(container, options = {}) {
     });
 
     container.querySelector("#btn-exit-dashboard")?.addEventListener("click", () => {
-      document.removeEventListener("visibilitychange", visibilityHandler);
+      cleanupListeners();
       flushMasterySync();
       if (typeof options.onExit === "function") {
         options.onExit();
@@ -272,7 +268,6 @@ export function renderQuestionView(container, options = {}) {
     });
   }
 
-  // Penalty-Free Skip Handler
   function handleSkip() {
     const feedbackEl = container.querySelector("#daily-feedback");
     if (feedbackEl) {
@@ -287,7 +282,6 @@ export function renderQuestionView(container, options = {}) {
     }, 500);
   }
 
-  // Answer Submission Evaluator
   function handleSubmission(userAns) {
     if (!currentQuestion) return;
 
@@ -328,16 +322,14 @@ export function renderQuestionView(container, options = {}) {
       renderKaTeX(solutionBox);
     }
 
-    // Skill Tree Target Mastery Completion Check (Score >= 90)
     const currentScore = state.mastery[activeGeneratorPath]?.score || 0;
     if (isSkillTree && currentScore >= targetMastery) {
       setTimeout(() => finishSession(true), 1200);
     }
   }
 
-  // Session Summary & Synchronization
   function finishSession(isMastered = false) {
-    document.removeEventListener("visibilitychange", visibilityHandler);
+    cleanupListeners();
     
     if (state.dailySession) {
       state.dailySession.completedToday = Math.max(state.dailySession.completedToday || 0, totalQuestions);
@@ -367,7 +359,6 @@ export function renderQuestionView(container, options = {}) {
       return;
     }
 
-    // Default Fallback Summary Renderer
     renderDefaultSummary(summaryData);
   }
 
