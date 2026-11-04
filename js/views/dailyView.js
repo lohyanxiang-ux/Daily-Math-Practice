@@ -1,6 +1,6 @@
 import { state } from "../state.js";
 import { renderQuestionView } from "./questionView.js";
-import { buildDailyQuestQueue } from "../utils/dailyQuestEngine.js";
+import { buildDailyQuestQueue, markDailyQuestCompletedToday } from "../utils/dailyQuestEngine.js";
 import { navigateTo } from "../router.js";
 
 export function renderDailyPractice(container, params = {}) {
@@ -19,7 +19,11 @@ export function renderDailyPractice(container, params = {}) {
     queue: dailyQueue,
     maxQuestions: 5,
     allowSkip: true,
-    onComplete: (summary) => renderDailyQuestSummary(container, summary),
+    onComplete: (summary) => {
+      // Mark Daily Quest as completed today & sync to backend Google Sheet
+      markDailyQuestCompletedToday();
+      renderDailyQuestSummary(container, summary);
+    },
     onExit: () => navigateTo("dashboard")
   });
 }
