@@ -9,10 +9,11 @@ export function renderSkillTree(container) {
   const studentYear = state.profile?.year ? String(state.profile.year).trim() : "Sec 1";
   const studentStream = state.profile?.stream ? String(state.profile.stream).trim() : "G3";
 
-  // Filter state (Defaults to student profile's year & stream)
+  // Filter & Search States
   let selectedYear = studentYear;
   let selectedStream = studentStream;
-  let activeStrand = "All";
+  let selectedStrand = "All";
+  let searchQuery = "";
 
   function flushSync() {
     if (state.pendingMasteryUpdates && state.pendingMasteryUpdates.size > 0 && state.userToken) {
@@ -22,39 +23,30 @@ export function renderSkillTree(container) {
     }
   }
 
-  // Extract unique options for filter dropdowns
+  // Extract unique options for dropdown filters
   const availableYears = Array.from(new Set(curriculum.map(c => String(c.year || c.level || "").trim()).filter(Boolean))).sort();
   const availableStreams = Array.from(new Set(curriculum.map(c => String(c.stream || "").trim()).filter(Boolean))).sort();
-
-  function getStrands() {
-    const strands = new Set(["All"]);
-    curriculum.forEach(s => {
-      const skillYear = String(s.year || s.level || "").trim();
-      const skillStream = String(s.stream || "").trim();
-      const matchYear = selectedYear === "All" || skillYear === selectedYear;
-      const matchStream = selectedStream === "All" || skillStream === selectedStream;
-
-      if (matchYear && matchStream && s.strand) {
-        strands.add(s.strand);
-      }
-    });
-    return Array.from(strands);
-  }
+  const availableStrands = Array.from(new Set(curriculum.map(c => String(c.strand || "").trim()).filter(Boolean))).sort();
 
   function getFilteredCurriculum() {
     return curriculum.filter(s => {
       const skillYear = String(s.year || s.level || "").trim();
       const skillStream = String(s.stream || "").trim();
+      const skillStrand = String(s.strand || "").trim();
+      const skillTitle = String(s.title || "").toLowerCase();
+      const skillTopic = String(s.topic || "").toLowerCase();
+      const query = searchQuery.toLowerCase().trim();
 
       const matchYear = selectedYear === "All" || skillYear === selectedYear;
       const matchStream = selectedStream === "All" || skillStream === selectedStream;
-      const matchStrand = activeStrand === "All" || s.strand === activeStrand;
+      const matchStrand = selectedStrand === "All" || skillStrand === selectedStrand;
+      const matchSearch = !query || skillTitle.includes(query) || skillTopic.includes(query);
 
-      return matchYear && matchStream && matchStrand;
+      return matchYear && matchStream && matchStrand && matchSearch;
     });
   }
 
-  // Card styling resolver: Out-of-grade gets distinct purple theme
+  // Card styling resolver: Out-of-grade vs Standard Tags
   function getSkillCardStyle(skill, isOutOfGrade) {
     if (isOutOfGrade) {
       return {
@@ -98,12 +90,6 @@ export function renderSkillTree(container) {
 
   function renderTree() {
     const filtered = getFilteredCurriculum();
-    const strands = getStrands();
-
-    // Reset active strand to "All" if selected strand is no longer in current options
-    if (!strands.includes(activeStrand)) {
-      activeStrand = "All";
-    }
 
     const groupedByTopic = {};
     filtered.forEach(skill => {
@@ -117,7 +103,7 @@ export function renderSkillTree(container) {
     container.innerHTML = `
       <div style="display: flex; flex-direction: column; height: 100%; padding: 16px; gap: 16px; overflow-y: auto; box-sizing: border-box; background: #f8fafc;">
         
-        <!-- HEADER BAR WITH LEVEL & STREAM CONTROLS -->
+        <!-- HEADER BAR WITH COMBINED FILTERS & SEARCH -->
         <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; background: #fff; padding: 16px 24px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; gap: 12px;">
           <div>
             <h2 style="font-size: 1.5rem; color: #0f172a; margin: 0; font-weight: 800;">🗺️ Skill Mastery Tree</h2>
@@ -127,21 +113,33 @@ export function renderSkillTree(container) {
           </div>
 
           <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-            <!-- Year Selector -->
-            <div style="display: flex; align-items: center; gap: 6px;">
+            <!-- Skill Search Bar -->
+            <input id="input-search-skill" type="text" value="${searchQuery}" placeholder="🔍 Search skill or topic..." style="padding: 7px 12px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.88rem; font-weight: 600; min-width: 180px; outline: none;" />
+
+            <!-- Level Selector -->
+            <div style="display: flex; align-items: center; gap: 4px;">
               <label style="font-size: 0.82rem; font-weight: 700; color: #475569;">Level:</label>
-              <select id="select-tree-year" style="padding: 6px 12px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-weight: 700; background: #ffffff; color: #0f172a; cursor: pointer;">
+              <select id="select-tree-year" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-weight: 700; background: #ffffff; color: #0f172a; cursor: pointer;">
                 <option value="All" ${selectedYear === 'All' ? 'selected' : ''}>All Levels</option>
                 ${availableYears.map(y => `<option value="${y}" ${y === selectedYear ? 'selected' : ''}>${y} ${y === studentYear ? '(Current)' : ''}</option>`).join('')}
               </select>
             </div>
 
             <!-- Stream Selector -->
-            <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 4px;">
               <label style="font-size: 0.82rem; font-weight: 700; color: #475569;">Stream:</label>
-              <select id="select-tree-stream" style="padding: 6px 12px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-weight: 700; background: #ffffff; color: #0f172a; cursor: pointer;">
+              <select id="select-tree-stream" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-weight: 700; background: #ffffff; color: #0f172a; cursor: pointer;">
                 <option value="All" ${selectedStream === 'All' ? 'selected' : ''}>All Streams</option>
                 ${availableStreams.map(s => `<option value="${s}" ${s === selectedStream ? 'selected' : ''}>${s} ${s === studentStream ? '(Current)' : ''}</option>`).join('')}
+              </select>
+            </div>
+
+            <!-- Strand Selector (Integrated Header Control) -->
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <label style="font-size: 0.82rem; font-weight: 700; color: #475569;">Strand:</label>
+              <select id="select-tree-strand" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-weight: 700; background: #ffffff; color: #0f172a; cursor: pointer;">
+                <option value="All" ${selectedStrand === 'All' ? 'selected' : ''}>All Strands</option>
+                ${availableStrands.map(st => `<option value="${st}" ${st === selectedStrand ? 'selected' : ''}>${st}</option>`).join('')}
               </select>
             </div>
 
@@ -149,7 +147,7 @@ export function renderSkillTree(container) {
           </div>
         </div>
 
-        <!-- TOPIC & OUT-OF-GRADE LEGEND -->
+        <!-- CARD LEGEND -->
         <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; background: #ffffff; padding: 12px 20px; border-radius: 14px; border: 1px solid #e2e8f0; font-size: 0.85rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
           <span style="font-weight: 800; color: #0f172a;">Card Legend:</span>
           
@@ -174,24 +172,11 @@ export function renderSkillTree(container) {
           </div>
         </div>
 
-        <!-- STRAND FILTER TABS (UNBLOCKED) -->
-        <div style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px;">
-          ${strands.map(strand => `
-            <button class="strand-tab ${strand === activeStrand ? 'active' : ''}" data-strand="${strand}" style="
-              padding: 8px 18px; border-radius: 20px; border: none; font-weight: 700; cursor: pointer; white-space: nowrap;
-              background: ${strand === activeStrand ? '#2563eb' : '#ffffff'};
-              color: ${strand === activeStrand ? '#ffffff' : '#0f172a'};
-              box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-              border: 1px solid ${strand === activeStrand ? '#2563eb' : '#e2e8f0'};
-            ">${strand}</button>
-          `).join('')}
-        </div>
-
         <!-- TOPIC GROUPS -->
         <div style="display: flex; flex-direction: column; gap: 20px;">
           ${Object.keys(groupedByTopic).length === 0 ? `
             <div style="background: #fff; padding: 40px; text-align: center; border-radius: 16px; color: #64748b; border: 1px solid #e2e8f0;">
-              No active skills available for the selected Level (${selectedYear}), Stream (${selectedStream}), and Strand (${activeStrand}).
+              No active skills match your current search and filter criteria.
             </div>
           ` : Object.entries(groupedByTopic).map(([topicName, skills]) => `
             <div style="background: #ffffff; padding: 20px; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
@@ -218,8 +203,8 @@ export function renderSkillTree(container) {
                   return `
                     <div style="${cardCfg.cardStyle} border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.15s ease;">
                       <div>
-                        <!-- CARD HEADER WITH BADGES -->
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 6px; flex-wrap: wrap;">
+                        <!-- CARD HEADER WITH TAG & MASTERY BADGE -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: wrap;">
                           <span style="${cardCfg.badgeStyle} padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; font-weight: 800;">
                             ${cardCfg.badgeText}
                           </span>
@@ -228,9 +213,20 @@ export function renderSkillTree(container) {
                           </span>
                         </div>
 
+                        <!-- TITLE & EXPLICIT YEAR/STREAM/STRAND BADGE -->
                         <h4 style="font-size: 1.02rem; color: #0f172a; margin: 0 0 6px 0; font-weight: 800; line-height: 1.35;">${skill.title}</h4>
+                        
+                        <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
+                          <span style="background: #e2e8f0; color: #334155; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 6px;">
+                            ${skill.year || skill.level || ''} • ${skill.stream || ''}
+                          </span>
+                          <span style="font-size: 0.78rem; color: #64748b; font-weight: 600;">
+                            ${skill.strand || ''}
+                          </span>
+                        </div>
+
                         <div style="font-size: 0.8rem; color: #64748b;">
-                          Strand: <strong>${skill.strand || 'General'}</strong> | Accuracy: <strong>${m.accuracy || 0}%</strong> (${m.totalAttempted || 0} attempted)
+                          Accuracy: <strong>${m.accuracy || 0}%</strong> (${m.totalAttempted || 0} attempted)
                         </div>
                       </div>
 
@@ -250,9 +246,22 @@ export function renderSkillTree(container) {
       </div>
     `;
 
-    // --- EVENT LISTENERS ---
+    // --- BIND EVENT LISTENERS WITH FOCUS RETENTION ---
 
-    // Year & Stream Filter Changes
+    const searchInput = container.querySelector("#input-search-skill");
+    if (searchInput) {
+      searchInput.addEventListener("input", (e) => {
+        searchQuery = e.target.value;
+        const cursorPos = e.target.selectionStart;
+        renderTree();
+        const reattachedInput = container.querySelector("#input-search-skill");
+        if (reattachedInput) {
+          reattachedInput.focus();
+          reattachedInput.setSelectionRange(cursorPos, cursorPos);
+        }
+      });
+    }
+
     container.querySelector("#select-tree-year")?.addEventListener("change", (e) => {
       selectedYear = e.target.value;
       renderTree();
@@ -263,12 +272,9 @@ export function renderSkillTree(container) {
       renderTree();
     });
 
-    // Strand Tab Click Listener
-    container.querySelectorAll(".strand-tab").forEach(tab => {
-      tab.addEventListener("click", () => {
-        activeStrand = tab.getAttribute("data-strand");
-        renderTree();
-      });
+    container.querySelector("#select-tree-strand")?.addEventListener("change", (e) => {
+      selectedStrand = e.target.value;
+      renderTree();
     });
 
     container.querySelector("#btn-tree-dashboard")?.addEventListener("click", () => {
