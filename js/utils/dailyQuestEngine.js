@@ -17,7 +17,7 @@ export function getTodayDateString() {
  */
 export function isDailyQuestCompletedToday() {
   const todayStr = getTodayDateString();
-  const userKey = state.profile?.studentEmail || state.profile?.displayName || "guest";
+  const userKey = state.profile?.email || state.profile?.studentEmail || state.profile?.displayName || "guest";
 
   // 1. Google Sheets Profile Backend Check (Cross-Device)
   if (state.profile?.lastDailyQuestDate === todayStr) {
@@ -39,7 +39,7 @@ export function isDailyQuestCompletedToday() {
  */
 export function markDailyQuestCompletedToday() {
   const todayStr = getTodayDateString();
-  const userKey = state.profile?.studentEmail || state.profile?.displayName || "guest";
+  const userKey = state.profile?.email || state.profile?.studentEmail || state.profile?.displayName || "guest";
 
   // Local storage backup
   localStorage.setItem(`daily_quest_date_${userKey}`, todayStr);
