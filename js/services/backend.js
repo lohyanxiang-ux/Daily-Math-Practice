@@ -14,7 +14,7 @@ export async function fetchUserData(tokenInput) {
 }
 
 /**
- * Authenticates students using 4-digit PIN only (Column L PIN & Column K Active Status verification).
+ * Authenticates students using 4-digit PIN only (Column C PIN & Column M Active Status verification).
  */
 export async function loginWithPin(pin) {
   const response = await fetch(APPS_SCRIPT_URL, {
@@ -72,5 +72,26 @@ export async function syncBatchMastery(idToken, updatesArray) {
     return await response.json();
   } catch (err) {
     console.error("Failed to sync batch mastery to Google Sheets:", err);
+  }
+}
+
+/**
+ * Saves Class Skill Tags set by teacher in Google Sheet.
+ */
+export async function saveClassSkillTags(idToken, className, tagsMap) {
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        token: idToken,
+        action: "saveClassSkillTags",
+        className: className,
+        tags: tagsMap
+      })
+    });
+    return await response.json();
+  } catch (err) {
+    console.error("Failed to save class skill tags to Google Sheets:", err);
   }
 }
