@@ -13,13 +13,41 @@ export function getTodayDateString() {
 }
 
 /**
+ * Returns yesterday's date string in local YYYY-MM-DD format
+ */
+export function getYesterdayDateString() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Returns active streak count, resetting to 0 if 1+ days were missed
+ */
+export function getActiveStreakCount() {
+  if (!state.profile) return 0;
+  const lastDate = state.profile.lastDailyQuestDate;
+  const todayStr = getTodayDateString();
+  const yesterdayStr = getYesterdayDateString();
+
+  if (lastDate === todayStr || lastDate === yesterdayStr) {
+    return state.profile.streakCount || 0;
+  }
+  
+  return 0;
+}
+
+/**
  * Checks if the student completed today's Daily Quest (Cross-device capable)
  */
 export function isDailyQuestCompletedToday() {
   const todayStr = getTodayDateString();
   const userKey = state.profile?.email || state.profile?.studentEmail || state.profile?.displayName || "guest";
 
-  // 1. Google Sheets Profile Backend Check (Cross-Device)
+  // 1. Google Sheets Profile Backend Check
   if (state.profile?.lastDailyQuestDate === todayStr) {
     return true;
   }
@@ -35,24 +63,40 @@ export function isDailyQuestCompletedToday() {
 }
 
 /**
- * Marks today's Daily Quest as completed and triggers backend sync
+ * Marks today's Daily Quest as completed, calculates streak progression, and syncs to backend
  */
 export function markDailyQuestCompletedToday() {
   const todayStr = getTodayDateString();
+  const yesterdayStr = getYesterdayDateString();
   const userKey = state.profile?.email || state.profile?.studentEmail || state.profile?.displayName || "guest";
+
+  if (!state.profile) state.profile = {};
+
+  const lastDate = state.profile.lastDailyQuestDate;
+
+  // ACCURATE STREAK CALCULATION LOGIC
+  if (lastDate === todayStr) {
+    // Already completed today — retain active streak
+  } else if (lastDate === yesterdayStr) {
+    // Consecutive daily completion — increment streak count
+    state.profile.streakCount = (state.profile.streakCount || 0) + 1;
+  } else {
+    // Missed 1+ days or first quest — reset streak to 1
+    state.profile.streakCount = 1;
+  }
+
+  // Update last completion date in state
+  state.profile.lastDailyQuestDate = todayStr;
 
   // Local storage backup
   localStorage.setItem(`daily_quest_date_${userKey}`, todayStr);
 
-  // In-memory state update
+  // In-memory session state update
   if (!state.dailySession) state.dailySession = {};
   state.dailySession.lastCompletedDate = todayStr;
   state.dailySession.completedToday = true;
 
-  if (!state.profile) state.profile = {};
-  state.profile.lastDailyQuestDate = todayStr;
-
-  // Sync to Google Sheets
+  // Sync updated XP, StreakCount, and lastDailyQuestDate to Google Sheets
   if (state.userToken) {
     syncUserProgress(
       state.userToken,
@@ -64,9 +108,7 @@ export function markDailyQuestCompletedToday() {
 }
 
 /**
- * Builds a 5-question Bento Box queue for Daily Quest habit building:
- * - 2 High-Score Confidence questions (Score >= 70)
- * - 3 Current / Recent Topic questions (Practiced < 14 days or active curriculum frontier)
+ * Builds a 5-question Bento Box queue for Daily Quest habit building
  */
 export function buildDailyQuestQueue(userState = state) {
   const curriculum = userState.curriculum || [];
@@ -106,27 +148,21 @@ export function buildDailyQuestQueue(userState = state) {
   const selectedQueue = [];
   const usedPaths = new Set();
 
-  // 1. Select up to 2 High-Score Questions
-  const shuffledHigh = shuffle([...highScorePool]);
-  for (const item of shuffledHigh) {
+  for (const item of shuffle([...highScorePool])) {
     if (selectedQueue.length < 2 && !usedPaths.has(item.generatorPath)) {
       selectedQueue.push(item);
       usedPaths.add(item.generatorPath);
     }
   }
 
-  // 2. Select up to 3 Current/Recent Questions
-  const shuffledRecent = shuffle([...currentRecentPool]);
-  for (const item of shuffledRecent) {
+  for (const item of shuffle([...currentRecentPool])) {
     if (selectedQueue.length < 5 && !usedPaths.has(item.generatorPath)) {
       selectedQueue.push(item);
       usedPaths.add(item.generatorPath);
     }
   }
 
-  // 3. Fill remaining slots up to 5 questions from fallback pool
-  const shuffledFallback = shuffle([...fallbackPool]);
-  for (const item of shuffledFallback) {
+  for (const item of shuffle([...fallbackPool])) {
     if (selectedQueue.length < 5 && !usedPaths.has(item.generatorPath)) {
       selectedQueue.push(item);
       usedPaths.add(item.generatorPath);
