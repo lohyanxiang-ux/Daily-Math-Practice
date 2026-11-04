@@ -261,20 +261,20 @@ export function renderQuestionView(container, options = {}) {
 
         </section>
 
-        <!-- RIGHT COLUMN (45% Width): SCROLLABLE COMPACT HINTS & EXPANDED UNIFIED KEYPAD -->
-        <section style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
+<!-- RIGHT COLUMN (45% Width): SCROLLABLE COMPACT HINTS & KEYPAD -->
+        <section style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; padding: 10px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
           
-          <!-- TOP HALF: SCROLLABLE COMPACT HINTS & SOLUTION FEEDBACK (HEIGHT: 170px) -->
-          <div style="height: 170px; flex-shrink: 0; overflow-y: auto; padding-right: 4px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <button id="btn-ask-hint" class="hint-btn" style="padding: 5px 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer;">
+          <!-- TOP HALF: SCROLLABLE HINTS & SOLUTION FEEDBACK (HEIGHT: 140px) -->
+          <div style="height: 140px; flex-shrink: 0; overflow-y: auto; padding-right: 4px; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <button id="btn-ask-hint" class="hint-btn" style="padding: 4px 10px; font-size: 0.78rem; font-weight: 700; cursor: pointer;">
                 💡 Ask for Hint (<span id="hint-count">0</span>/${stepsList.length})
               </button>
             </div>
             
             <div id="hints-container" class="hints-list"></div>
-            <div id="daily-feedback" class="feedback-area" style="margin-top: 6px; font-weight: 700; border-radius: 8px;"></div>
-            <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 6px; padding: 8px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;"></div>
+            <div id="daily-feedback" class="feedback-area" style="margin-top: 4px; font-weight: 700; border-radius: 8px;"></div>
+            <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 4px; padding: 6px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;"></div>
           </div>
 
           <!-- BOTTOM HALF: UNIFIED STANDARDIZED KEYPAD DOCK SECTION -->
