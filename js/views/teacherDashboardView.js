@@ -1,6 +1,7 @@
 import { state } from "../state.js";
 import { getMasteryMetadata } from "../utils/masteryScoreEngine.js";
 import { loadQuestionGenerator } from "../questions/loader.js";
+import { renderKaTeX } from "../utils/katexHelper.js";
 
 // Hardcoded Google Apps Script Web App API URL
 const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbwEsVnKapmwUFuv0vyG1wFvyAXoFKQMrpsNxibUqYh891PHXzFgmBThnT62lGoEPo_xiQ/exec";
@@ -8,7 +9,7 @@ const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbwEsVnKapmwUFuv
 export function renderTeacherDashboard(container, onLogout) {
   if (!container) return;
 
-  // HIDE REDUNDANT SHELL HEADER BAR (SS2 FIX)
+  // Hide redundant global top-nav bar if present
   const globalShellNav = document.querySelector(".top-nav");
   if (globalShellNav) {
     globalShellNav.style.display = "none";
@@ -33,6 +34,7 @@ export function renderTeacherDashboard(container, onLogout) {
   let selectedStream = "All";
   let selectedStrand = "All";
   let selectedTopic = "All";
+  let selectedMatrixTag = "All"; // Filter matrix skills by tag (Current, Past, Future)
 
   // Class Skill Tagging Dedicated Filters
   let tagFilterLevel = "All";
@@ -103,11 +105,14 @@ export function renderTeacherDashboard(container, onLogout) {
       const matchStream = selectedStream === "All" || String(c.stream) === String(selectedStream);
       const matchStrand = selectedStrand === "All" || String(c.strand) === String(selectedStrand);
       const matchTopic = selectedTopic === "All" || String(c.topic) === String(selectedTopic);
-      return matchLevel && matchStream && matchStrand && matchTopic;
+      
+      const skillTagVal = currentClassTagsBuffer[c.generatorPath] || getAutoDefaultTag(c, selectedClass);
+      const matchTag = selectedMatrixTag === "All" || String(skillTagVal).toUpperCase() === String(selectedMatrixTag).toUpperCase();
+
+      return matchLevel && matchStream && matchStrand && matchTopic && matchTag;
     });
   }
 
-  // Get skills matching Tagging Tab active filters
   function getTaggingFilteredSkills() {
     return curriculum.filter(c => {
       const matchLevel = tagFilterLevel === "All" || String(c.level || c.year) === String(tagFilterLevel);
@@ -187,7 +192,6 @@ export function renderTeacherDashboard(container, onLogout) {
     }
   }
 
-  // Multi-key generator function resolver
   function findGeneratorFunction(path) {
     if (!path) return null;
 
@@ -260,7 +264,6 @@ export function renderTeacherDashboard(container, onLogout) {
     const classAvgScore = totalScoreCount > 0 ? Math.round(totalScoreSum / totalScoreCount) : 0;
     const avgMeta = safeGetMasteryMetadata(classAvgScore);
 
-    // Group skills by Topic for Tagging view
     const skillsByTopic = {};
     taggingSkills.forEach(sk => {
       const topic = sk.topic || "General Mathematics";
@@ -271,7 +274,7 @@ export function renderTeacherDashboard(container, onLogout) {
     container.innerHTML = `
       <div class="teacher-dashboard-container" style="display: flex; flex-direction: column; gap: 16px; padding: 20px; height: 100%; box-sizing: border-box; background: #f8fafc; overflow-y: auto;">
         
-        <!-- SINGLE HEADER BAR -->
+        <!-- HEADER BAR -->
         <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; background: #ffffff; padding: 16px 24px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; gap: 12px;">
           <div>
             <div style="display: flex; align-items: center; gap: 10px;">
@@ -359,6 +362,14 @@ export function renderTeacherDashboard(container, onLogout) {
               <h3 style="font-size: 1.1rem; color: #0f172a; margin: 0; font-weight: 800;">🗺️ Class Skill Mastery Matrix</h3>
               
               <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                <!-- Tag Filter Included Here -->
+                <select id="filter-matrix-tag" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #2563eb; font-size: 0.82rem; font-weight: 700; background: #eff6ff; color: #1e40af;">
+                  <option value="All">Tag: All</option>
+                  <option value="Current" ${selectedMatrixTag === 'Current' ? 'selected' : ''}>🟢 Current Unit</option>
+                  <option value="Past" ${selectedMatrixTag === 'Past' ? 'selected' : ''}>🔵 Past Topic</option>
+                  <option value="Future" ${selectedMatrixTag === 'Future' ? 'selected' : ''}>⚪ Future Unit</option>
+                </select>
+
                 <select id="filter-level" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 600; background: #fff;">
                   <option value="All">Level: All</option>
                   ${levels.map(l => `<option value="${l}" ${String(l) === String(selectedLevel) ? 'selected' : ''}>${l}</option>`).join('')}
@@ -507,7 +518,6 @@ export function renderTeacherDashboard(container, onLogout) {
               <!-- TAGGING CONTROLS: FILTERS & MASS SETTING -->
               <div style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; background: #f8fafc; padding: 14px 18px; border-radius: 12px; border: 1px solid #e2e8f0;">
                 
-                <!-- Filter Dropdowns -->
                 <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
                   <span style="font-weight: 800; font-size: 0.86rem; color: #0f172a;">Filter Skills:</span>
 
@@ -527,7 +537,6 @@ export function renderTeacherDashboard(container, onLogout) {
                   </select>
                 </div>
 
-                <!-- Mass Setting Buttons -->
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                   <span style="font-weight: 800; font-size: 0.82rem; color: #64748b;">Bulk Tag (${taggingSkills.length}):</span>
                   <button type="button" id="btn-mass-past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #0284c7; background: #e0f2fe; color: #0369a1; font-weight: 700; font-size: 0.82rem; cursor: pointer;">🔵 Set All Past</button>
@@ -605,7 +614,7 @@ export function renderTeacherDashboard(container, onLogout) {
 
       <!-- SKILL QUESTION PREVIEW MODAL -->
       <div id="skill-preview-modal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5); z-index: 110; align-items: center; justify-content: center; padding: 20px;">
-        <div style="background: #ffffff; width: 680px; max-width: 100%; max-height: 90vh; border-radius: 16px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 16px; overflow-y: auto;">
+        <div style="background: #ffffff; width: 720px; max-width: 100%; max-height: 90vh; border-radius: 16px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 14px; overflow-y: auto; position: relative;">
           
           <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 12px;">
             <div>
@@ -615,18 +624,47 @@ export function renderTeacherDashboard(container, onLogout) {
             <button id="btn-close-skill-modal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">✕</button>
           </div>
 
-          <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 8px 12px; border-radius: 10px; border: 1px solid #e2e8f0;">
-            <span style="font-weight: 700; font-size: 0.88rem; color: #334155;">Select Difficulty Tier:</span>
-            <div style="display: flex; gap: 8px;">
-              <button class="btn-tier-select" data-tier="1" style="padding: 6px 14px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; background: #ffffff;">Tier 1 (Basic)</button>
-              <button class="btn-tier-select" data-tier="2" style="padding: 6px 14px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; background: #ffffff;">Tier 2 (Int.)</button>
-              <button class="btn-tier-select" data-tier="3" style="padding: 6px 14px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; background: #ffffff;">Tier 3 (Adv.)</button>
+          <!-- CONTROLS & ANNOTATION TOOLBAR -->
+          <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; background: #f8fafc; padding: 10px 14px; border-radius: 10px; border: 1px solid #e2e8f0; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-weight: 700; font-size: 0.85rem; color: #334155;">Difficulty:</span>
+              <button class="btn-tier-select" data-tier="1" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.8rem; font-weight: 700; cursor: pointer; background: #ffffff;">Tier 1 (Basic)</button>
+              <button class="btn-tier-select" data-tier="2" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.8rem; font-weight: 700; cursor: pointer; background: #ffffff;">Tier 2 (Int.)</button>
+              <button class="btn-tier-select" data-tier="3" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.8rem; font-weight: 700; cursor: pointer; background: #ffffff;">Tier 3 (Adv.)</button>
+            </div>
+
+            <!-- Annotation Toolbar Controls -->
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <button id="btn-toggle-draw" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; background: #ffffff; color: #0f172a;">
+                ✏️ Draw Annotation
+              </button>
+              
+              <div id="draw-tools-panel" style="display: none; align-items: center; gap: 6px;">
+                <input id="draw-color" type="color" value="#dc2626" style="width: 28px; height: 28px; border: none; cursor: pointer; border-radius: 4px; background: none;" title="Pen Color" />
+                <button id="btn-clear-draw" style="padding: 5px 10px; border-radius: 6px; border: 1px solid #fca5a5; background: #fef2f2; color: #991b1b; font-size: 0.78rem; font-weight: 700; cursor: pointer;">
+                  🗑️ Clear
+                </button>
+              </div>
             </div>
           </div>
 
-          <div id="modal-question-container" style="border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; background: #fafafa; min-height: 200px; display: flex; flex-direction: column; gap: 12px;"></div>
+          <!-- QUESTION WORKSPACE WRAPPER WITH ANNOTATION OVERLAY CANVAS -->
+          <div style="position: relative; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; overflow: hidden; min-height: 220px;">
+            <canvas id="annotation-canvas" style="display: none; position: absolute; inset: 0; z-index: 10; cursor: crosshair; touch-action: none;"></canvas>
+            <div id="modal-question-container" style="padding: 18px; display: flex; flex-direction: column; gap: 14px;"></div>
+          </div>
 
-          <button id="btn-regen-question" style="align-self: flex-end; padding: 8px 16px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-weight: 700; cursor: pointer;">
+          <!-- PROGRESSIVE REVEAL TOGGLES -->
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px;">
+            <button id="btn-toggle-answer" style="flex: 1; padding: 10px; border-radius: 10px; border: 1px solid #3b82f6; background: #eff6ff; color: #1d4ed8; font-weight: 800; cursor: pointer; font-size: 0.88rem;">
+              👁️ Show Expected Answer
+            </button>
+            <button id="btn-toggle-steps" style="flex: 1; padding: 10px; border-radius: 10px; border: 1px solid #059669; background: #ecfdf5; color: #047857; font-weight: 800; cursor: pointer; font-size: 0.88rem;">
+              📝 Show Step-by-Step Solution
+            </button>
+          </div>
+
+          <button id="btn-regen-question" style="align-self: flex-end; padding: 8px 18px; background: #2563eb; color: #fff; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; margin-top: 4px;">
             🔄 Generate Another Sample
           </button>
 
@@ -657,7 +695,6 @@ export function renderTeacherDashboard(container, onLogout) {
       render();
     });
 
-    // CLASS SKILL TAGGING DEDICATED FILTERS
     container.querySelector("#tag-filter-level")?.addEventListener("change", (e) => {
       tagFilterLevel = e.target.value;
       render();
@@ -673,7 +710,6 @@ export function renderTeacherDashboard(container, onLogout) {
       render();
     });
 
-    // MASS TAGGING BUTTON HANDLERS
     function applyMassTag(targetTag) {
       const skillsToTag = getTaggingFilteredSkills();
       if (skillsToTag.length === 0) {
@@ -690,7 +726,6 @@ export function renderTeacherDashboard(container, onLogout) {
     container.querySelector("#btn-mass-current")?.addEventListener("click", () => applyMassTag("Current"));
     container.querySelector("#btn-mass-future")?.addEventListener("click", () => applyMassTag("Future"));
 
-    // IN-PLACE TAG BUTTON TOGGLE HANDLER (PREVENTS SCROLL JUMP)
     container.querySelectorAll(".tag-toggle-group").forEach(group => {
       const path = group.getAttribute("data-path");
       const buttons = group.querySelectorAll(".btn-tag-toggle");
@@ -733,7 +768,6 @@ export function renderTeacherDashboard(container, onLogout) {
       });
     });
 
-    // SAVE CLASS TAGS HANDLER WITH API URL FALLBACK
     container.querySelector("#btn-save-class-tags")?.addEventListener("click", async (e) => {
       const saveBtn = e.target;
 
@@ -788,7 +822,8 @@ export function renderTeacherDashboard(container, onLogout) {
       }
     });
 
-    // Matrix Filters
+    // Matrix Filters (Including Tag Filter)
+    container.querySelector("#filter-matrix-tag")?.addEventListener("change", (e) => { selectedMatrixTag = e.target.value; render(); });
     container.querySelector("#filter-level")?.addEventListener("change", (e) => { selectedLevel = e.target.value; render(); });
     container.querySelector("#filter-stream")?.addEventListener("change", (e) => { selectedStream = e.target.value; render(); });
     container.querySelector("#filter-strand")?.addEventListener("change", (e) => { selectedStrand = e.target.value; render(); });
@@ -820,9 +855,102 @@ export function renderTeacherDashboard(container, onLogout) {
       if (drawerEl) drawerEl.style.display = "none";
     });
 
-    // Skill Sample Preview Modal
+    // Skill Sample Preview Modal State
     let activeSkillForModal = null;
     let activeTierForModal = 1;
+    let isAnswerVisible = false;
+    let isStepsVisible = false;
+    let isDrawingActive = false;
+
+    // Annotation Canvas Mechanics
+    const canvas = container.querySelector("#annotation-canvas");
+    let ctx = canvas ? canvas.getContext("2d") : null;
+    let isDrawing = false;
+
+    function resizeAnnotationCanvas() {
+      if (!canvas) return;
+      const parent = canvas.parentElement;
+      if (parent) {
+        canvas.width = parent.clientWidth;
+        canvas.height = parent.clientHeight;
+      }
+    }
+
+    function initCanvasListeners() {
+      if (!canvas || !ctx) return;
+
+      const getPos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return { x: clientX - rect.left, y: clientY - rect.top };
+      };
+
+      const startDraw = (e) => {
+        if (!isDrawingActive) return;
+        isDrawing = true;
+        const pos = getPos(e);
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+      };
+
+      const draw = (e) => {
+        if (!isDrawing || !isDrawingActive) return;
+        const pos = getPos(e);
+        const strokeColor = container.querySelector("#draw-color")?.value || "#dc2626";
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 3;
+        ctx.lineCap = "round";
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+      };
+
+      const stopDraw = () => { isDrawing = false; };
+
+      canvas.addEventListener("mousedown", startDraw);
+      canvas.addEventListener("mousemove", draw);
+      canvas.addEventListener("mouseup", stopDraw);
+      canvas.addEventListener("mouseleave", stopDraw);
+
+      canvas.addEventListener("touchstart", startDraw, { passive: true });
+      canvas.addEventListener("touchmove", draw, { passive: true });
+      canvas.addEventListener("touchend", stopDraw);
+    }
+
+    initCanvasListeners();
+
+    container.querySelector("#btn-toggle-draw")?.addEventListener("click", () => {
+      isDrawingActive = !isDrawingActive;
+      const drawBtn = container.querySelector("#btn-toggle-draw");
+      const toolsPanel = container.querySelector("#draw-tools-panel");
+
+      if (isDrawingActive) {
+        if (canvas) {
+          resizeAnnotationCanvas();
+          canvas.style.display = "block";
+        }
+        if (drawBtn) {
+          drawBtn.innerText = "🛑 Stop Annotation";
+          drawBtn.style.background = "#dc2626";
+          drawBtn.style.color = "#ffffff";
+        }
+        if (toolsPanel) toolsPanel.style.display = "flex";
+      } else {
+        if (canvas) canvas.style.display = "none";
+        if (drawBtn) {
+          drawBtn.innerText = "✏️ Draw Annotation";
+          drawBtn.style.background = "#ffffff";
+          drawBtn.style.color = "#0f172a";
+        }
+        if (toolsPanel) toolsPanel.style.display = "none";
+      }
+    });
+
+    container.querySelector("#btn-clear-draw")?.addEventListener("click", () => {
+      if (canvas && ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    });
 
     container.querySelectorAll(".skill-header-cell").forEach(cell => {
       cell.addEventListener("click", () => {
@@ -831,6 +959,8 @@ export function renderTeacherDashboard(container, onLogout) {
         if (skillObj) {
           activeSkillForModal = skillObj;
           activeTierForModal = 1;
+          isAnswerVisible = false;
+          isStepsVisible = false;
           openSkillPreviewModal();
         }
       });
@@ -847,6 +977,26 @@ export function renderTeacherDashboard(container, onLogout) {
         updateTierButtons();
         renderSampleQuestion();
       });
+    });
+
+    container.querySelector("#btn-toggle-answer")?.addEventListener("click", () => {
+      isAnswerVisible = !isAnswerVisible;
+      updateRevealButtons();
+      const ansContainer = container.querySelector("#modal-expected-answer-box");
+      if (ansContainer) {
+        ansContainer.style.display = isAnswerVisible ? "block" : "none";
+        if (isAnswerVisible) renderKaTeX(ansContainer);
+      }
+    });
+
+    container.querySelector("#btn-toggle-steps")?.addEventListener("click", () => {
+      isStepsVisible = !isStepsVisible;
+      updateRevealButtons();
+      const stepsContainer = container.querySelector("#modal-steps-solution-box");
+      if (stepsContainer) {
+        stepsContainer.style.display = isStepsVisible ? "block" : "none";
+        if (isStepsVisible) renderKaTeX(stepsContainer);
+      }
     });
 
     container.querySelector("#btn-regen-question")?.addEventListener("click", () => {
@@ -866,19 +1016,44 @@ export function renderTeacherDashboard(container, onLogout) {
       });
     }
 
+    function updateRevealButtons() {
+      const btnAns = container.querySelector("#btn-toggle-answer");
+      const btnSteps = container.querySelector("#btn-toggle-steps");
+
+      if (btnAns) {
+        btnAns.innerText = isAnswerVisible ? "🙈 Hide Expected Answer" : "👁️ Show Expected Answer";
+        btnAns.style.background = isAnswerVisible ? "#3b82f6" : "#eff6ff";
+        btnAns.style.color = isAnswerVisible ? "#ffffff" : "#1d4ed8";
+      }
+
+      if (btnSteps) {
+        btnSteps.innerText = isStepsVisible ? "🙈 Hide Step-by-Step Solution" : "📝 Show Step-by-Step Solution";
+        btnSteps.style.background = isStepsVisible ? "#059669" : "#ecfdf5";
+        btnSteps.style.color = isStepsVisible ? "#ffffff" : "#047857";
+      }
+    }
+
     function openSkillPreviewModal() {
       if (!activeSkillForModal) return;
       container.querySelector("#modal-skill-title").innerText = activeSkillForModal.title;
       container.querySelector("#modal-skill-strand").innerText = `${activeSkillForModal.strand || 'General'} | Level ${activeSkillForModal.level || 'All'} (${activeSkillForModal.stream || 'Express'})`;
+      
       updateTierButtons();
+      updateRevealButtons();
       renderSampleQuestion();
+      
       if (skillModalEl) skillModalEl.style.display = "flex";
+      setTimeout(resizeAnnotationCanvas, 100);
     }
 
-    // ASYNC SAMPLE QUESTION RENDERER (SS1 FIX VIA LOADER.JS)
+    // ASYNC SAMPLE QUESTION RENDERER WITH KATEX & PROGRESSIVE REVEAL
     async function renderSampleQuestion() {
       const qContainer = container.querySelector("#modal-question-container");
       if (!qContainer) return;
+
+      if (canvas && ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
 
       qContainer.innerHTML = `<div style="text-align: center; color: #64748b; padding: 20px;">Generating sample question...</div>`;
 
@@ -886,17 +1061,14 @@ export function renderTeacherDashboard(container, onLogout) {
         const rawPath = activeSkillForModal.generatorPath || "";
         let generatorFn = findGeneratorFunction(rawPath);
 
-        // Dynamically import generator module using loader.js if not yet in state
         if (!generatorFn && typeof loadQuestionGenerator === "function") {
           try {
             const loadedModule = await loadQuestionGenerator(rawPath);
             if (loadedModule) {
-              // Extract generator function from loader wrapper
               const genFn = loadedModule.generate || loadedModule.generateQuestion;
               if (typeof genFn === "function") {
                 generatorFn = genFn;
                 
-                // Store in state.skillGenerators for caching & lookups
                 if (!state.skillGenerators) state.skillGenerators = {};
                 state.skillGenerators[rawPath] = generatorFn;
                 const clean = rawPath.trim().replace(/^js\/questions\//, '').replace(/^\/+/, '');
@@ -912,22 +1084,32 @@ export function renderTeacherDashboard(container, onLogout) {
           const qData = generatorFn(activeTierForModal);
 
           qContainer.innerHTML = `
-            <div style="font-weight: 700; font-size: 0.95rem; line-height: 1.5; color: #0f172a;">${qData.prompt || qData.questionTemplate || ''}</div>
+            <!-- Question Prompt & Diagram -->
+            <div id="modal-prompt-box" style="font-weight: 700; font-size: 1.05rem; line-height: 1.6; color: #0f172a;">
+              ${qData.prompt || qData.questionTemplate || ''}
+            </div>
+
             ${qData.diagramSvg ? `<div style="text-align: center; margin: 10px 0;">${qData.diagramSvg}</div>` : ''}
             
-            <div style="background: #e0f2fe; border-left: 4px solid #0284c7; padding: 10px 14px; border-radius: 6px; font-size: 0.88rem; color: #0369a1;">
+            <!-- Expected Answer Container (Progressive Reveal) -->
+            <div id="modal-expected-answer-box" style="display: ${isAnswerVisible ? 'block' : 'none'}; background: #e0f2fe; border-left: 4px solid #0284c7; padding: 12px 16px; border-radius: 8px; font-size: 0.92rem; color: #0369a1;">
               <strong>Expected Answer:</strong> <code>${qData.expectedAnswer || 'N/A'}</code>
             </div>
 
-            ${qData.steps && qData.steps.length > 0 ? `
-              <div style="margin-top: 8px;">
-                <strong style="font-size: 0.88rem; color: #1e293b;">Step-by-step Solution:</strong>
-                <ol style="margin: 6px 0 0 18px; padding: 0; font-size: 0.85rem; color: #475569;">
-                  ${qData.steps.map(s => `<li style="margin-bottom: 4px;">${s}</li>`).join('')}
+            <!-- Step-by-Step Solution Container (Progressive Reveal) -->
+            <div id="modal-steps-solution-box" style="display: ${isStepsVisible ? 'block' : 'none'}; background: #f0fdf4; border-left: 4px solid #16a34a; padding: 12px 16px; border-radius: 8px; font-size: 0.9rem; color: #14532d;">
+              <strong style="font-size: 0.92rem;">Step-by-step Solution:</strong>
+              ${qData.steps && qData.steps.length > 0 ? `
+                <ol style="margin: 8px 0 0 20px; padding: 0;">
+                  ${qData.steps.map(s => `<li style="margin-bottom: 6px;">${s}</li>`).join('')}
                 </ol>
-              </div>
-            ` : ''}
+              ` : '<p style="margin: 4px 0 0 0;">No steps provided for this question.</p>'}
+            </div>
           `;
+
+          // Apply KaTeX Math Rendering across the entire prompt & revealed sections
+          renderKaTeX(qContainer);
+
         } else {
           const availableKeys = Object.keys(state.skillGenerators || window.skillGenerators || {});
           qContainer.innerHTML = `
