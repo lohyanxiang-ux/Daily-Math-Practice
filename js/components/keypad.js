@@ -5,20 +5,20 @@ if (window.MathfieldElement) {
 
 export const STANDARD_KEYPADS = {
   basic: [
-    "(", ")", "/", "×",
-    "7", "8", "9", "-",
-    "4", "5", "6", "+",
-    "1", "2", "3", ".",
-    "0", "⌫", "←", "→",
-    "Clear"
+    "x", "y", "(", ")",
+    "7", "8", "9", "/",
+    "4", "5", "6", "×",
+    "1", "2", "3", "-",
+    "0", ".", "=", "+",
+    "←", "→", "⌫", "Clear"
   ],
   math: [
-    "x", "y", "z", "=",
     "x²", "xⁿ", "√", "π",
     "<", ">", "≤", "≥",
     "a", "b", "c", "θ",
     "no solution", "", "", "",
-    "Clear"
+    "", "", "", "",
+    "←", "→", "⌫", "Clear"
   ]
 };
 
@@ -30,29 +30,53 @@ export function initKeypad(container, customKeys = null, onInputChange, onSubmit
   let activeTab = "basic"; // 'basic' or 'math'
   let isSubmitted = false;
 
-  // Mount Auto-Expanding MathLive Field
+  // Mount Height-Optimized MathLive Field & Toggle Button
   displayContainer.innerHTML = `
-    <div id="math-field-wrapper" style="
-      width: 100%;
-      min-height: 44px;
-      max-height: 85px;
-      padding: 4px 8px;
-      background: #ffffff;
-      border: 1.5px solid #cbd5e1;
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      box-sizing: border-box;
-      transition: all 0.2s ease-in-out;
-      overflow-y: auto;
-    ">
-      <math-field id="math-input" style="
-        width: 100%;
-        font-size: 1.15rem;
-        border: none;
-        outline: none;
-        background: transparent;
-      "></math-field>
+    <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+      <!-- INPUT FIELD (Min-height 52px eliminates jump when fractions expand) -->
+      <div id="math-field-wrapper" style="
+        flex: 1;
+        min-height: 52px;
+        max-height: 72px;
+        padding: 4px 10px;
+        background: #ffffff;
+        border: 2px solid #cbd5e1;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        box-sizing: border-box;
+        transition: all 0.15s ease-in-out;
+        overflow-y: auto;
+      ">
+        <math-field id="math-input" style="
+          width: 100%;
+          font-size: 1.2rem;
+          border: none;
+          outline: none;
+          background: transparent;
+        "></math-field>
+      </div>
+
+      <!-- MODE TOGGLE BUTTON (BESIDE INPUT FIELD) -->
+      <button type="button" id="btn-toggle-keypad-mode" style="
+        height: 52px;
+        padding: 0 12px;
+        font-size: 0.82rem;
+        font-weight: 800;
+        border-radius: 10px;
+        border: 1.5px solid #cbd5e1;
+        background: #f8fafc;
+        color: #1e293b;
+        cursor: pointer;
+        white-space: nowrap;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      ">
+        ${activeTab === 'basic' ? '∛ Math' : '🔢 Basic'}
+      </button>
     </div>
   `;
 
@@ -65,11 +89,11 @@ export function initKeypad(container, customKeys = null, onInputChange, onSubmit
     mathField.addEventListener("input", () => {
       const val = mathField.value || "";
       
-      // Auto-expand field height when fraction or power structure is present
+      // Dynamic expansion adjustment
       if (val.includes("\\frac") || val.includes("^{")) {
-        fieldWrapper.style.minHeight = "72px";
+        fieldWrapper.style.minHeight = "66px";
       } else {
-        fieldWrapper.style.minHeight = "44px";
+        fieldWrapper.style.minHeight = "52px";
       }
 
       if (typeof onInputChange === "function") {
@@ -78,7 +102,7 @@ export function initKeypad(container, customKeys = null, onInputChange, onSubmit
     });
   }
 
-  // Generate combined Math mode keys (merging custom keys like 'no solution' if provided)
+  // Merge custom keys into math mode
   function getKeysForTab(tab) {
     if (tab === "basic") return STANDARD_KEYPADS.basic;
 
@@ -87,7 +111,6 @@ export function initKeypad(container, customKeys = null, onInputChange, onSubmit
       const flatCustom = customKeys.flat();
       flatCustom.forEach(k => {
         if (!baseMath.includes(k) && !STANDARD_KEYPADS.basic.includes(k) && k !== "Submit" && k !== "Skip") {
-          // Fill first available blank slot
           const emptyIdx = baseMath.indexOf("");
           if (emptyIdx !== -1) {
             baseMath[emptyIdx] = k;
@@ -101,45 +124,22 @@ export function initKeypad(container, customKeys = null, onInputChange, onSubmit
   function renderGrid() {
     const keysToRender = getKeysForTab(activeTab);
 
-    // Mode Switcher Header Row
-    const headerHTML = `
-      <div style="grid-column: span 4; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-        <span style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
-          ${activeTab === 'basic' ? '🔢 Basic Mode' : '∛ Math Symbols'}
-        </span>
-        <button type="button" id="btn-toggle-keypad-mode" style="
-          padding: 4px 10px;
-          font-size: 0.78rem;
-          font-weight: 700;
-          border-radius: 6px;
-          border: 1px solid #cbd5e1;
-          background: #f1f5f9;
-          color: #1e293b;
-          cursor: pointer;
-        ">
-          ${activeTab === 'basic' ? 'Switch to ∛ Math' : 'Switch to 🔢 Basic'}
-        </button>
-      </div>
-    `;
-
     // 4-Column Grid Buttons
     const buttonsHTML = keysToRender.map(key => {
       if (key === "") {
-        return `<div style="background: #f8fafc; border-radius: 8px; border: 1px dashed #e2e8f0; opacity: 0.5;"></div>`;
+        return `<div style="background: #f8fafc; border-radius: 8px; border: 1px dashed #e2e8f0; opacity: 0.4;"></div>`;
       }
 
       const isClear = key === "Clear";
-      const isAction = key === "⌫" || isClear;
+      const isBack = key === "⌫";
+      const isAction = isBack || isClear;
       const isNav = key === "←" || key === "→";
       const isSpecial = key === "no solution";
 
-      const gridSpan = isClear ? "grid-column: span 4;" : "";
-
       return `
         <button type="button" class="keypad-btn ${isAction ? 'action' : ''} ${isNav ? 'nav-btn' : ''}" data-key="${key}" style="
-          ${gridSpan}
-          padding: ${isSpecial ? '6px 2px' : '10px 4px'};
-          font-size: ${isSpecial ? '0.78rem' : '1.02rem'};
+          padding: ${isSpecial ? '4px 2px' : '7px 2px'};
+          font-size: ${isSpecial ? '0.75rem' : '1.05rem'};
           font-weight: 700;
           border: 1px solid #cbd5e1;
           border-radius: 8px;
@@ -154,37 +154,44 @@ export function initKeypad(container, customKeys = null, onInputChange, onSubmit
       `;
     }).join("");
 
-    // Bottom Full-Width Submit Button
+    // Full-Width Submit Button at Bottom
     const submitHTML = `
       <button id="btn-keypad-submit" type="button" class="keypad-btn submit" style="
         grid-column: span 4;
-        margin-top: 6px;
-        padding: 12px;
-        font-size: 1rem;
+        margin-top: 4px;
+        padding: 10px;
+        font-size: 0.98rem;
         font-weight: 800;
         background: ${isSubmitted ? '#10b981' : '#2563eb'};
         color: #ffffff;
         border: none;
         border-radius: 10px;
         cursor: pointer;
-        box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
+        box-shadow: 0 3px 8px rgba(37, 99, 235, 0.25);
       ">
         ${isSubmitted ? 'Next Question ➔' : 'Submit'}
       </button>
     `;
 
     gridEl.style.display = "grid";
-    gridEl.style.gridTemplateColumns = "repeat(4, 1fr)";
-    gridEl.style.gap = "6px";
-    gridEl.innerHTML = headerHTML + buttonsHTML + submitHTML;
+    gridEl.style.gridTemplateColumns = "repeat(4, minmax(0, 1fr))";
+    gridEl.style.gap = "5px";
+    gridEl.innerHTML = buttonsHTML + submitHTML;
 
     attachEvents();
   }
 
   function attachEvents() {
-    // Mode Switcher Toggle
-    gridEl.querySelector("#btn-toggle-keypad-mode")?.addEventListener("click", () => {
+    // Mode Switcher Toggle Listener
+    displayContainer.querySelector("#btn-toggle-keypad-mode")?.addEventListener("click", () => {
       activeTab = activeTab === "basic" ? "math" : "basic";
+      const toggleBtn = displayContainer.querySelector("#btn-toggle-keypad-mode");
+      if (toggleBtn) {
+        toggleBtn.innerText = activeTab === 'basic' ? '∛ Math' : '🔢 Basic';
+        toggleBtn.style.background = activeTab === 'math' ? '#eff6ff' : '#f8fafc';
+        toggleBtn.style.color = activeTab === 'math' ? '#1d4ed8' : '#1e293b';
+        toggleBtn.style.borderColor = activeTab === 'math' ? '#93c5fd' : '#cbd5e1';
+      }
       renderGrid();
     });
 
@@ -215,7 +222,7 @@ export function initKeypad(container, customKeys = null, onInputChange, onSubmit
 
         mathField.focus();
 
-        // MathLive Command Execution
+        // MathLive Commands
         if (key === "/" || key === "a/b") {
           mathField.executeCommand(["insert", "\\frac{#0}{#?}"]);
         } else if (key === "^" || key === "xⁿ") {
