@@ -20,8 +20,10 @@ export function renderDailyPractice(container, params = {}) {
     maxQuestions: 5,
     allowSkip: true,
     onComplete: (summary) => {
-      // Mark Daily Quest as completed today & sync to backend Google Sheet
+      // 1. Calculate streak progression, update profile state, & sync to Google Sheets
       markDailyQuestCompletedToday();
+
+      // 2. Render summary screen with updated streak count badge
       renderDailyQuestSummary(container, summary);
     },
     onExit: () => navigateTo("dashboard")
@@ -29,6 +31,8 @@ export function renderDailyPractice(container, params = {}) {
 }
 
 function renderDailyQuestSummary(container, summary) {
+  const currentStreak = state.profile?.streakCount || 1;
+
   const summaryRowsHtml = Object.keys(summary.sessionInitialScores).map(path => {
     const skillObj = (state.curriculum || []).find(s => s.generatorPath === path) || { title: "Practice Skill" };
     const startScore = summary.sessionInitialScores[path] || 0;
@@ -53,8 +57,14 @@ function renderDailyQuestSummary(container, summary) {
       <h2 style="color: #0f172a; margin: 0 0 8px 0; font-size: 1.6rem;">📅 Daily Quest Completed!</h2>
       <p style="color: #64748b; margin: 0 0 20px 0; font-size: 0.95rem;">Great habit building! You completed today's 5 practice items.</p>
       
-      <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 14px; border-radius: 12px; margin-bottom: 20px; color: #1e40af; font-weight: 700;">
-        ⭐ Accuracy: ${summary.sessionScore} / 5 Correct ${summary.bonusXP > 0 ? `• +${summary.bonusXP} Perfect Bonus XP!` : ''}
+      <!-- STREAK & ACCURACY BADGE CONTAINER -->
+      <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 20px;">
+        <div style="background: #fff7ed; border: 1px solid #ffedd5; padding: 10px 16px; border-radius: 12px; color: #c2410c; font-weight: 800; font-size: 0.95rem;">
+          🔥 ${currentStreak} Day Streak!
+        </div>
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 10px 16px; border-radius: 12px; color: #1e40af; font-weight: 800; font-size: 0.95rem;">
+          ⭐ ${summary.sessionScore} / 5 Correct ${summary.bonusXP > 0 ? `(+${summary.bonusXP} XP)` : ''}
+        </div>
       </div>
 
       <div style="margin-bottom: 24px; text-align: left;">
