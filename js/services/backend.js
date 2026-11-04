@@ -27,17 +27,26 @@ export async function loginWithPin(pin) {
   return await response.json();
 }
 
-export async function syncUserProgress(idToken, xp, streakCount) {
+/**
+ * Syncs user XP, Streak, and optional Daily Quest completion date.
+ */
+export async function syncUserProgress(idToken, xp, streakCount, lastDailyQuestDate = null) {
   try {
+    const payload = {
+      token: idToken,
+      action: "updateProgress",
+      xp: xp,
+      streakCount: streakCount
+    };
+
+    if (lastDailyQuestDate) {
+      payload.lastDailyQuestDate = lastDailyQuestDate;
+    }
+
     await fetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        token: idToken,
-        action: "updateProgress",
-        xp: xp,
-        streakCount: streakCount
-      })
+      body: JSON.stringify(payload)
     });
   } catch (err) {
     console.error("Failed to sync progress:", err);
