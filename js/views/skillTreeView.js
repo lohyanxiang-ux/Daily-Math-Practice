@@ -34,35 +34,30 @@ export function renderSkillTree(container) {
     });
   }
 
+  // Returns full card background, border, button styling based on tag
   function getTagConfig(tagStr) {
     const t = (tagStr || "Current").toUpperCase();
+    
     if (t === "CURRENT") {
       return {
-        label: "🟢 Current Unit",
-        badgeStyle: "background: #dcfce7; color: #15803d; border: 1px solid #86efac;",
-        cardStyle: "background: #ffffff; border: 1.5px solid #2563eb; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);",
+        // Green color palette for Current Unit
+        cardStyle: "background: #f0fdf4; border: 2px solid #22c55e; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.12);",
         btnText: "Practice Current Skill ➔",
-        btnStyle: "background: #2563eb; color: #ffffff;",
-        isFuture: false
+        btnStyle: "background: #16a34a; color: #ffffff;"
       };
     } else if (t === "PAST") {
       return {
-        label: "🔵 Past Topic",
-        badgeStyle: "background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd;",
-        cardStyle: "background: #ffffff; border: 1.5px solid #e2e8f0;",
-        btnText: "Review Past Topic ➔",
-        btnStyle: "background: #0284c7; color: #ffffff;",
-        isFuture: false
+        // Blue color palette for Past Topics
+        cardStyle: "background: #eff6ff; border: 1.5px solid #3b82f6; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.05);",
+        btnText: "Review Past Skill ➔",
+        btnStyle: "background: #2563eb; color: #ffffff;"
       };
     } else {
-      // FUTURE TAG
+      // Light grey color palette with dashed border for Future Topics
       return {
-        label: "⚪ Future Topic",
-        badgeStyle: "background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1;",
         cardStyle: "background: #f8fafc; border: 1.5px dashed #cbd5e1; opacity: 0.85;",
-        btnText: "🔒 Future Unit (Preview)",
-        btnStyle: "background: #94a3b8; color: #ffffff;",
-        isFuture: true
+        btnText: "🔒 Future Unit",
+        btnStyle: "background: #94a3b8; color: #ffffff;"
       };
     }
   }
@@ -80,14 +75,35 @@ export function renderSkillTree(container) {
     });
 
     container.innerHTML = `
-      <div style="display: flex; flex-direction: column; height: 100%; padding: 10px; gap: 16px; overflow-y: auto;">
+      <div style="display: flex; flex-direction: column; height: 100%; padding: 16px; gap: 16px; overflow-y: auto; box-sizing: border-box; background: #f8fafc;">
         
-        <div style="display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 16px 24px; border-radius: 16px; box-shadow: var(--shadow);">
+        <!-- HEADER BAR -->
+        <div style="display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 16px 24px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
           <div>
-            <h2 style="font-size: 1.5rem; color: var(--text-main); margin: 0;">🗺️ Skill Mastery Tree</h2>
-            <p style="color: var(--text-muted); font-size: 0.9rem; margin: 4px 0 0 0;">${state.profile?.year || 'Sec 1'} (${state.profile?.stream || 'G3'}) • Class ${state.profile?.class || 'Syllabus'}</p>
+            <h2 style="font-size: 1.5rem; color: #0f172a; margin: 0; font-weight: 800;">🗺️ Skill Mastery Tree</h2>
+            <p style="color: #64748b; font-size: 0.88rem; margin: 4px 0 0 0;">${state.profile?.year || 'Sec 1'} (${state.profile?.stream || 'G3'}) • Class ${state.profile?.class || 'Syllabus'}</p>
           </div>
-          <button id="btn-tree-dashboard" class="secondary-btn" style="padding: 8px 16px; border-radius: 10px; border: 1px solid #cbd5e1; font-weight: 700; background: #fff; cursor: pointer;">← Back to Dashboard</button>
+          <button id="btn-tree-dashboard" style="padding: 8px 16px; border-radius: 10px; border: 1px solid #cbd5e1; font-weight: 700; background: #fff; color: #334155; cursor: pointer;">← Back to Dashboard</button>
+        </div>
+
+        <!-- SYLLABUS TAG COLOR LEGEND -->
+        <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; background: #ffffff; padding: 12px 20px; border-radius: 14px; border: 1px solid #e2e8f0; font-size: 0.85rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+          <span style="font-weight: 800; color: #0f172a;">Topic Legend:</span>
+          
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="display: inline-block; width: 16px; height: 16px; border-radius: 4px; background: #f0fdf4; border: 2px solid #22c55e;"></span>
+            <span style="font-weight: 700; color: #15803d;">Current Unit</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="display: inline-block; width: 16px; height: 16px; border-radius: 4px; background: #eff6ff; border: 1.5px solid #3b82f6;"></span>
+            <span style="font-weight: 700; color: #1e40af;">Past Topic</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="display: inline-block; width: 16px; height: 16px; border-radius: 4px; background: #f8fafc; border: 1.5px dashed #cbd5e1;"></span>
+            <span style="font-weight: 700; color: #64748b;">Future Unit</span>
+          </div>
         </div>
 
         <!-- STRAND FILTER TABS -->
@@ -95,9 +111,10 @@ export function renderSkillTree(container) {
           ${strands.map(strand => `
             <button class="strand-tab ${strand === activeStrand ? 'active' : ''}" data-strand="${strand}" style="
               padding: 8px 18px; border-radius: 20px; border: none; font-weight: 700; cursor: pointer; white-space: nowrap;
-              background: ${strand === activeStrand ? 'var(--primary, #2563eb)' : '#ffffff'};
-              color: ${strand === activeStrand ? '#ffffff' : 'var(--text-main, #0f172a)'};
-              box-shadow: var(--shadow);
+              background: ${strand === activeStrand ? '#2563eb' : '#ffffff'};
+              color: ${strand === activeStrand ? '#ffffff' : '#0f172a'};
+              box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+              border: 1px solid ${strand === activeStrand ? '#2563eb' : '#e2e8f0'};
             ">${strand}</button>
           `).join('')}
         </div>
@@ -105,12 +122,12 @@ export function renderSkillTree(container) {
         <!-- TOPIC GROUPS -->
         <div style="display: flex; flex-direction: column; gap: 20px;">
           ${Object.keys(groupedByTopic).length === 0 ? `
-            <div style="background: #fff; padding: 40px; text-align: center; border-radius: 16px; color: var(--text-muted);">
+            <div style="background: #fff; padding: 40px; text-align: center; border-radius: 16px; color: #64748b; border: 1px solid #e2e8f0;">
               No active skills available for this topic filter.
             </div>
           ` : Object.entries(groupedByTopic).map(([topicName, skills]) => `
-            <div style="background: #ffffff; padding: 20px; border-radius: 20px; box-shadow: var(--shadow);">
-              <h3 style="font-size: 1.2rem; margin-bottom: 14px; color: var(--text-main); border-bottom: 2px solid #f1f5f9; padding-bottom: 8px;">
+            <div style="background: #ffffff; padding: 20px; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
+              <h3 style="font-size: 1.15rem; margin: 0 0 14px 0; color: #0f172a; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; font-weight: 800;">
                 📂 ${topicName}
               </h3>
 
@@ -128,21 +145,20 @@ export function renderSkillTree(container) {
                   const meta = getMasteryMetadata(m.score || 0);
 
                   return `
-                    <div style="${tagCfg.cardStyle} border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <!-- FULL SKILL CARD COLORED BY TAG -->
+                    <div style="${tagCfg.cardStyle} border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.15s ease;">
                       <div>
-                        <!-- TAG BADGE & MASTERY BADGE HEADER -->
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 6px; flex-wrap: wrap;">
-                          <span style="${tagCfg.badgeStyle} padding: 2px 8px; border-radius: 8px; font-size: 0.74rem; font-weight: 800;">
-                            ${tagCfg.label}
-                          </span>
+                        <!-- CARD HEADER (MASTERY BADGE ONLY) -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                          <span style="font-size: 0.78rem; font-weight: 700; color: #64748b;">${skill.strand || ''}</span>
                           <span style="${meta.badgeCss} padding: 3px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
                             ${meta.tierName} • <strong>${meta.score}</strong>/100
                           </span>
                         </div>
 
-                        <h4 style="font-size: 1.02rem; color: #0f172a; margin: 0 0 6px 0; font-weight: 800;">${skill.title}</h4>
+                        <h4 style="font-size: 1.02rem; color: #0f172a; margin: 0 0 6px 0; font-weight: 800; line-height: 1.35;">${skill.title}</h4>
                         <div style="font-size: 0.8rem; color: #64748b;">
-                          Strand: <strong>${skill.strand}</strong> | Accuracy: <strong>${m.accuracy || 0}%</strong> (${m.totalAttempted || 0} attempted)
+                          Accuracy: <strong>${m.accuracy || 0}%</strong> (${m.totalAttempted || 0} attempted)
                         </div>
                       </div>
 
