@@ -4,9 +4,9 @@ import { getDecayedScore } from "./masteryScoreEngine.js";
 const YEAR_LEVELS = { "Sec 1": 1, "Sec 2": 2, "Sec 3": 3, "Sec 4": 4 };
 
 /**
- * Calculates dynamic memory half-life in days based on baseline score & accuracy
+ * Calculates dynamic memory half-life in days based on baseline score
  */
-function getMemoryHalfLife(rawScore, accuracy) {
+function getMemoryHalfLife(rawScore) {
   if (rawScore < 40) return 1.5;    // Basic Tier: ~1.5 day half-life
   if (rawScore < 70) return 4.0;    // Intermediate Tier: ~4 day half-life
   if (rawScore < 90) return 9.0;    // Advanced Tier: ~9 day half-life
@@ -60,7 +60,7 @@ export function getSmartReviewQueue(options = {}) {
     const daysElapsed = lastPracticedMs > 0 ? (now - lastPracticedMs) / (1000 * 60 * 60 * 24) : 999;
     
     // Cognitive Half-Life & Retention Modeling
-    const halfLife = getMemoryHalfLife(rawScore, accuracy);
+    const halfLife = getMemoryHalfLife(rawScore);
     const retentionProb = daysElapsed === 999 ? 0.3 : Math.pow(2, -daysElapsed / halfLife);
     const effectiveScore = Math.max(0, Math.round(rawScore * retentionProb));
     const daysOverdue = daysElapsed - halfLife;
@@ -107,29 +107,42 @@ export function getSmartReviewQueue(options = {}) {
     });
   });
 
-  // Sort by priority (Highest urgency first)
-  candidateSkills.sort((a, b) => b.priority - a.priority);
-
-  // Apply Interleaving across topics
-  const interleavedQueue = [];
-  const pool = candidateSkills.slice(0, Math.max(questionCount * 2, 10));
-  const usedGenerators = new Set();
-
-  while (interleavedQueue.length < questionCount && pool.length > 0) {
-    let selectedIdx = pool.findIndex(item => !usedGenerators.has(item.generatorPath));
-    if (selectedIdx === -1) selectedIdx = 0; // Fallback if repeated
-
-    const item = pool.splice(selectedIdx, 1)[0];
-    interleavedQueue.push(item);
-    usedGenerators.add(item.generatorPath);
+  if (candidateSkills.length === 0) {
+    const emptyQueue = [];
+    emptyQueue.candidateSkills = [];
+    emptyQueue.dueCount = 0;
+    emptyQueue.uniqueTopicsCount = 0;
+    return emptyQueue;
   }
 
-  return interleavedQueue;
+  // Sort candidate skills by urgency priority
+  candidateSkills.sort((a, b) => b.priority - a.priority);
+
+  // Multi-Question Interleaved Queue Distribution:
+  // Build exact questionCount length array by cycling through candidate topics
+  const questionQueue = [];
+  let idx = 0;
+  while (questionQueue.length < questionCount) {
+    const item = candidateSkills[idx % candidateSkills.length];
+    questionQueue.push({ ...item });
+    idx++;
+  }
+
+  // Attach metadata properties directly to the returned queue
+  questionQueue.candidateSkills = candidateSkills;
+  questionQueue.dueCount = candidateSkills.filter(s => s.isDue).length;
+  questionQueue.uniqueTopicsCount = candidateSkills.length;
+
+  return questionQueue;
 }
 
+/**
+ * Returns summary metrics for Dashboard badges.
+ */
 export function getSRSMetrics() {
   const dueQueue = getSmartReviewQueue({ questionCount: 100, includePriorYears: true });
+  const candidates = dueQueue.candidateSkills || [];
   return {
-    totalDue: dueQueue.filter(s => s.isDue).length
+    totalDue: candidates.filter(s => s.isDue).length
   };
 }
