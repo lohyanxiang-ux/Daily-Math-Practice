@@ -134,76 +134,30 @@ body {
 }
 
 /* =========================================================
-   5. 3-COLUMN PRACTICE LAYOUT (LANDSCAPE IPAD OPTIMIZED)
+   5. 2-COLUMN PRACTICE WORKSPACE (IPAD LANDSCAPE OPTIMIZED)
    ========================================================= */
-.practice-grid-3col {
-  display: grid;
-  grid-template-columns: 1fr 1.1fr 1fr;
-  gap: 12px;
-  height: 100%;
-  width: 100%;
-  max-width: 100vw;
-  box-sizing: border-box;
-  overflow: hidden;
+#left-column-workspace {
+  -webkit-overflow-scrolling: touch;
 }
 
-.practice-col {
-  background: var(--card-bg);
-  border-radius: 20px;
-  padding: 16px;
-  box-shadow: var(--shadow);
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-  box-sizing: border-box;
+#scratchpad-scroll-wrapper {
+  touch-action: pan-y;
 }
 
-/* =========================================================
-   COLUMN 1: PROTECTED QUESTION & SCROLLABLE HINTS/SOLUTIONS
-   ========================================================= */
-.practice-col.col-scrollable {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  max-height: 100%;
-  overflow: hidden; /* Main column container locked */
+#question-underlay {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
-/* PROTECTED QUESTION PROMPT HEADER (NEVER COVERED) */
-.protected-question-header {
-  flex-shrink: 0;
-  background: var(--card-bg);
-  padding-bottom: 12px;
-  border-bottom: 2px solid var(--border);
-  margin-bottom: 12px;
-}
-
-.question-header { 
-  display: flex; 
-  justify-content: space-between; 
-  align-items: center; 
-  margin-bottom: 8px; 
-}
-
-.tag { 
-  background: #e0e7ff; 
-  color: var(--primary); 
-  font-size: 0.82rem; 
-  font-weight: 700; 
-  padding: 4px 10px; 
-  border-radius: 8px; 
-  display: inline-block;
-}
-
+/* MATH PROMPT DISPLAY & KA TEX FORMATTING */
 .math-display {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   font-weight: 600;
-  padding: 14px;
+  padding: 10px 14px;
   background: #f9fafb;
   border-radius: 12px;
   border-left: 4px solid var(--primary);
-  margin-top: 8px;
+  margin-top: 6px;
   word-break: break-word;
   overflow-x: auto;
 }
@@ -214,13 +168,84 @@ body {
   overflow-y: hidden;
 }
 
-/* INNER SCROLLABLE HINTS & FEEDBACK CONTAINER */
-.scrollable-hints-area {
-  flex: 1;
-  overflow-y: auto;
-  padding-right: 4px;
+/* UNCONSTRAINED RESPONSIVE DIAGRAM SVG SCALING */
+.math-display svg,
+#diagram-viewport svg {
+  width: auto !important;
+  max-width: 100% !important;
+  height: auto !important;
+  max-height: 230px !important;
+  display: block;
+  margin: 8px auto;
 }
 
+/* =========================================================
+   APPLE PENCIL SCRATCHPAD CANVAS OVERLAY
+   ========================================================= */
+.scratchpad-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 4px;
+}
+
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f1f5f9;
+  padding: 3px 6px;
+  border-radius: 8px;
+}
+
+.tool-icon-btn {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tool-icon-btn.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px #d1d5db;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.color-swatch.active {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.canvas-wrapper {
+  touch-action: none;
+}
+
+canvas#scratchpad-canvas {
+  display: block;
+  width: 100%;
+  background: transparent;
+}
+
+/* =========================================================
+   HINTS & FEEDBACK AREA
+   ========================================================= */
 .hints-wrapper {
   margin-top: 8px;
   display: flex;
@@ -232,9 +257,10 @@ body {
   background: #fef3c7;
   color: #92400e;
   border: 1px solid #fde68a;
-  padding: 8px 14px;
-  border-radius: 10px;
+  padding: 6px 12px;
+  border-radius: 8px;
   font-weight: 700;
+  font-size: 0.82rem;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -250,158 +276,66 @@ body {
 .hint-card {
   background: #fffbeb;
   border-left: 4px solid #f59e0b;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-radius: 8px;
-  margin-bottom: 8px;
-  font-size: 0.95rem;
+  margin-bottom: 6px;
+  font-size: 0.88rem;
 }
 
 .feedback-area {
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: 12px;
-  font-size: 1.05rem;
-  font-weight: 600;
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
   text-align: center;
 }
 
 .solution-box {
   background: #f0fdf4;
   border: 1px solid #bbf7d0;
-  border-radius: 12px;
-  padding: 14px;
-  margin-top: 12px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 8px;
   color: #166534;
 }
 
 /* =========================================================
-   COLUMN 2: APPLE PENCIL SCRATCHPAD
+   STRATEGY C TABBED MATHLIVE KEYPAD DOCK
    ========================================================= */
-.scratchpad-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 8px;
-}
-
-.tool-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.tool-icon-btn {
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  font-size: 1.1rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
+.keypad-tab-btn {
   transition: all 0.15s ease;
 }
 
-.tool-icon-btn.active {
-  background: var(--primary);
-  color: white;
-  border-color: var(--primary);
-}
-
-.color-swatch {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 2px solid #ffffff;
-  box-shadow: 0 0 0 1px #d1d5db;
-  cursor: pointer;
-  transition: transform 0.1s ease;
-}
-
-.color-swatch.active {
-  transform: scale(1.2);
-  box-shadow: 0 0 0 2px var(--primary);
-}
-
-.canvas-wrapper {
-  flex: 1;
-  background: #ffffff;
-  border: 2px dashed #cbd5e1;
-  border-radius: 12px;
-  position: relative;
-  overflow-y: auto;
-  touch-action: none;
-}
-
-canvas#scratchpad-canvas {
-  display: block;
-  width: 100%;
-  background: transparent;
-}
-
-/* =========================================================
-   COLUMN 3: MATHLIVE DISPLAY & KEYPAD (NO-SCROLL GRID FIX)
-   ========================================================= */
-.practice-col.keypad-col {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  width: 100%;
-  max-width: 100%;
-  overflow: hidden;
-  padding: 12px;
-  box-sizing: border-box;
-}
-
-/* INTERACTIVE MATHFIELD DISPLAY BOX */
 .answer-display-box {
-  min-height: 64px; /* Expanded height to fit stacked fractions */
+  min-height: 38px;
   background: #ffffff;
-  border: 2px solid var(--primary);
-  border-radius: 12px;
+  border: 1.5px solid var(--primary);
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 12px;
-  margin-bottom: 8px;
-  flex-shrink: 0;
+  padding: 4px 8px;
   box-sizing: border-box;
   overflow-x: auto;
-  overflow-y: visible;
 }
 
 math-field {
   width: 100%;
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   border: none;
   outline: none;
   background: transparent;
   box-shadow: none;
-  padding: 2px 0;
+  padding: 0;
 }
 
-math-field {
-  width: 100%;
-  font-size: 1.3rem;
-  border: none;
-  outline: none;
-  background: transparent;
-  box-shadow: none;
-}
-
-/* KEYPAD GRID: minmax(0, 1fr) PREVENTS 4TH COLUMN FROM CLIPPING ON IPAD */
 .keypad-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   grid-auto-rows: 1fr;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
-  flex: 1;
-  min-height: 0;
   box-sizing: border-box;
 }
 
@@ -413,8 +347,8 @@ math-field {
   padding: 0;
   background: #ffffff;
   border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  font-size: 1rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--text-main);
   cursor: pointer;
@@ -428,11 +362,6 @@ math-field {
 .keypad-btn:active {
   transform: translateY(2px);
   box-shadow: none;
-}
-
-.keypad-btn.nav-btn {
-  background: #e2e8f0;
-  color: #1e293b;
 }
 
 .keypad-btn.action {
@@ -450,50 +379,13 @@ math-field {
   grid-column: span 4;
   background: var(--primary);
   color: white;
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   border: none;
-  box-shadow: 0 3px 0 #1d4ed8;
+  box-shadow: 0 2px 0 #1d4ed8;
 }
 
 .keypad-btn.submit:active {
   transform: translateY(2px);
-  box-shadow: none;
-}
-
-/* =========================================================
-   6. UTILITY BUTTONS
-   ========================================================= */
-.secondary-btn {
-  background: #f3f4f6;
-  border: 1px solid var(--border);
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.secondary-btn:hover {
-  background: #e5e7eb;
-}
-
-.btn-next-question {
-  width: 100%;
-  padding: 14px;
-  background: var(--accent);
-  color: white;
-  font-size: 1.1rem;
-  font-weight: 700;
-  border: none;
-  border-radius: 12px;
-  box-shadow: 0 4px 0 #059669;
-  cursor: pointer;
-  margin-top: 12px;
-  transition: transform 0.1s ease;
-}
-
-.btn-next-question:active {
-  transform: translateY(4px);
   box-shadow: none;
 }
 
@@ -506,105 +398,27 @@ math-field::part(content) {
   touch-action: manipulation !important;
 }
 
-/* OPTIONAL: Hide the small default MathLive keyboard toggle icon at the bottom right */
 math-field::part(virtual-keyboard-toggle) {
   display: none !important;
 }
 
 /* =========================================================
-   SVG & QUESTION PROMPT HEIGHT RESTRICTIONS (PREVENTS HIDING HINTS)
+   6. UTILITY BUTTONS & MASTERY BADGES
    ========================================================= */
-.math-display {
-  font-size: 1.15rem;
+.secondary-btn {
+  background: #f3f4f6;
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 8px;
   font-weight: 600;
-  padding: 10px 14px;
-  background: #f9fafb;
-  border-radius: 12px;
-  border-left: 4px solid var(--primary);
-  margin-top: 6px;
-  word-break: break-word;
-  overflow-x: auto;
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
 
-/* Constrain SVG diagrams so hint buttons remain visible */
-.math-display svg {
-  max-height: 140px !important;
-  width: auto !important;
-  max-width: 100% !important;
-  display: block;
-  margin: 8px auto;
+.secondary-btn:hover {
+  background: #e5e7eb;
 }
 
-.protected-question-header {
-  flex-shrink: 0;
-  max-height: 55%; /* Keeps question box bounded */
-  overflow-y: auto;
-  background: var(--card-bg);
-  padding-bottom: 8px;
-  border-bottom: 2px solid var(--border);
-  margin-bottom: 8px;
-}
-
-.scrollable-hints-area {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
-  padding-right: 4px;
-}
-
-/* =========================================================
-   DYNAMIC KEYPAD GRID LAYOUTS (3-COL NUMERIC vs 4-COL ALGEBRAIC)
-   ========================================================= */
-/* 3-COLUMN NUMERIC GRID */
-.keypad-grid.numeric-3col {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: 1fr;
-  gap: 6px;
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-  box-sizing: border-box;
-}
-
-/* 4-COLUMN ALGEBRAIC GRID */
-.keypad-grid.algebraic-4col {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-auto-rows: 1fr;
-  gap: 6px;
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-  box-sizing: border-box;
-}
-
-/* KEYPAD BUTTON SPANS */
-.keypad-btn.submit.span-2 {
-  grid-column: span 2;
-}
-
-.keypad-btn.submit.span-3 {
-  grid-column: span 3;
-}
-
-.keypad-btn.skip {
-  grid-column: span 1;
-  background: #fff7ed;
-  color: #c2410c;
-  border: 1px solid #ffedd5;
-  font-size: 0.95rem;
-  box-shadow: 0 2px 0 #fed7aa;
-}
-
-.keypad-btn.skip:active {
-  transform: translateY(2px);
-  box-shadow: none;
-}
-
-/* =========================================================
-   MASTERY SCORE BADGES & PILLS
-   ========================================================= */
 .mastery-pill {
   display: inline-flex;
   align-items: center;
@@ -616,45 +430,7 @@ math-field::part(virtual-keyboard-toggle) {
   white-space: nowrap;
 }
 
-.mastery-score-number {
-  font-size: 0.95rem;
-  font-weight: 800;
-}
-
-/* TIER COLOR CLASSES */
-.mastery-tier-basic {
-  background: #eff6ff;
-  color: #2563eb;
-  border: 1px solid #bfdbfe;
-}
-
-.mastery-tier-intermediate {
-  background: #fffbeb;
-  color: #d97706;
-  border: 1px solid #fde68a;
-}
-
-.mastery-tier-advanced {
-  background: #f5f3ff;
-  color: #7c3aed;
-  border: 1px solid #ddd6fe;
-}
-
-.mastery-tier-mastered {
-  background: #ecfdf5;
-  color: #059669;
-  border: 1px solid #a7f3d0;
-}
-
-/* Teacher Matrix Table Hover & Sticky States */
-.student-matrix-row:hover {
-  background-color: #f1f5f9 !important;
-}
-
-.student-matrix-row:hover td:first-child {
-  background-color: #f1f5f9 !important;
-}
-
-.teacher-dashboard-container select:focus {
-  outline: 2px solid var(--primary);
-}
+.mastery-tier-basic { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+.mastery-tier-intermediate { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+.mastery-tier-advanced { background: #f5f3ff; color: #7c3aed; border: 1px solid #ddd6fe; }
+.mastery-tier-mastered { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
