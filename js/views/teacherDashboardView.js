@@ -1,14 +1,18 @@
 import { state } from "../state.js";
 import { getMasteryMetadata } from "../utils/masteryScoreEngine.js";
 
-export function renderTeacherDashboard(container) {
+export function renderTeacherDashboard(container, onLogout) {
   if (!container) return;
 
   // Defensive data extraction
   const teacherData = state.teacherData || {};
   const students = teacherData.students || [];
   const classMastery = teacherData.classMastery || {};
+  const classSkillTags = teacherData.classSkillTags || {};
   const curriculum = state.curriculum || [];
+  const currentUser = state.currentUser || {};
+
+  const teacherName = currentUser.displayName || currentUser.name || state.user?.name || "Teacher Account";
 
   // Filter States
   let selectedClass = "All";
@@ -17,10 +21,12 @@ export function renderTeacherDashboard(container) {
   let selectedStrand = "All";
   let selectedTopic = "All";
 
+  // Temporary edit buffer for class skill tags
+  let currentClassTagsBuffer = {};
+
   // State for Masked PINs
   const revealedPins = new Set();
 
-  // Safe Metadata Wrapper
   function safeGetMasteryMetadata(score) {
     try {
       const meta = getMasteryMetadata(score);
@@ -35,14 +41,12 @@ export function renderTeacherDashboard(container) {
     };
   }
 
-  // Normalize Class Name
   function getStudentClass(st) {
     if (!st) return "Unassigned";
     const c = st.class || st.className || st.gradeClass;
     return (c && String(c).trim()) ? String(c).trim() : "Unassigned";
   }
 
-  // Filter Dropdown Options Extraction
   const classes = Array.from(new Set(students.map(getStudentClass))).sort();
   const levels = Array.from(new Set(curriculum.map(c => c.level).filter(Boolean))).sort();
   const streams = Array.from(new Set(curriculum.map(c => c.stream).filter(Boolean))).sort();
@@ -116,8 +120,21 @@ export function renderTeacherDashboard(container) {
     return alerts;
   }
 
+  function syncClassTagsBuffer() {
+    if (selectedClass !== "All") {
+      const existing = classSkillTags[selectedClass] || {};
+      currentClassTagsBuffer = { ...existing };
+      curriculum.forEach(sk => {
+        if (!currentClassTagsBuffer[sk.generatorPath]) {
+          currentClassTagsBuffer[sk.generatorPath] = "Current";
+        }
+      });
+    } else {
+      currentClassTagsBuffer = {};
+    }
+  }
+
   function render() {
-    // Handling Loading State
     if (state.isLoadingTeacherData) {
       container.innerHTML = `
         <div style="display: flex; justify-content: center; align-items: center; min-height: 60vh; flex-direction: column; gap: 12px; background: #f8fafc; padding: 24px;">
@@ -128,6 +145,8 @@ export function renderTeacherDashboard(container) {
       `;
       return;
     }
+
+    syncClassTagsBuffer();
 
     const filteredStudents = getFilteredStudents();
     const filteredSkills = getFilteredSkills();
@@ -159,24 +178,98 @@ export function renderTeacherDashboard(container) {
     container.innerHTML = `
       <div class="teacher-dashboard-container" style="display: flex; flex-direction: column; gap: 16px; padding: 20px; min-height: 100%; box-sizing: border-box; background: #f8fafc;">
         
-        <!-- TOP HEADER & CLASS SELECTOR -->
+        <!-- INTEGRATED HEADER -->
+        <header style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 14px 24px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h1 style="font-size: 1.25rem; font-weight: 800; color: #0f172a; margin: 0;">${teacherName}</h1>
+                <span style="background: #2563eb; color: #ffffff; padding: 3px 10px; border-radius: 12px; font-weight: 800; font-size: 0.75rem; letter-spacing: 0.3px;">
+                  🎓 TEACHER DASHBOARD
+                </span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="background: #e0e7ff; color: #3730a3; padding: 2px 8px; border-radius: 10px; font-size: 0.78rem; font-weight: 700;">
+                  👨‍🏫 Educator Portal
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 16px;">
+            <div style="display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 0.85rem; font-weight: 600;">
+              <span>🏫 Class Analytics & Diagnostic Mode</span>
+            </div>
+            <button id="btn-dashboard-logout" style="background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 8px 16px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: background 0.15s;">
+              🚪 Logout
+            </button>
+          </div>
+        </header>
+
+        <!-- TITLE & CLASS SELECTOR -->
         <div style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 18px 24px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
           <div>
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <h2 style="font-size: 1.4rem; color: #1e293b; margin: 0; font-weight: 800;">🏫 Teacher Analytics Dashboard</h2>
-              <span style="background: #e0e7ff; color: #3730a3; padding: 3px 10px; border-radius: 12px; font-weight: 700; font-size: 0.78rem;">Teacher View</span>
-            </div>
+            <h2 style="font-size: 1.35rem; color: #1e293b; margin: 0; font-weight: 800;">📊 Student Class Overview</h2>
             <p style="color: #64748b; font-size: 0.88rem; margin: 4px 0 0 0;">Monitoring <strong>${filteredStudents.length}</strong> students across <strong>${filteredSkills.length}</strong> curriculum skills</p>
           </div>
           
           <div style="display: flex; gap: 12px; align-items: center;">
-            <label style="font-weight: 700; font-size: 0.88rem; color: #334155;">Class Filter:</label>
+            <label style="font-weight: 700; font-size: 0.88rem; color: #334155;">Active Class Filter:</label>
             <select id="select-class-filter" style="padding: 8px 14px; border-radius: 10px; border: 1.5px solid #cbd5e1; font-weight: 600; cursor: pointer; background: #fff; color: #1e293b;">
               <option value="All">All Classes (${students.length} Students)</option>
               ${classes.map(c => `<option value="${c}" ${c === selectedClass ? 'selected' : ''}>Class ${c}</option>`).join('')}
             </select>
           </div>
         </div>
+
+        <!-- SYLLABUS SKILL TAGGING CONTROL PANEL (For Selected Class) -->
+        ${selectedClass !== "All" ? `
+          <div style="background: #ffffff; padding: 18px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <div>
+                <h3 style="margin: 0; font-size: 1.1rem; color: #0f172a; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                  📌 Class Syllabus Skill Tagging (Class ${selectedClass})
+                </h3>
+                <p style="margin: 2px 0 0 0; font-size: 0.82rem; color: #64748b;">
+                  Tag skills as <strong>Current</strong> (Daily practice priority), <strong>Past</strong> (Spaced review), or <strong>Future</strong> (Excluded from Daily Quest & greyed out in Skill Tree).
+                </p>
+              </div>
+              <button id="btn-save-class-tags" style="background: #2563eb; color: #ffffff; border: none; padding: 8px 18px; border-radius: 10px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);">
+                💾 Save Skill Tags to Google Sheet
+              </button>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; max-height: 240px; overflow-y: auto; padding-right: 4px;">
+              ${filteredSkills.map(sk => {
+                const currentTag = currentClassTagsBuffer[sk.generatorPath] || "Current";
+                return `
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                    <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 8px;">
+                      <div style="font-size: 0.86rem; font-weight: 700; color: #0f172a; text-overflow: ellipsis; overflow: hidden;" title="${sk.title}">${sk.title}</div>
+                      <div style="font-size: 0.74rem; color: #64748b;">${sk.strand || ''}</div>
+                    </div>
+
+                    <div style="display: flex; gap: 4px; flex-shrink: 0;" class="tag-toggle-group" data-path="${sk.generatorPath}">
+                      <button class="btn-tag-toggle ${currentTag === 'Past' ? 'active' : ''}" data-tag="Past" style="padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.75rem; font-weight: 700; cursor: pointer; ${currentTag === 'Past' ? 'background:#0284c7; color:#fff; border-color:#0284c7;' : 'background:#fff; color:#475569;'}">
+                        🔵 Past
+                      </button>
+                      <button class="btn-tag-toggle ${currentTag === 'Current' ? 'active' : ''}" data-tag="Current" style="padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.75rem; font-weight: 700; cursor: pointer; ${currentTag === 'Current' ? 'background:#16a34a; color:#fff; border-color:#16a34a;' : 'background:#fff; color:#475569;'}">
+                        🟢 Current
+                      </button>
+                      <button class="btn-tag-toggle ${currentTag === 'Future' ? 'active' : ''}" data-tag="Future" style="padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.75rem; font-weight: 700; cursor: pointer; ${currentTag === 'Future' ? 'background:#64748b; color:#fff; border-color:#64748b;' : 'background:#fff; color:#475569;'}">
+                        ⚪ Future
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        ` : `
+          <div style="background: #fffbebf5; border: 1px solid #fde047; padding: 12px 18px; border-radius: 12px; font-size: 0.86rem; color: #854d0e;">
+            💡 <strong>Syllabus Tagging Tip:</strong> Select a specific Class from the top dropdown filter to configure <strong>Current</strong>, <strong>Past</strong>, and <strong>Future</strong> skill tags for that class.
+          </div>
+        `}
 
         <!-- SUMMARY CARDS -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
@@ -228,7 +321,6 @@ export function renderTeacherDashboard(container) {
         <!-- SKILL HEATMAP & MATRIX TABLE -->
         <div style="background: #ffffff; border-radius: 16px; padding: 18px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; flex: 1; display: flex; flex-direction: column; min-height: 420px;">
           
-          <!-- MULTI-FILTER BAR FOR MATRIX SKILLS -->
           <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px;">
             <h3 style="font-size: 1.1rem; color: #0f172a; margin: 0; font-weight: 800;">🗺️ Class Skill Mastery Matrix</h3>
             
@@ -264,14 +356,19 @@ export function renderTeacherDashboard(container) {
                     Student Profile
                   </th>
                   <th style="padding: 12px 10px; text-align: center; background: #f8fafc;">Class</th>
-                  ${filteredSkills.map(sk => `
-                    <th class="skill-header-cell" data-path="${sk.generatorPath}" data-title="${sk.title}" style="padding: 12px; text-align: center; min-width: 140px; cursor: pointer; user-select: none; background: #f8fafc;" title="Click to preview sample questions">
-                      <div style="display: flex; flex-direction: column; gap: 2px; align-items: center;">
-                        <span style="font-weight: 700; color: #2563eb; text-decoration: underline;">${sk.title} 🔍</span>
-                        <span style="font-size: 0.72rem; color: #64748b; font-weight: 500;">${sk.strand || ''}</span>
-                      </div>
-                    </th>
-                  `).join('')}
+                  ${filteredSkills.map(sk => {
+                    const tagVal = selectedClass !== "All" ? (currentClassTagsBuffer[sk.generatorPath] || "Current") : "";
+                    const tagBadge = tagVal === "Current" ? "🟢" : (tagVal === "Past" ? "🔵" : (tagVal === "Future" ? "⚪" : ""));
+
+                    return `
+                      <th class="skill-header-cell" data-path="${sk.generatorPath}" data-title="${sk.title}" style="padding: 12px; text-align: center; min-width: 140px; cursor: pointer; user-select: none; background: #f8fafc;" title="Click to preview sample questions">
+                        <div style="display: flex; flex-direction: column; gap: 2px; align-items: center;">
+                          <span style="font-weight: 700; color: #2563eb; text-decoration: underline;">${tagBadge} ${sk.title} 🔍</span>
+                          <span style="font-size: 0.72rem; color: #64748b; font-weight: 500;">${sk.strand || ''}</span>
+                        </div>
+                      </th>
+                    `;
+                  }).join('')}
                   <th style="padding: 12px 14px; text-align: center; min-width: 110px; background: #f8fafc;">Avg Score</th>
                 </tr>
               </thead>
@@ -395,9 +492,65 @@ export function renderTeacherDashboard(container) {
 
     // --- ATTACH EVENT LISTENERS ---
 
+    container.querySelector("#btn-dashboard-logout")?.addEventListener("click", () => {
+      if (typeof onLogout === "function") onLogout();
+      else if (typeof state.logout === "function") state.logout();
+      else window.location.reload();
+    });
+
     container.querySelector("#select-class-filter")?.addEventListener("change", (e) => {
       selectedClass = e.target.value;
       render();
+    });
+
+    // Tag Toggle Buttons
+    container.querySelectorAll(".btn-tag-toggle").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        const group = e.target.closest(".tag-toggle-group");
+        const path = group?.getAttribute("data-path");
+        const selectedTag = e.target.getAttribute("data-tag");
+
+        if (path && selectedTag) {
+          currentClassTagsBuffer[path] = selectedTag;
+          render();
+        }
+      });
+    });
+
+    // Save Class Skill Tags Button Handler
+    container.querySelector("#btn-save-class-tags")?.addEventListener("click", async (e) => {
+      const saveBtn = e.target;
+      saveBtn.disabled = true;
+      saveBtn.innerText = "⏳ Saving...";
+
+      try {
+        const response = await fetch(state.apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "saveClassSkillTags",
+            token: state.userToken,
+            className: selectedClass,
+            tags: currentClassTagsBuffer
+          })
+        });
+        const resData = await response.json();
+
+        if (resData.status === "success") {
+          if (!state.teacherData.classSkillTags) state.teacherData.classSkillTags = {};
+          state.teacherData.classSkillTags[selectedClass] = { ...currentClassTagsBuffer };
+          saveBtn.innerText = "✅ Saved Successfully!";
+          setTimeout(() => render(), 1200);
+        } else {
+          alert("Failed to save tags: " + (resData.message || "Unknown error"));
+          saveBtn.disabled = false;
+          saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
+        }
+      } catch (err) {
+        alert("Network error while saving skill tags: " + err.message);
+        saveBtn.disabled = false;
+        saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
+      }
     });
 
     container.querySelector("#filter-level")?.addEventListener("change", (e) => { selectedLevel = e.target.value; render(); });
