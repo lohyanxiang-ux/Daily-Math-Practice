@@ -11,10 +11,12 @@ export const state = {
     streakCount: 0
   },
   curriculum: [],
-  mastery: {}, // Keyed by generatorPath: { score, effectiveScore, accuracy, totalAttempted, totalCorrect, rollingHistory, lastPracticed }
+  mastery: {}, // Keyed by generatorPath
+  skillTags: {}, // Class skill tag mappings for logged-in student
   teacherData: {
     students: [],
-    classMastery: {}
+    classMastery: {},
+    classSkillTags: {}
   },
   pendingMasteryUpdates: new Set(),
   dailySession: {
@@ -22,6 +24,11 @@ export const state = {
     completedToday: 0
   }
 };
+
+// Expose state globally for browser console debugging
+if (typeof window !== "undefined") {
+  window.state = state;
+}
 
 /**
  * Resets local state when user logs out.
@@ -38,7 +45,8 @@ export function resetState() {
   };
   state.curriculum = [];
   state.mastery = {};
-  state.teacherData = { students: [], classMastery: {} };
+  state.skillTags = {};
+  state.teacherData = { students: [], classMastery: {}, classSkillTags: {} };
   state.pendingMasteryUpdates.clear();
   state.dailySession = { targetQuestions: 5, completedToday: 0 };
 }
@@ -50,6 +58,7 @@ export function setStateData(payload) {
   if (!payload) return;
   if (payload.profile) state.profile = { ...state.profile, ...payload.profile };
   if (payload.curriculum) state.curriculum = payload.curriculum;
+  if (payload.skillTags) state.skillTags = payload.skillTags; // Store class skill tags
   if (payload.teacherData) state.teacherData = payload.teacherData;
   if (payload.mastery) {
     state.mastery = {};
