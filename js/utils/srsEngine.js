@@ -1,25 +1,24 @@
 import { state } from "../state.js";
-import { getDecayedScore } from "./masteryScoreEngine.js";
 
 const YEAR_LEVELS = { "Sec 1": 1, "Sec 2": 2, "Sec 3": 3, "Sec 4": 4 };
 
 /**
- * Calculates dynamic memory half-life in days based on baseline score
+ * Calculates dynamic memory half-life in days based on baseline mastery score
  */
 function getMemoryHalfLife(rawScore) {
   if (rawScore < 40) return 1.5;    // Basic Tier: ~1.5 day half-life
   if (rawScore < 70) return 4.0;    // Intermediate Tier: ~4 day half-life
   if (rawScore < 90) return 9.0;    // Advanced Tier: ~9 day half-life
-  return 18.0;                      // Mastered Tier: ~18 day half-life
+  return 18.0;                      // Mastered Tier: ~18 day half-life (capped at 30 days max interval)
 }
 
 /**
  * Builds a cognitive SRS review queue using memory retention modeling,
- * dynamic urgency scoring, and topic interleaving.
+ * score-shielding for high-mastery topics, and micro-batch interleaving.
  */
 export function getSmartReviewQueue(options = {}) {
   const {
-    questionCount = 10,
+    questionCount = 5,
     includePriorYears = false,
     selectedStrand = "All"
   } = options;
@@ -47,15 +46,16 @@ export function getSmartReviewQueue(options = {}) {
     const isCurrentYear = skillYearLevel === studentYearLevel;
     const isPriorYear = skillYearLevel < studentYearLevel;
 
-    if (isCurrentYear && mastery.totalAttempted < 1) return;
-    if (isPriorYear && (!includePriorYears || mastery.totalAttempted < 1)) return;
+    // Shield unpracticed skills (must be practiced first in Skill Tree mode)
+    if (mastery.totalAttempted < 1) return;
+    if (isPriorYear && !includePriorYears) return;
     if (skillYearLevel > studentYearLevel) return;
 
     const rawScore = Number(mastery.score) || 0;
     const accuracy = Number(mastery.accuracy) || 0;
     const totalAttempted = Number(mastery.totalAttempted) || 0;
 
-    // Days Since Last Practice
+    // Days Since Last Practice Calculation
     const lastPracticedMs = mastery.lastPracticed ? new Date(mastery.lastPracticed).getTime() : 0;
     const daysElapsed = lastPracticedMs > 0 ? (now - lastPracticedMs) / (1000 * 60 * 60 * 24) : 999;
     
@@ -65,27 +65,31 @@ export function getSmartReviewQueue(options = {}) {
     const effectiveScore = Math.max(0, Math.round(rawScore * retentionProb));
     const daysOverdue = daysElapsed - halfLife;
 
-    // Explicit Cognitive Reasons
+    // HARD RETENTION SHIELD:
+    // If Retained Score >= 70 and accuracy is healthy (>= 60%), skill does NOT require review
+    const needsRefresh = effectiveScore < 70 || accuracy < 60 || daysOverdue >= 0;
+
+    if (!needsRefresh) return; // Topic is shielded / up-to-date
+
+    // Explicit Pedagogical Reasons
     const reasons = [];
     if (retentionProb < 0.75 && rawScore >= 40) {
       const drop = rawScore - effectiveScore;
-      reasons.push(`⏳ Memory Decay (-${drop} pts retention loss)`);
+      reasons.push(`⏳ Retained Score Decayed (-${drop} pts)`);
     }
     if (rawScore < 40) {
-      reasons.push("🚨 Basic Concept Recall (< 40 Score)");
+      reasons.push("🚨 Basic Skill Tune-Up (< 40 Score)");
     } else if (rawScore < 70) {
-      reasons.push("⚠️ Intermediate Consolidation Needed");
+      reasons.push("⚠️ Intermediate Consolidation");
     }
     if (accuracy < 60 && totalAttempted >= 2) {
-      reasons.push(`❌ Low Rolling Accuracy (${accuracy}%)`);
+      reasons.push(`❌ Accuracy Drop (${accuracy}%)`);
     }
     if (daysOverdue >= 0 && daysElapsed < 900) {
-      reasons.push(`📅 Overdue Retrieval (${Math.floor(daysElapsed)} days elapsed)`);
+      reasons.push(`📅 Scheduled Refresh (${Math.floor(daysElapsed)} days elapsed)`);
     }
 
-    const isDue = effectiveScore < rawScore || rawScore < 70 || accuracy < 60 || daysOverdue >= 0;
-
-    // Urgency Priority Formula
+    // Urgency Priority Score Formula
     let priority = (100 - effectiveScore) * (1 + (daysElapsed / halfLife));
     if (accuracy < 60 && totalAttempted >= 2) priority += (60 - accuracy) * 1.5;
     if (rawScore < 40) priority += 35;
@@ -100,9 +104,9 @@ export function getSmartReviewQueue(options = {}) {
       totalAttempted,
       lastPracticed: mastery.lastPracticed,
       daysSincePracticed: Math.floor(daysElapsed),
-      reasons: reasons.length > 0 ? reasons : ["🔄 Routine Memory Maintenance"],
-      primaryReason: reasons[0] || "🔄 Routine Memory Maintenance",
-      isDue,
+      reasons: reasons.length > 0 ? reasons : ["🔄 Memory Maintenance"],
+      primaryReason: reasons[0] || "🔄 Memory Maintenance",
+      needsRefresh: true,
       priority
     });
   });
@@ -110,16 +114,16 @@ export function getSmartReviewQueue(options = {}) {
   if (candidateSkills.length === 0) {
     const emptyQueue = [];
     emptyQueue.candidateSkills = [];
-    emptyQueue.dueCount = 0;
+    emptyQueue.refreshCount = 0;
     emptyQueue.uniqueTopicsCount = 0;
     return emptyQueue;
   }
 
-  // Sort candidate skills by urgency priority
+  // Sort candidate skills by urgency priority descending
   candidateSkills.sort((a, b) => b.priority - a.priority);
 
-  // Multi-Question Interleaved Queue Distribution:
-  // Build exact questionCount length array by cycling through candidate topics
+  // Micro-Batch Interleaved Queue Distribution:
+  // Build exact questionCount length array by cycling through available candidate topics
   const questionQueue = [];
   let idx = 0;
   while (questionQueue.length < questionCount) {
@@ -128,21 +132,20 @@ export function getSmartReviewQueue(options = {}) {
     idx++;
   }
 
-  // Attach metadata properties directly to the returned queue
+  // Attach metadata directly to returned array
   questionQueue.candidateSkills = candidateSkills;
-  questionQueue.dueCount = candidateSkills.filter(s => s.isDue).length;
+  questionQueue.refreshCount = candidateSkills.length;
   questionQueue.uniqueTopicsCount = candidateSkills.length;
 
   return questionQueue;
 }
 
 /**
- * Returns summary metrics for Dashboard badges.
+ * Returns metrics for Dashboard badges.
  */
 export function getSRSMetrics() {
-  const dueQueue = getSmartReviewQueue({ questionCount: 100, includePriorYears: true });
-  const candidates = dueQueue.candidateSkills || [];
+  const queue = getSmartReviewQueue({ questionCount: 100, includePriorYears: true });
   return {
-    totalDue: candidates.filter(s => s.isDue).length
+    totalRefreshNeeded: queue.refreshCount || 0
   };
 }
