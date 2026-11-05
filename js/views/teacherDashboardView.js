@@ -69,10 +69,6 @@ export function renderTeacherDashboard(container, onLogout) {
   const strands = Array.from(new Set(curriculum.map(c => c.strand).filter(Boolean))).sort();
   const topics = Array.from(new Set(curriculum.map(c => c.topic).filter(Boolean))).sort();
 
-  /**
-   * Automatically sets both Overview Matrix and Tagging filters 
-   * to match the level & stream of the selected class.
-   */
   function syncClassFilters(className) {
     if (!className || className === "All") {
       selectedLevel = "All";
@@ -232,10 +228,20 @@ export function renderTeacherDashboard(container, onLogout) {
         curriculum,
         students,
         activeSession: activeLiveSession,
-        liveAttempts,
+        liveAttempts
+      });
+
+      // BIND EVENTS WITH ONSTARTSESSION AND ONENDSESSION HANDLERS
+      initLiveTabEvents(tabContainer, {
         onStartSession: async (targetClass, skillPaths) => {
           try {
-            await fetch(getApiUrl(), {
+            const submitBtn = tabContainer.querySelector("#btn-launch-live");
+            if (submitBtn) {
+              submitBtn.disabled = true;
+              submitBtn.innerText = "⏳ Launching Session...";
+            }
+
+            const response = await fetch(getApiUrl(), {
               method: "POST",
               headers: { "Content-Type": "text/plain;charset=utf-8" },
               body: JSON.stringify({
@@ -246,11 +252,27 @@ export function renderTeacherDashboard(container, onLogout) {
                 status: "ACTIVE"
               })
             });
-            await fetchLiveSessionData();
-            startLivePolling();
-            render();
+
+            const resData = await response.json();
+            if (resData.status === "success") {
+              await fetchLiveSessionData();
+              startLivePolling();
+              render();
+            } else {
+              alert("Failed to start live session: " + (resData.message || "Unknown error"));
+              if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerText = "🚀 Start Live Class Practice";
+              }
+            }
           } catch (e) {
+            console.error("Start live session error:", e);
             alert("Error starting live session: " + e.message);
+            const submitBtn = tabContainer.querySelector("#btn-launch-live");
+            if (submitBtn) {
+              submitBtn.disabled = false;
+              submitBtn.innerText = "🚀 Start Live Class Practice";
+            }
           }
         },
         onEndSession: async () => {
@@ -275,9 +297,7 @@ export function renderTeacherDashboard(container, onLogout) {
           } catch (e) {
             alert("Error ending live session: " + e.message);
           }
-        }
-      });
-      initLiveTabEvents(tabContainer, {
+        },
         onToggleProjector: () => renderTabContentOnly()
       });
     }
