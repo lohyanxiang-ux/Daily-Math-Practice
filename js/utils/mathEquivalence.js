@@ -38,16 +38,16 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
   const clean = (str) => {
     let s = String(str)
       .trim()
-      .replace(/\u2212|\u2013|\u2014|\\text\{-\}/g, '-') // Normalize minus signs
-      .replace(/^[a-zA-Z]\s*=\s*/, '')                   // Strip equation prefixes (e.g., "x = ")
-      .replace(/\\placeholder(\{[^{}]*\}|\[[^{}]*\])?/g, '') // Strip placeholders
+      .replace(/\u2212|\u2013|\u2014|\\text\{-\}/g, '-')                     // Normalize minus signs
+      .replace(/^[a-zA-Z]\s*=\s*/, '')                                       // Strip equation prefixes (e.g., "x = ")
+      .replace(/\\placeholder(\{[^{}]*\}|\[[^{}]*\])?/g, '')                 // Strip placeholders
       .replace(/#\?|#0/g, '');
 
     // Recursively strip LaTeX font & text wrappers: \mathrm{x}, \mathit{x}, \text{x}, etc.
     let prevText;
     do {
       prevText = s;
-      s = s.replace(/\\(mathrm|mathit|mathbf|mathsf|mathtt|text|operatorname|d)\{([^{}]+)\}/g, '$2');
+      s = s.replace(/\\(mathrm|mathit|mathbf|mathsf|mathtt|text|text|text|text|operatorname|d)\{([^{}]+)\}/g, '$2');
     } while (s !== prevText);
 
     // Strip formatting commands & invisible spacers
@@ -61,11 +61,14 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
     s = s.replace(/\\div/g, '/');
     s = s.replace(/\\pi/g, 'Math.PI');
 
-    // Handle nested \frac{a}{b} recursively
+    // Robust \frac conversion handling all LaTeX variants (\frac{3}{2}, \frac32, \frac{3}2, \frac3{2})
     let prevFrac;
     do {
       prevFrac = s;
       s = s.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '(($1)/($2))');
+      s = s.replace(/\\frac([0-9a-zA-Z])([0-9a-zA-Z])/g, '(($1)/($2))');
+      s = s.replace(/\\frac\{([^{}]+)\}([0-9a-zA-Z])/g, '(($1)/($2))');
+      s = s.replace(/\\frac([0-9a-zA-Z])\{([^{}]+)\}/g, '(($1)/($2))');
     } while (s !== prevFrac);
 
     // Handle nested \sqrt{a} recursively
@@ -111,7 +114,7 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
         else if (char === ')' || char === ']' || char === '}') depth--;
         else if (depth === 0 && (char === '+' || char === '-')) {
           if (i > 0 && !/[*\/^+\-(]/.test(userClean[i - 1])) {
-            hasTopLevelAddSub = True;
+            hasTopLevelAddSub = true; // Fixed lowercase true
             break;
           }
         }
