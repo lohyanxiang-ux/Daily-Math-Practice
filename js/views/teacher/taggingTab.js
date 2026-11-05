@@ -1,5 +1,8 @@
 import { getAutoDefaultTag } from "./helperUtils.js";
 
+/**
+ * Renders HTML for Tab 2: Class Skill Tagging
+ */
 export function renderTaggingTabHTML(props) {
   const {
     selectedClass,
@@ -23,6 +26,7 @@ export function renderTaggingTabHTML(props) {
   return `
     <div style="background: #ffffff; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 16px;">
       
+      <!-- HEADER & SAVE BUTTON -->
       <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 16px;">
         <div>
           <h3 style="margin: 0; font-size: 1.2rem; color: #0f172a; font-weight: 800;">
@@ -34,7 +38,7 @@ export function renderTaggingTabHTML(props) {
         </div>
 
         ${selectedClass !== "All" ? `
-          <button id="btn-save-class-tags" style="background: #2563eb; color: #ffffff; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); transition: background 0.15s;">
+          <button id="btn-save-class-tags" type="button" style="background: #2563eb; color: #ffffff; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); transition: all 0.15s ease;">
             💾 Save Skill Tags to Google Sheet
           </button>
         ` : ''}
@@ -51,7 +55,6 @@ export function renderTaggingTabHTML(props) {
           <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
             <span style="font-weight: 800; font-size: 0.86rem; color: #0f172a;">Filter Skills:</span>
 
-            <!-- CLEAN LEVEL DROPDOWN: Shows "Sec 1" directly instead of "Level Sec 1" -->
             <select id="tag-filter-level" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.84rem; font-weight: 700; background: #ffffff; color: #1e293b; cursor: pointer;">
               <option value="All">All Levels</option>
               ${levels.map(l => `<option value="${l}" ${String(l) === String(tagFilterLevel) ? 'selected' : ''}>${l}</option>`).join('')}
@@ -106,13 +109,13 @@ export function renderTaggingTabHTML(props) {
                       </div>
 
                       <div style="display: flex; gap: 6px; flex-shrink: 0;" class="tag-toggle-group" data-path="${sk.generatorPath}">
-                        <button type="button" class="btn-tag-toggle ${currentTag === 'Past' ? 'active' : ''}" data-tag="Past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Past' ? 'background:#0284c7; color:#fff; border-color:#0284c7;' : 'background:#fff; color:#475569;'}">
+                        <button type="button" class="btn-tag-toggle ${currentTag === 'Past' ? 'active' : ''}" data-tag="Past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; touch-action: manipulation; ${currentTag === 'Past' ? 'background:#0284c7; color:#fff; border-color:#0284c7;' : 'background:#fff; color:#475569;'}">
                           🔵 Past Skill
                         </button>
-                        <button type="button" class="btn-tag-toggle ${currentTag === 'Current' ? 'active' : ''}" data-tag="Current" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Current' ? 'background:#16a34a; color:#fff; border-color:#16a34a;' : 'background:#fff; color:#475569;'}">
+                        <button type="button" class="btn-tag-toggle ${currentTag === 'Current' ? 'active' : ''}" data-tag="Current" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; touch-action: manipulation; ${currentTag === 'Current' ? 'background:#16a34a; color:#fff; border-color:#16a34a;' : 'background:#fff; color:#475569;'}">
                           🟢 Current Skill
                         </button>
-                        <button type="button" class="btn-tag-toggle ${currentTag === 'Future' ? 'active' : ''}" data-tag="Future" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Future' ? 'background:#64748b; color:#fff; border-color:#64748b;' : 'background:#fff; color:#475569;'}">
+                        <button type="button" class="btn-tag-toggle ${currentTag === 'Future' ? 'active' : ''}" data-tag="Future" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; touch-action: manipulation; ${currentTag === 'Future' ? 'background:#64748b; color:#fff; border-color:#64748b;' : 'background:#fff; color:#475569;'}">
                           ⚪ Future Skill
                         </button>
                       </div>
@@ -129,4 +132,98 @@ export function renderTaggingTabHTML(props) {
 
     </div>
   `;
+}
+
+/**
+ * Initializes Event Handlers for Skill Tagging Interactions
+ */
+export function initTaggingTabEvents(container, props) {
+  const {
+    currentClassTagsBuffer,
+    taggingSkills,
+    onFilterChange,
+    onSaveClassTags
+  } = props;
+
+  // 1. Filter Dropdowns
+  container.querySelector("#tag-filter-level")?.addEventListener("change", (e) => {
+    if (typeof onFilterChange === "function") onFilterChange("level", e.target.value);
+  });
+  container.querySelector("#tag-filter-stream")?.addEventListener("change", (e) => {
+    if (typeof onFilterChange === "function") onFilterChange("stream", e.target.value);
+  });
+  container.querySelector("#tag-filter-strand")?.addEventListener("change", (e) => {
+    if (typeof onFilterChange === "function") onFilterChange("strand", e.target.value);
+  });
+
+  // Helper to visually update button group styles
+  function updateGroupUI(group, activeTag) {
+    group.querySelectorAll(".btn-tag-toggle").forEach(btn => {
+      const bTag = btn.getAttribute("data-tag");
+      if (bTag === activeTag) {
+        btn.classList.add("active");
+        if (bTag === "Past") {
+          btn.style.background = "#0284c7"; btn.style.color = "#ffffff"; btn.style.borderColor = "#0284c7";
+        } else if (bTag === "Current") {
+          btn.style.background = "#16a34a"; btn.style.color = "#ffffff"; btn.style.borderColor = "#16a34a";
+        } else if (bTag === "Future") {
+          btn.style.background = "#64748b"; btn.style.color = "#ffffff"; btn.style.borderColor = "#64748b";
+        }
+      } else {
+        btn.classList.remove("active");
+        btn.style.background = "#ffffff";
+        btn.style.color = "#475569";
+        btn.style.borderColor = "#cbd5e1";
+      }
+    });
+  }
+
+  // 2. Individual Skill Tag Toggle Buttons (Instant Reaction on Touch/Click)
+  container.querySelectorAll(".btn-tag-toggle").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const targetBtn = e.currentTarget;
+      const group = targetBtn.closest(".tag-toggle-group");
+      if (!group) return;
+
+      const generatorPath = group.getAttribute("data-path");
+      const selectedTag = targetBtn.getAttribute("data-tag");
+
+      if (!generatorPath || !selectedTag) return;
+
+      // Update memory buffer
+      currentClassTagsBuffer[generatorPath] = selectedTag;
+
+      // Update button visual state immediately
+      updateGroupUI(group, selectedTag);
+    });
+  });
+
+  // 3. Bulk Mass Tag Buttons
+  function applyBulkTag(targetTag) {
+    if (!taggingSkills || taggingSkills.length === 0) return;
+
+    taggingSkills.forEach(sk => {
+      currentClassTagsBuffer[sk.generatorPath] = targetTag;
+    });
+
+    // Update all visible DOM toggle groups
+    container.querySelectorAll(".tag-toggle-group").forEach(group => {
+      const path = group.getAttribute("data-path");
+      if (path && currentClassTagsBuffer[path]) {
+        updateGroupUI(group, currentClassTagsBuffer[path]);
+      }
+    });
+  }
+
+  container.querySelector("#btn-mass-past")?.addEventListener("click", () => applyBulkTag("Past"));
+  container.querySelector("#btn-mass-current")?.addEventListener("click", () => applyBulkTag("Current"));
+  container.querySelector("#btn-mass-future")?.addEventListener("click", () => applyBulkTag("Future"));
+
+  // 4. Save Button
+  container.querySelector("#btn-save-class-tags")?.addEventListener("click", (e) => {
+    if (typeof onSaveClassTags === "function") {
+      onSaveClassTags(e);
+    }
+  });
 }
