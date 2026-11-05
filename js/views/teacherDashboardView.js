@@ -43,13 +43,7 @@ export function renderTeacherDashboard(container, onLogout) {
   const globalShellNav = document.querySelector(".top-nav");
   if (globalShellNav) globalShellNav.style.display = "none";
 
-  const teacherData = state.teacherData || {};
-  const students = teacherData.students || [];
-  const classMastery = teacherData.classMastery || {};
-  const classSkillTags = teacherData.classSkillTags || {};
-  const curriculum = state.curriculum || [];
   const currentUser = state.currentUser || {};
-
   const teacherName = currentUser.displayName || currentUser.name || state.user?.name || "Teacher Account";
 
   let activeTab = "overview"; 
@@ -72,20 +66,22 @@ export function renderTeacherDashboard(container, onLogout) {
   let activeLiveSession = null;
   let liveAttempts = [];
   let livePollTimer = null;
+  let overviewPollTimer = null;
   let targetTimePromptShown = false;
   let isLoadingSummary = false;
+  let isRefreshingData = false;
   let postSessionSummaryData = null;
 
   const revealedPins = new Set();
 
-  const classes = Array.from(new Set(students.map(getStudentClass))).sort();
-  const levels = Array.from(new Set(curriculum.map(c => c.level || c.year).filter(Boolean))).sort();
-  const streams = Array.from(new Set(curriculum.map(c => c.stream).filter(Boolean))).sort();
-  const strands = Array.from(new Set(curriculum.map(c => c.strand).filter(Boolean))).sort();
-  const topics = Array.from(new Set(curriculum.map(c => c.topic).filter(Boolean))).sort();
+  function getStudents() { return state.teacherData?.students || []; }
+  function getClassMastery() { return state.teacherData?.classMastery || {}; }
+  function getClassSkillTags() { return state.teacherData?.classSkillTags || {}; }
+  function getCurriculum() { return state.curriculum || []; }
 
   function syncClassFilters(className) {
     if (!className || className === "All") return;
+    const students = getStudents();
     const repStudent = students.find(s => cleanClassStr(getStudentClass(s)) === cleanClassStr(className));
     if (repStudent) {
       if (repStudent.year || repStudent.level || repStudent.grade) {
@@ -102,10 +98,11 @@ export function renderTeacherDashboard(container, onLogout) {
   }
 
   function getFilteredStudents() {
-    return students.filter(s => selectedClass === "All" || cleanClassStr(getStudentClass(s)) === cleanClassStr(selectedClass));
+    return getStudents().filter(s => selectedClass === "All" || cleanClassStr(getStudentClass(s)) === cleanClassStr(selectedClass));
   }
 
   function getFilteredSkills() {
+    const curriculum = getCurriculum();
     return curriculum.filter(c => {
       const matchLevel = selectedLevel === "All" || String(c.level || c.year) === String(selectedLevel);
       const matchStream = selectedStream === "All" || String(c.stream) === String(selectedStream);
@@ -118,6 +115,7 @@ export function renderTeacherDashboard(container, onLogout) {
   }
 
   function getTaggingFilteredSkills() {
+    const curriculum = getCurriculum();
     return curriculum.filter(c => {
       const matchLevel = tagFilterLevel === "All" || String(c.level || c.year) === String(tagFilterLevel);
       const matchStream = tagFilterStream === "All" || String(c.stream) === String(tagFilterStream);
@@ -127,6 +125,8 @@ export function renderTeacherDashboard(container, onLogout) {
   }
 
   function syncClassTagsBufferIfNeeded() {
+    const classSkillTags = getClassSkillTags();
+    const curriculum = getCurriculum();
     if (selectedClass !== lastLoadedClassForBuffer) {
       if (selectedClass !== "All") {
         const savedTags = classSkillTags[selectedClass] || {};
@@ -144,6 +144,67 @@ export function renderTeacherDashboard(container, onLogout) {
     }
   }
 
+  // --------------------------------------------------------------------------
+  // MANUAL & PERIODIC DATA REFRESH LOGIC (Student Class Overview)
+  // --------------------------------------------------------------------------
+  async function fetchFreshTeacherData(isSilent = false) {
+    if (isRefreshingData) return;
+    isRefreshingData = true;
+
+    const refreshBtn = container.querySelector("#btn-refresh-overview");
+    if (refreshBtn && !isSilent) {
+      refreshBtn.disabled = true;
+      refreshBtn.innerText = "⏳ Refreshing...";
+    }
+
+    try {
+      const response = await fetch(getApiUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "getTeacherDashboardData",
+          token: state.userToken || state.token || "TEACHER_SESSION"
+        })
+      });
+      const resData = await response.json();
+      if (resData.status === "success" && resData.data) {
+        state.teacherData = resData.data;
+        renderTabContentOnly();
+      }
+    } catch (err) {
+      console.error("Error refreshing teacher dashboard data:", err);
+    } finally {
+      isRefreshingData = false;
+      if (refreshBtn && !isSilent) {
+        refreshBtn.innerText = "✓ Refreshed!";
+        setTimeout(() => {
+          if (document.body.contains(refreshBtn)) {
+            refreshBtn.disabled = false;
+            refreshBtn.innerText = "🔄 Refresh Data";
+          }
+        }, 1500);
+      }
+    }
+  }
+
+  // 15-Second Background Polling for Overview Tab
+  function startOverviewPolling() {
+    stopAllPolling();
+    overviewPollTimer = setInterval(() => {
+      if (activeTab === "overview" && !isRefreshingData) {
+        fetchFreshTeacherData(true);
+      }
+    }, 15000);
+  }
+
+  function stopAllPolling() {
+    if (livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
+    if (overviewPollTimer) { clearInterval(overviewPollTimer); overviewPollTimer = null; }
+  }
+
+  // --------------------------------------------------------------------------
+  // LIVE SESSION POLLING
+  // --------------------------------------------------------------------------
   function checkTargetTimeExpiryAlert(session) {
     if (!session || targetTimePromptShown) return;
     const sessTargetType = String(session.targetType || "").toUpperCase();
@@ -191,7 +252,7 @@ export function renderTeacherDashboard(container, onLogout) {
   }
 
   function startLivePolling() {
-    stopLivePolling();
+    stopAllPolling();
     fetchLiveSessionData().then(() => renderTabContentOnly());
     
     livePollTimer = setInterval(async () => {
@@ -207,13 +268,6 @@ export function renderTeacherDashboard(container, onLogout) {
     }, 3000);
   }
 
-  function stopLivePolling() {
-    if (livePollTimer) {
-      clearInterval(livePollTimer);
-      livePollTimer = null;
-    }
-  }
-
   async function endLiveSessionAndSummarize() {
     if (!activeLiveSession) return;
     const sessionToSummarize = { ...activeLiveSession };
@@ -224,6 +278,7 @@ export function renderTeacherDashboard(container, onLogout) {
     try {
       await fetchLiveSessionData();
       const attemptsToSummarize = [...liveAttempts];
+      const students = getStudents();
 
       await fetch(getApiUrl(), {
         method: "POST",
@@ -297,7 +352,7 @@ export function renderTeacherDashboard(container, onLogout) {
 
       activeLiveSession = null;
       liveAttempts = [];
-      stopLivePolling();
+      stopAllPolling();
 
       isLoadingSummary = false;
       render();
@@ -316,6 +371,15 @@ export function renderTeacherDashboard(container, onLogout) {
     const filteredStudents = getFilteredStudents();
     const filteredSkills = getFilteredSkills();
     const taggingSkills = getTaggingFilteredSkills();
+    const curriculum = getCurriculum();
+    const classMastery = getClassMastery();
+    const students = getStudents();
+    const classes = Array.from(new Set(students.map(getStudentClass))).sort();
+
+    const levels = Array.from(new Set(curriculum.map(c => c.level || c.year).filter(Boolean))).sort();
+    const streams = Array.from(new Set(curriculum.map(c => c.stream).filter(Boolean))).sort();
+    const strands = Array.from(new Set(curriculum.map(c => c.strand).filter(Boolean))).sort();
+    const topics = Array.from(new Set(curriculum.map(c => c.topic).filter(Boolean))).sort();
 
     if (activeTab === "overview") {
       tabContainer.innerHTML = renderOverviewTabHTML({
@@ -439,6 +503,7 @@ export function renderTeacherDashboard(container, onLogout) {
         onDoneSummary: () => {
           postSessionSummaryData = null;
           activeTab = "overview";
+          startOverviewPolling();
           render();
         },
         onTargetTimeExpired: (targetMins) => {
@@ -453,6 +518,7 @@ export function renderTeacherDashboard(container, onLogout) {
         },
         onSaveAutoTags: async () => {
           if (!postSessionSummaryData || !postSessionSummaryData.skillPaths) return;
+          const classSkillTags = getClassSkillTags();
           const tagsToSave = { ...(classSkillTags[selectedClass] || {}) };
           postSessionSummaryData.skillPaths.forEach(p => { tagsToSave[p] = "Current"; });
           
@@ -478,6 +544,10 @@ export function renderTeacherDashboard(container, onLogout) {
   }
 
   function bindOverviewEvents() {
+    const students = getStudents();
+    const classMastery = getClassMastery();
+    const curriculum = getCurriculum();
+
     container.querySelector("#filter-matrix-tag")?.addEventListener("change", (e) => { selectedMatrixTag = e.target.value; renderTabContentOnly(); });
     container.querySelector("#filter-level")?.addEventListener("change", (e) => { selectedLevel = e.target.value; renderTabContentOnly(); });
     container.querySelector("#filter-stream")?.addEventListener("change", (e) => { selectedStream = e.target.value; renderTabContentOnly(); });
@@ -530,13 +600,16 @@ export function renderTeacherDashboard(container, onLogout) {
 
     syncClassTagsBufferIfNeeded();
 
+    const students = getStudents();
+    const curriculum = getCurriculum();
+    const classes = Array.from(new Set(students.map(getStudentClass))).sort();
     const filteredStudents = getFilteredStudents();
     const isLiveActive = activeLiveSession && activeLiveSession.status === "ACTIVE";
 
     container.innerHTML = `
       <div class="teacher-dashboard-container" style="display: flex; flex-direction: column; gap: 16px; padding: 20px; height: 100%; box-sizing: border-box; background: #f8fafc; overflow-y: auto;">
         
-        <!-- HEADER BAR -->
+        <!-- HEADER BAR WITH MANUAL REFRESH BUTTON -->
         <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; background: #ffffff; padding: 16px 24px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; gap: 12px;">
           <div>
             <div style="display: flex; align-items: center; gap: 10px;">
@@ -546,7 +619,12 @@ export function renderTeacherDashboard(container, onLogout) {
             <p style="color: #64748b; font-size: 0.88rem; margin: 2px 0 0 0;">Monitoring <strong>${filteredStudents.length}</strong> students across <strong>${curriculum.length}</strong> total skills</p>
           </div>
           
-          <div style="display: flex; gap: 14px; align-items: center;">
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <!-- MANUAL REFRESH BUTTON -->
+            <button id="btn-refresh-overview" style="background: #f1f5f9; color: #0f172a; border: 1.5px solid #cbd5e1; padding: 8px 14px; border-radius: 10px; font-weight: 700; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              🔄 Refresh Data
+            </button>
+
             <div style="display: flex; gap: 8px; align-items: center;">
               <label style="font-weight: 700; font-size: 0.88rem; color: #334155;">Class Filter:</label>
               <select id="select-class-filter" style="padding: 8px 14px; border-radius: 10px; border: 1.5px solid #cbd5e1; font-weight: 700; cursor: pointer; background: #fff; color: #1e293b;">
@@ -586,15 +664,20 @@ export function renderTeacherDashboard(container, onLogout) {
       ${renderQuestionPreviewModalHTML()}
     `;
 
+    // Global Event Bindings
+    container.querySelector("#btn-refresh-overview")?.addEventListener("click", () => {
+      fetchFreshTeacherData(false);
+    });
+
     container.querySelector("#tab-btn-overview")?.addEventListener("click", () => {
       activeTab = "overview";
-      stopLivePolling();
+      startOverviewPolling();
       render();
     });
 
     container.querySelector("#tab-btn-tagging")?.addEventListener("click", () => {
       activeTab = "tagging";
-      stopLivePolling();
+      stopAllPolling();
       render();
     });
 
@@ -605,7 +688,7 @@ export function renderTeacherDashboard(container, onLogout) {
     });
 
     container.querySelector("#btn-dashboard-logout")?.addEventListener("click", () => {
-      stopLivePolling();
+      stopAllPolling();
       if (typeof onLogout === "function") onLogout();
       else if (typeof state.logout === "function") state.logout();
       else window.location.reload();
@@ -624,5 +707,7 @@ export function renderTeacherDashboard(container, onLogout) {
     renderTabContentOnly();
   }
 
+  // Start initial polling if starting on overview tab
+  startOverviewPolling();
   render();
 }
