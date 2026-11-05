@@ -22,31 +22,47 @@ const ANONYMOUS_ALIASES = [
   "Golden Bear 🐻", "Solar Eagle 🦅", "Cyber Dolphin 🐬", "Turbo Fox 🦊"
 ];
 
-// Web Audio API Synthetic Chime (No external audio file needed)
+/**
+ * Web Audio API Synthetic 5-Second Alarm Chime
+ * Loops a distinct 2-tone alert chime across 5 seconds without external audio dependencies.
+ */
 export function playTimeUpChime() {
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
 
-    const notes = [
-      { freq: 523.25, start: 0.0, duration: 0.25 }, // C5
-      { freq: 659.25, start: 0.18, duration: 0.25 }, // E5
-      { freq: 783.99, start: 0.36, duration: 0.45 }  // G5
-    ];
+    const ringDuration = 5.0; 
+    const pulseInterval = 0.6;
+    const totalPulses = Math.floor(ringDuration / pulseInterval);
 
-    notes.forEach(n => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(n.freq, ctx.currentTime + n.start);
-      gain.gain.setValueAtTime(0.3, ctx.currentTime + n.start);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + n.start + n.duration);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(ctx.currentTime + n.start);
-      osc.stop(ctx.currentTime + n.start + n.duration);
-    });
+    for (let i = 0; i < totalPulses; i++) {
+      const startTime = ctx.currentTime + (i * pulseInterval);
+
+      // Tone 1: E5 (659.25 Hz)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = "sine";
+      osc1.frequency.setValueAtTime(659.25, startTime);
+      gain1.gain.setValueAtTime(0.25, startTime);
+      gain1.gain.exponentialRampToValueAtTime(0.001, startTime + 0.22);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(startTime);
+      osc1.stop(startTime + 0.22);
+
+      // Tone 2: A5 (880.00 Hz)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(880.00, startTime + 0.15);
+      gain2.gain.setValueAtTime(0.25, startTime + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.001, startTime + 0.38);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(startTime + 0.15);
+      osc2.stop(startTime + 0.38);
+    }
   } catch (e) {
     console.warn("Audio chime playback error:", e);
   }
@@ -75,7 +91,6 @@ function formatElapsed(startMs) {
   return `${mins}:${secs}`;
 }
 
-// Calculate existing student baseline mastery score for assigned live practice skills
 function getStudentBaselineScore(emailKey, skillPaths, classMastery) {
   if (!skillPaths || skillPaths.length === 0) return 0;
 
@@ -295,7 +310,6 @@ export function renderLiveTabHTML(props) {
   }
 
   // MODE D: LIVE MONITORING DASHBOARD (Active Session)
-  // Resolve unified targetVal from any matching backend property
   const targetValNum = Number(activeSession.targetVal ?? activeSession.targetValue ?? activeSession.targetScore ?? activeSession.targetTime ?? 0);
   const sessTargetType = String(activeSession.targetType || "").toUpperCase();
   const sessTargetTime = sessTargetType === "TIME" ? targetValNum : 0;
@@ -310,7 +324,6 @@ export function renderLiveTabHTML(props) {
     let consecutiveWrong = 0;
     let highHintCount = 0;
 
-    // Retrieve baseline existing mastery score if student has 0 live attempts
     const baselineScore = getStudentBaselineScore(emailKey, activeSession?.skillPaths || [], classMastery);
     let latestScore = stAttempts.length > 0 ? stAttempts[stAttempts.length - 1].newScore : baselineScore;
     let latestSkillPath = stAttempts.length > 0 ? stAttempts[stAttempts.length - 1].generatorPath : "";
@@ -382,8 +395,42 @@ export function renderLiveTabHTML(props) {
   }
 
   return `
-    <div style="display: flex; flex-direction: column; gap: 16px; relative;">
+    <div style="display: flex; flex-direction: column; gap: 16px;">
       
+      <!-- TIME EXPIRED ACTION BANNER FOR TEACHER -->
+      <div id="live-time-expired-banner" style="
+        display: ${isTimeExpired ? 'flex' : 'none'};
+        background: #fef2f2;
+        border: 2px solid #ef4444;
+        border-radius: 14px;
+        padding: 14px 20px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+        animation: pulse 2s infinite;
+      ">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-size: 2rem;">⏰</span>
+          <div>
+            <div style="font-size: 1.05rem; font-weight: 800; color: #991b1b;">Target Time Limit (${sessTargetTime} mins) Reached!</div>
+            <div style="font-size: 0.85rem; color: #7f1d1d; margin-top: 2px;">Practice is still active for students. Choose to extend practice time or end session now.</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <button id="btn-banner-extend-5" style="background: #eff6ff; color: #1d4ed8; border: 1.5px solid #bfdbfe; padding: 8px 14px; border-radius: 8px; font-weight: 800; font-size: 0.85rem; cursor: pointer;">
+            ⏱️ +5 Mins
+          </button>
+          <button id="btn-banner-extend-10" style="background: #eff6ff; color: #1d4ed8; border: 1.5px solid #bfdbfe; padding: 8px 14px; border-radius: 8px; font-weight: 800; font-size: 0.85rem; cursor: pointer;">
+            ⏱️ +10 Mins
+          </button>
+          <button id="btn-banner-end-session" style="background: #dc2626; color: #ffffff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 800; font-size: 0.85rem; cursor: pointer; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);">
+            🛑 End Session
+          </button>
+        </div>
+      </div>
+
       <!-- ACTIVE CONTROL HEADER BAR -->
       <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; background: #1e293b; color: #ffffff; padding: 18px 24px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); gap: 12px;">
         <div>
@@ -451,32 +498,6 @@ export function renderLiveTabHTML(props) {
             </div>
           `;
         }).join('')}
-      </div>
-
-      <!-- TARGET TIME EXPIRED OVERLAY MODAL -->
-      <div id="modal-time-expired-overlay" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 9999; justify-content: center; align-items: center; padding: 20px;">
-        <div style="background: #ffffff; border-radius: 20px; max-width: 480px; width: 100%; padding: 28px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3); text-align: center; border: 3px solid #f87171;">
-          <div style="font-size: 3rem; margin-bottom: 8px;">⏰</div>
-          <h3 style="font-size: 1.4rem; font-weight: 900; color: #991b1b; margin: 0 0 8px 0;">Target Practice Time Is Up!</h3>
-          <p style="color: #475569; font-size: 0.95rem; margin: 0 0 20px 0; line-height: 1.5;">
-            The target limit of <strong id="expired-time-display">${sessTargetTime}</strong> minutes has been reached for Class <strong>${activeSession.className}</strong>.
-          </p>
-
-          <div style="display: flex; flex-direction: column; gap: 10px;">
-            <div style="display: flex; gap: 10px;">
-              <button id="btn-extend-time-5" style="flex: 1; background: #eff6ff; color: #1d4ed8; border: 1.5px solid #bfdbfe; padding: 12px; border-radius: 12px; font-weight: 800; font-size: 0.92rem; cursor: pointer;">
-                ⏱️ Extend +5 Mins
-              </button>
-              <button id="btn-extend-time-10" style="flex: 1; background: #eff6ff; color: #1d4ed8; border: 1.5px solid #bfdbfe; padding: 12px; border-radius: 12px; font-weight: 800; font-size: 0.92rem; cursor: pointer;">
-                ⏱️ Extend +10 Mins
-              </button>
-            </div>
-
-            <button id="btn-expired-end-session" style="background: #dc2626; color: #ffffff; border: none; padding: 14px; border-radius: 12px; font-weight: 800; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);">
-              🛑 End Live Session Now
-            </button>
-          </div>
-        </div>
       </div>
 
     </div>
@@ -562,7 +583,11 @@ function renderTeacherSummaryHTML(summary, curriculum) {
             <tbody>
               ${studentStats.map(st => {
                 let badgeHtml = `<span style="background: #f1f5f9; color: #475569; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.78rem;">✅ Solid Progress</span>`;
-                if (st.status === "TOP_PERFORMER") {
+                
+                // Badge assignment logic including non-participants
+                if (st.totalAttempted === 0 || st.status === "DID_NOT_PARTICIPATE") {
+                  badgeHtml = `<span style="background: #f1f5f9; color: #64748b; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.78rem;">⚪ Did Not Participate</span>`;
+                } else if (st.status === "TOP_PERFORMER") {
                   badgeHtml = `<span style="background: #fef3c7; color: #92400e; padding: 3px 8px; border-radius: 6px; font-weight: 800; font-size: 0.78rem;">🌟 Top Performer</span>`;
                 } else if (st.status === "NEEDS_SUPPORT") {
                   badgeHtml = `<span style="background: #ffe4e6; color: #9f1239; padding: 3px 8px; border-radius: 6px; font-weight: 800; font-size: 0.78rem;">🚨 Needs Support</span>`;
@@ -576,7 +601,7 @@ function renderTeacherSummaryHTML(summary, curriculum) {
                   <tr style="border-bottom: 1px solid #f1f5f9;">
                     <td style="padding: 10px 14px; font-weight: 700; color: #0f172a;">${st.name}</td>
                     <td style="padding: 10px 14px; color: #334155;">${st.totalAttempted} Qs</td>
-                    <td style="padding: 10px 14px; font-weight: 700; color: #16a34a;">${st.accuracy}%</td>
+                    <td style="padding: 10px 14px; font-weight: 700; color: #16a34a;">${st.totalAttempted > 0 ? st.accuracy + '%' : '-'}</td>
                     <td style="padding: 10px 14px; font-weight: 800; color: #0f172a;">
                       ${st.startScore} ➔ <span style="color: #2563eb;">${st.endScore}</span> 
                       <span style="font-size: 0.78rem; color: ${sColor}; margin-left: 4px;">(${sBadge} pts)</span>
@@ -602,7 +627,7 @@ export function initLiveTabEvents(container, props) {
     liveTimerInterval = null;
   }
 
-  // 1-SECOND TIMER + REAL-TIME TARGET TIME EXPIRY MONITOR WITH CHIME & POPUP
+  // 1-SECOND TIMER + REAL-TIME TARGET TIME EXPIRY MONITOR WITH 5-SEC CHIME & BANNER
   const timerReadout = container.querySelector("#live-timer-readout");
   if (timerReadout) {
     const startMs = Number(timerReadout.getAttribute("data-start"));
@@ -628,15 +653,16 @@ export function initLiveTabEvents(container, props) {
               targetBadge.innerHTML = `🚨 TIME EXPIRED! (${sessTargetTimeMins}m limit reached)`;
             }
 
-            // Trigger Chime & Modal once per expiration cycle
+            // Reveal Teacher Time-Expired Action Banner
+            const timeExpiredBanner = container.querySelector("#live-time-expired-banner");
+            if (timeExpiredBanner && timeExpiredBanner.style.display === "none") {
+              timeExpiredBanner.style.display = "flex";
+            }
+
+            // Trigger 5-second ringing audio chime once per expiration cycle
             if (!hasChimedForCurrentExpiry) {
               hasChimedForCurrentExpiry = true;
               playTimeUpChime();
-
-              const expiredModal = container.querySelector("#modal-time-expired-overlay");
-              if (expiredModal) {
-                expiredModal.style.display = "flex";
-              }
             }
           }
         }
@@ -647,23 +673,23 @@ export function initLiveTabEvents(container, props) {
     }, 1000);
   }
 
-  // TARGET TIME OVERLAY MODAL BUTTONS
-  const expiredModal = container.querySelector("#modal-time-expired-overlay");
-  
-  container.querySelector("#btn-extend-time-5")?.addEventListener("click", () => {
-    if (expiredModal) expiredModal.style.display = "none";
-    hasChimedForCurrentExpiry = false; // Reset trigger for extended window
+  // TARGET TIME EXPIRED BANNER BUTTON EVENT LISTENERS
+  const expiredBanner = container.querySelector("#live-time-expired-banner");
+
+  container.querySelector("#btn-banner-extend-5")?.addEventListener("click", () => {
+    if (expiredBanner) expiredBanner.style.display = "none";
+    hasChimedForCurrentExpiry = false; // Reset trigger for extended practice window
     if (typeof onExtendTime === "function") onExtendTime(5);
   });
 
-  container.querySelector("#btn-extend-time-10")?.addEventListener("click", () => {
-    if (expiredModal) expiredModal.style.display = "none";
-    hasChimedForCurrentExpiry = false; // Reset trigger for extended window
+  container.querySelector("#btn-banner-extend-10")?.addEventListener("click", () => {
+    if (expiredBanner) expiredBanner.style.display = "none";
+    hasChimedForCurrentExpiry = false; // Reset trigger for extended practice window
     if (typeof onExtendTime === "function") onExtendTime(10);
   });
 
-  container.querySelector("#btn-expired-end-session")?.addEventListener("click", () => {
-    if (expiredModal) expiredModal.style.display = "none";
+  container.querySelector("#btn-banner-end-session")?.addEventListener("click", () => {
+    if (expiredBanner) expiredBanner.style.display = "none";
     if (typeof onEndSession === "function") onEndSession();
   });
 
@@ -718,7 +744,6 @@ export function initLiveTabEvents(container, props) {
       const selectedClass = container.querySelector("#live-select-class")?.value;
       const checkedArray = Array.from(selectedSkillPaths);
 
-      // Read target value directly from input to guarantee accuracy on launch
       const valInput = container.querySelector("#live-target-val-input");
       if (valInput) {
         activeTargetVal = Number(valInput.value) || activeTargetVal;
