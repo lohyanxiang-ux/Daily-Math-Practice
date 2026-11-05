@@ -1,9 +1,14 @@
 import { state } from "../../state.js";
+import { getStudentClass } from "./helperUtils.js";
 
-let livePollInterval = null;
-let isProjectorMode = false; // Suggestion 2: Anonymized leaderboard view toggle
+let isProjectorMode = false;
 
-// Deterministic Fun Alias Generator for Projector Mode
+// Filter state variables for Live Practice setup
+let activeFilterLevel = null;
+let activeFilterStream = null;
+let activeFilterStrand = "All";
+let lastSelectedClass = null;
+
 const ANONYMOUS_ALIASES = [
   "Clever Panda 🐼", "Swift Falcon 🦅", "Math Wizard 🧙‍♂️", "Brave Tiger 🐯",
   "Cosmic Otter 🦦", "Starlight Koala 🐨", "Quantum Dragon 🐉", "Laser Cheetah 🐆",
@@ -22,16 +27,38 @@ export function renderLiveTabHTML(props) {
     curriculum,
     students,
     activeSession,
-    liveAttempts,
-    onStartSession,
-    onEndSession
+    liveAttempts
   } = props;
 
   const isActive = activeSession && activeSession.status === "ACTIVE";
 
-  // Filter students for the selected class
+  // AUTO-DEFAULT FILTERS TO SELECTED CLASS LEVEL & STREAM
+  if (selectedClass !== lastSelectedClass) {
+    lastSelectedClass = selectedClass;
+    
+    let defaultLevel = "All";
+    let defaultStream = "All";
+
+    if (selectedClass !== "All") {
+      const repStudent = students.find(s => getStudentClass(s) === selectedClass);
+      if (repStudent) {
+        if (repStudent.year || repStudent.level || repStudent.grade) {
+          defaultLevel = String(repStudent.year || repStudent.level || repStudent.grade).trim();
+        }
+        if (repStudent.stream) {
+          defaultStream = String(repStudent.stream).trim();
+        }
+      }
+    }
+
+    activeFilterLevel = defaultLevel;
+    activeFilterStream = defaultStream;
+    activeFilterStrand = "All";
+  }
+
+  // Filter students for selected class
   const classStudents = students.filter(s => {
-    const c = String(s.className || s.class || s.grade || "").trim();
+    const c = getStudentClass(s);
     return selectedClass === "All" || c === selectedClass;
   });
 
@@ -39,9 +66,22 @@ export function renderLiveTabHTML(props) {
   // MODE A: SETUP FORM (No Active Live Session)
   // ---------------------------------------------------------
   if (!isActive) {
-    // Group skills by topic for multi-select checklist
+    // Collect unique filter options
+    const levels = Array.from(new Set(curriculum.map(c => c.level || c.year).filter(Boolean))).sort();
+    const streams = Array.from(new Set(curriculum.map(c => c.stream).filter(Boolean))).sort();
+    const strands = Array.from(new Set(curriculum.map(c => c.strand).filter(Boolean))).sort();
+
+    // Apply filters to curriculum skills
+    const filteredSkills = curriculum.filter(sk => {
+      const matchLevel = activeFilterLevel === "All" || String(sk.level || sk.year) === String(activeFilterLevel);
+      const matchStream = activeFilterStream === "All" || String(sk.stream) === String(activeFilterStream);
+      const matchStrand = activeFilterStrand === "All" || String(sk.strand) === String(activeFilterStrand);
+      return matchLevel && matchStream && matchStrand;
+    });
+
+    // Group filtered skills by Topic
     const skillsByTopic = {};
-    curriculum.forEach(sk => {
+    filteredSkills.forEach(sk => {
       const topic = sk.topic || "General Topics";
       if (!skillsByTopic[topic]) skillsByTopic[topic] = [];
       skillsByTopic[topic].push(sk);
@@ -53,8 +93,8 @@ export function renderLiveTabHTML(props) {
         <div style="display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 14px; margin-bottom: 20px;">
           <span style="font-size: 2rem;">📡</span>
           <div>
-            <h3 style="font-size: 1.3rem; color: #0f172a; margin: 0; font-weight: 800;">Launch Teacher-Directed Live Practice</h3>
-            <p style="color: #64748b; font-size: 0.88rem; margin: 2px 0 0 0;">Select the class and skill(s) you want your students to focus on right now in class.</p>
+            <h3 style="font-size: 1.3rem; color: #0f172a; margin: 0; font-weight: 800;">Launch Live Practice</h3>
+            <p style="color: #64748b; font-size: 0.88rem; margin: 2px 0 0 0;">Select class and skills to assign for real-time classroom practice.</p>
           </div>
         </div>
 
@@ -62,10 +102,47 @@ export function renderLiveTabHTML(props) {
           
           <!-- CLASS SELECTION -->
           <div>
-            <label style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">1. Select Target Class:</label>
+            <label style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">1. Target Class:</label>
             <select id="live-select-class" style="width: 100%; max-width: 320px; padding: 10px 14px; border-radius: 10px; border: 1.5px solid #cbd5e1; font-weight: 700; font-size: 0.95rem; background: #fff; color: #0f172a;">
               ${classes.map(c => `<option value="${c}" ${c === selectedClass ? 'selected' : ''}>Class ${c}</option>`).join('')}
             </select>
+          </div>
+
+          <!-- SKILL FILTERS BAR -->
+          <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; padding: 14px 16px; border-radius: 12px;">
+            <div style="font-weight: 800; font-size: 0.88rem; color: #1e293b; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between;">
+              <span>🔍 Filter Available Skills</span>
+              <span style="font-weight: 600; font-size: 0.78rem; color: #64748b;">Showing ${filteredSkills.length} of ${curriculum.length} skills</span>
+            </div>
+            
+            <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+              <!-- Level Filter -->
+              <div style="flex: 1; min-width: 140px;">
+                <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Level / Year</label>
+                <select id="live-filter-level" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: 700; font-size: 0.85rem; background: #fff; color: #0f172a;">
+                  <option value="All" ${activeFilterLevel === "All" ? 'selected' : ''}>All Levels</option>
+                  ${levels.map(l => `<option value="${l}" ${String(l) === String(activeFilterLevel) ? 'selected' : ''}>${l}</option>`).join('')}
+                </select>
+              </div>
+
+              <!-- Stream Filter -->
+              <div style="flex: 1; min-width: 140px;">
+                <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Stream</label>
+                <select id="live-filter-stream" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: 700; font-size: 0.85rem; background: #fff; color: #0f172a;">
+                  <option value="All" ${activeFilterStream === "All" ? 'selected' : ''}>All Streams</option>
+                  ${streams.map(s => `<option value="${s}" ${String(s) === String(activeFilterStream) ? 'selected' : ''}>${s}</option>`).join('')}
+                </select>
+              </div>
+
+              <!-- Strand Filter -->
+              <div style="flex: 1; min-width: 140px;">
+                <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Strand</label>
+                <select id="live-filter-strand" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: 700; font-size: 0.85rem; background: #fff; color: #0f172a;">
+                  <option value="All" ${activeFilterStrand === "All" ? 'selected' : ''}>All Strands</option>
+                  ${strands.map(s => `<option value="${s}" ${String(s) === String(activeFilterStrand) ? 'selected' : ''}>${s}</option>`).join('')}
+                </select>
+              </div>
+            </div>
           </div>
 
           <!-- MULTI-SKILL SELECTION (Grouped by Topic) -->
@@ -74,15 +151,19 @@ export function renderLiveTabHTML(props) {
               2. Select Skill(s) to Practice (Choose 1 to 3):
             </label>
 
-            <div style="max-height: 320px; overflow-y: auto; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 16px; background: #f8fafc; display: flex; flex-direction: column; gap: 16px;">
-              ${Object.entries(skillsByTopic).map(([topicName, skills]) => `
+            <div style="max-height: 320px; overflow-y: auto; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 16px; background: #ffffff; display: flex; flex-direction: column; gap: 16px;">
+              ${Object.keys(skillsByTopic).length === 0 ? `
+                <div style="text-align: center; color: #64748b; padding: 24px; font-weight: 600;">
+                  No skills match the selected Level/Stream filter. Adjust your filter above.
+                </div>
+              ` : Object.entries(skillsByTopic).map(([topicName, skills]) => `
                 <div>
                   <div style="font-weight: 800; color: #1e293b; font-size: 0.88rem; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
                     📂 ${topicName}
                   </div>
                   <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px;">
                     ${skills.map(sk => `
-                      <label style="display: flex; align-items: center; gap: 8px; background: #ffffff; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                      <label style="display: flex; align-items: center; gap: 8px; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
                         <input type="checkbox" class="chk-live-skill" value="${sk.generatorPath}" style="width: 16px; height: 16px; accent-color: #2563eb;" />
                         <span>${sk.title}</span>
                       </label>
@@ -122,23 +203,19 @@ export function renderLiveTabHTML(props) {
     let latestScore = stAttempts.length > 0 ? stAttempts[stAttempts.length - 1].newScore : 0;
     let latestSkillPath = stAttempts.length > 0 ? stAttempts[stAttempts.length - 1].generatorPath : "";
 
-    // Count consecutive wrong answers from latest attempts
     for (let i = stAttempts.length - 1; i >= 0; i--) {
       if (!stAttempts[i].isCorrect) consecutiveWrong++;
       else break;
     }
 
-    // Check hint reliance
     stAttempts.forEach(a => {
       if (a.hintsUsed >= 3) highHintCount++;
     });
 
-    // Check stalled time (no attempt in last 3 minutes)
     const lastAttemptTime = stAttempts.length > 0 ? new Date(stAttempts[stAttempts.length - 1].timestamp).getTime() : 0;
     const isStalled = totalAttempted > 0 && (Date.now() - lastAttemptTime > 3 * 60 * 1000);
 
-    // Determine Intervention Priority Alert
-    let alertLevel = null; // "RED", "YELLOW", "ORANGE", null
+    let alertLevel = null;
     let alertMsg = "";
 
     if (consecutiveWrong >= 2) {
@@ -168,7 +245,6 @@ export function renderLiveTabHTML(props) {
     };
   });
 
-  // Sort students: Needing intervention at the top!
   studentMetrics.sort((a, b) => b.priority - a.priority || b.latestScore - a.latestScore);
 
   const activeSkillsList = activeSession.skillPaths.map(p => {
@@ -192,13 +268,10 @@ export function renderLiveTabHTML(props) {
         </div>
 
         <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-          
-          <!-- SUGGESTION 2: PROJECTOR / LEADERBOARD MODE TOGGLE -->
           <button id="btn-toggle-projector" style="padding: 10px 18px; border-radius: 10px; border: 1.5px solid ${isProjectorMode ? '#8b5cf6' : '#475569'}; font-weight: 800; background: ${isProjectorMode ? '#7c3aed' : '#334155'}; color: #ffffff; cursor: pointer; display: flex; align-items: center; gap: 8px;">
             ${isProjectorMode ? '📽️ Projector Mode: ON (Names Anonymized)' : '👁️ Projector Mode: OFF'}
           </button>
 
-          <!-- SUGGESTION 3: END SESSION (WITH SMART AUTOSAVE) -->
           <button id="btn-stop-live-session" style="background: #dc2626; color: #ffffff; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 10px rgba(220, 38, 38, 0.3);">
             🛑 End Live Session
           </button>
@@ -250,13 +323,37 @@ export function renderLiveTabHTML(props) {
   `;
 }
 
-/**
- * Event Binding & Live Polling Initializer
- */
 export function initLiveTabEvents(container, props) {
-  const { onStartSession, onEndSession, onToggleProjector } = props;
+  const { onStartSession, onEndSession, onToggleProjector, onFilterChange } = props;
 
-  // Form Submission -> Start Session
+  // Level Filter Change
+  container.querySelector("#live-filter-level")?.addEventListener("change", (e) => {
+    activeFilterLevel = e.target.value;
+    if (typeof onFilterChange === "function") onFilterChange();
+  });
+
+  // Stream Filter Change
+  container.querySelector("#live-filter-stream")?.addEventListener("change", (e) => {
+    activeFilterStream = e.target.value;
+    if (typeof onFilterChange === "function") onFilterChange();
+  });
+
+  // Strand Filter Change
+  container.querySelector("#live-filter-strand")?.addEventListener("change", (e) => {
+    activeFilterStrand = e.target.value;
+    if (typeof onFilterChange === "function") onFilterChange();
+  });
+
+  // Class Filter Change inside setup card
+  container.querySelector("#live-select-class")?.addEventListener("change", (e) => {
+    const mainClassSelect = document.querySelector("#select-class-filter");
+    if (mainClassSelect) {
+      mainClassSelect.value = e.target.value;
+      mainClassSelect.dispatchEvent(new Event("change"));
+    }
+  });
+
+  // Form Submission -> Start Live Session
   const form = container.querySelector("#form-start-live-session");
   if (form) {
     form.addEventListener("submit", (e) => {
@@ -273,14 +370,18 @@ export function initLiveTabEvents(container, props) {
         return;
       }
 
-      onStartSession(selectedClass, checkedBoxes);
+      if (typeof onStartSession === "function") {
+        onStartSession(selectedClass, checkedBoxes);
+      }
     });
   }
 
   // End Session Button
   container.querySelector("#btn-stop-live-session")?.addEventListener("click", () => {
     if (confirm("End live practice session? Assigned skills will automatically be saved as 'Current' in teacher tags.")) {
-      onEndSession();
+      if (typeof onEndSession === "function") {
+        onEndSession();
+      }
     }
   });
 
