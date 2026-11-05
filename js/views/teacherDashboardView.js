@@ -63,6 +63,7 @@ export function renderTeacherDashboard(container, onLogout) {
   let liveAttempts = [];
   let livePollTimer = null;
   let targetTimePromptShown = false;
+  let isLoadingSummary = false; // Loading screen trigger for post-session summary
   let postSessionSummaryData = null;
 
   const revealedPins = new Set();
@@ -133,7 +134,7 @@ export function renderTeacherDashboard(container, onLogout) {
     }
   }
 
-  // Live Polling & Target Time Check
+  // Live Polling & Reliable Target Time Check
   async function fetchLiveSessionData() {
     if (selectedClass === "All") return;
     try {
@@ -151,17 +152,19 @@ export function renderTeacherDashboard(container, onLogout) {
         activeLiveSession = resData.activeSession || null;
         liveAttempts = resData.attempts || [];
 
-        // Check target time limit
+        // RELIABLE TARGET TIME LIMIT ALERT CHECK
         if (activeLiveSession && activeLiveSession.targetType === "TIME" && activeLiveSession.targetTime && activeLiveSession.startTime && !targetTimePromptShown) {
           const startTimeMs = new Date(activeLiveSession.startTime).getTime();
-          const targetDurationMs = activeLiveSession.targetTime * 60 * 1000;
+          const targetMins = Number(activeLiveSession.targetTime);
+          const targetDurationMs = targetMins * 60 * 1000;
+
           if (Date.now() - startTimeMs >= targetDurationMs) {
             targetTimePromptShown = true;
             setTimeout(() => {
-              if (confirm(`⏱️ Target time of ${activeLiveSession.targetTime} minutes reached! End the live practice session now?`)) {
+              if (confirm(`⏱️ Target time of ${targetMins} minutes reached! End the live practice session now?`)) {
                 endLiveSessionAndSummarize();
               }
-            }, 300);
+            }, 200);
           }
         }
       }
@@ -175,7 +178,7 @@ export function renderTeacherDashboard(container, onLogout) {
     fetchLiveSessionData().then(() => renderTabContentOnly());
     
     livePollTimer = setInterval(async () => {
-      if (activeTab === "live" && selectedClass !== "All" && !postSessionSummaryData) {
+      if (activeTab === "live" && selectedClass !== "All" && !postSessionSummaryData && !isLoadingSummary) {
         const prevStatus = activeLiveSession?.status;
         await fetchLiveSessionData();
         const currentStatus = activeLiveSession?.status;
@@ -194,17 +197,21 @@ export function renderTeacherDashboard(container, onLogout) {
     }
   }
 
-  // End Session and Generate Diagnostic Summary
+  // End Session with Immediate Summary Loading Screen
   async function endLiveSessionAndSummarize() {
     if (!activeLiveSession) return;
     const sessionToSummarize = { ...activeLiveSession };
 
+    // 1. Immediately switch to Loading Screen
+    isLoadingSummary = true;
+    renderTabContentOnly();
+
     try {
-      // 1. Fetch freshest attempt data right before terminating
+      // 2. Fetch absolute freshest data right before stopping
       await fetchLiveSessionData();
       const attemptsToSummarize = [...liveAttempts];
 
-      // 2. Terminate session on backend
+      // 3. Send termination signal to Google Apps Script
       await fetch(getApiUrl(), {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -218,10 +225,8 @@ export function renderTeacherDashboard(container, onLogout) {
         })
       });
 
-      // 3. Bulletproof Roster Matching
+      // 4. Bulletproof Roster Matching
       const sessionClassClean = cleanClassStr(sessionToSummarize.className);
-      
-      // Match students by class name OR by email present in attempts
       const attemptedEmails = new Set(attemptsToSummarize.map(a => (a.studentEmail || "").toLowerCase()));
       const classSts = students.filter(s => {
         const sClassClean = cleanClassStr(getStudentClass(s));
@@ -262,7 +267,6 @@ export function renderTeacherDashboard(container, onLogout) {
         };
       });
 
-      // Filter out students with 0 attempts if desired, or show full class roster
       const activeParticipants = studentStats.filter(s => s.totalAttempted > 0);
       const startScores = activeParticipants.map(s => s.startScore);
       const endScores = activeParticipants.map(s => s.endScore);
@@ -273,7 +277,7 @@ export function renderTeacherDashboard(container, onLogout) {
         className: sessionToSummarize.className,
         durationMins,
         skillPaths: sessionToSummarize.skillPaths,
-        studentStats: studentStats, // Roster includes all class students with attempt breakdowns
+        studentStats: studentStats,
         overallAccuracy,
         avgScoreStart,
         avgScoreEnd
@@ -282,10 +286,15 @@ export function renderTeacherDashboard(container, onLogout) {
       activeLiveSession = null;
       liveAttempts = [];
       stopLivePolling();
+
+      // 5. Hide loading screen and display final summary
+      isLoadingSummary = false;
       render();
 
     } catch (e) {
+      isLoadingSummary = false;
       alert("Error ending live session: " + e.message);
+      renderTabContentOnly();
     }
   }
 
@@ -338,7 +347,8 @@ export function renderTeacherDashboard(container, onLogout) {
         students,
         activeSession: activeLiveSession,
         liveAttempts,
-        summaryData: postSessionSummaryData
+        summaryData: postSessionSummaryData,
+        isLoadingSummary: isLoadingSummary
       });
 
       initLiveTabEvents(tabContainer, {
@@ -404,7 +414,6 @@ export function renderTeacherDashboard(container, onLogout) {
             });
             if (!state.teacherData.classSkillTags) state.teacherData.classSkillTags = {};
             state.teacherData.classSkillTags[selectedClass] = tagsToSave;
-            alert("✅ Assigned skills successfully saved as 'Current' in Class Skill Tags!");
           } catch (err) {
             alert("Error saving skill tags: " + err.message);
           }
