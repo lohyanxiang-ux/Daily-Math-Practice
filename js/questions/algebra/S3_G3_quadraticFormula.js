@@ -23,7 +23,6 @@ export function generateQuestion(tier = 1) {
     const subType = randInt(1, 2);
 
     if (subType === 1) {
-      // ax^2 + bx + c = 0 where c < 0
       const a = randInt(1, 6);
       const b = randInt(-9, 9, true);
       const c = randInt(-9, -1);
@@ -50,7 +49,10 @@ export function generateQuestion(tier = 1) {
         tierName: "Basic",
         skillTitle: "Solve Quadratic Equations using Quadratic Formula",
         prompt: `Solve the following equation using the quadratic formula. Give your answers correct to 3 significant figures.\n\n$$${eq}$$`,
-        expectedAnswer: `x = ${ans1} or x = ${ans2}`,
+        inputCount: 2,
+        inputLabels: ["x =", "x ="],
+        expectedAnswer: [ans1, ans2],
+        displayAnswer: `x = ${ans1} \\text{ or } x = ${ans2}`,
         steps: [
           `Identify the coefficients $a$, $b$, and $c$ from $ax^2 + bx + c = 0$: $$${step1}$$`,
           `Substitute $a$, $b$, and $c$ into the quadratic formula $x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$: $$${step2}$$`,
@@ -58,7 +60,6 @@ export function generateQuestion(tier = 1) {
         ]
       };
     } else {
-      // ax^2 + bx + c = 0 where c > 0 (b_eff calculated to ensure disc > 0)
       const a = randInt(2, 5);
       const b_raw = randInt(6, 10);
       const c = randInt(1, 3);
@@ -87,7 +88,10 @@ export function generateQuestion(tier = 1) {
         tierName: "Basic",
         skillTitle: "Solve Quadratic Equations using Quadratic Formula",
         prompt: `Solve the following equation using the quadratic formula. Give your answers correct to 3 significant figures.\n\n$$${eq}$$`,
-        expectedAnswer: `x = ${ans1} or x = ${ans2}`,
+        inputCount: 2,
+        inputLabels: ["x =", "x ="],
+        expectedAnswer: [ans1, ans2],
+        displayAnswer: `x = ${ans1} \\text{ or } x = ${ans2}`,
         steps: [
           `Identify the coefficients $a$, $b$, and $c$: $$${step1}$$`,
           `Substitute into the quadratic formula $x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$: $$${step2}$$`,
@@ -104,7 +108,6 @@ export function generateQuestion(tier = 1) {
     const subType = randInt(1, 2);
 
     if (subType === 1) {
-      // x(ax + b) = c -> ax^2 + bx - c = 0
       const a = randInt(2, 5);
       const b = randInt(-6, 6, true);
       const c = randInt(3, 12);
@@ -137,7 +140,10 @@ export function generateQuestion(tier = 1) {
         tierName: "Intermediate",
         skillTitle: "Solve Quadratic Equations using Quadratic Formula",
         prompt: `Solve the following equation using the quadratic formula. Give your answers correct to 3 significant figures.\n\n$$${eq}$$`,
-        expectedAnswer: `x = ${ans1} or x = ${ans2}`,
+        inputCount: 2,
+        inputLabels: ["x =", "x ="],
+        expectedAnswer: [ans1, ans2],
+        displayAnswer: `x = ${ans1} \\text{ or } x = ${ans2}`,
         steps: [
           `Expand the brackets and express the equation in standard form $ax^2 + bx + c = 0$: $$${step1}$$`,
           `State $a$, $b$, and $c$: $$${step2}$$`,
@@ -146,7 +152,6 @@ export function generateQuestion(tier = 1) {
         ]
       };
     } else {
-      // (x + m)(x + n) = k -> x^2 + (m+n)x + (mn-k) = 0
       const m = randInt(-5, 5, true);
       const n = randInt(-5, 5, true);
       const k = randInt(5, 15);
@@ -181,7 +186,10 @@ export function generateQuestion(tier = 1) {
         tierName: "Intermediate",
         skillTitle: "Solve Quadratic Equations using Quadratic Formula",
         prompt: `Solve the following equation using the quadratic formula. Give your answers correct to 3 significant figures.\n\n$$${eq}$$`,
-        expectedAnswer: `x = ${ans1} or x = ${ans2}`,
+        inputCount: 2,
+        inputLabels: ["x =", "x ="],
+        expectedAnswer: [ans1, ans2],
+        displayAnswer: `x = ${ans1} \\text{ or } x = ${ans2}`,
         steps: [
           `Expand the brackets and rearrange to standard form $ax^2 + bx + c = 0$: $$${step1}$$`,
           `Identify $a$, $b$, and $c$: $$${step2}$$`,
@@ -195,7 +203,6 @@ export function generateQuestion(tier = 1) {
   // =========================================================
   // TIER 3: ADVANCED (Level 3 - Multi-Term Equations)
   // =========================================================
-  // x + mx(n - x) = px - q -> mx^2 + (p - 1 - mn)x - q = 0
   const m = randInt(2, 6);
   const n = randInt(1, 4);
   const p = randInt(2, 5);
@@ -227,7 +234,10 @@ export function generateQuestion(tier = 1) {
     tierName: "Advanced",
     skillTitle: "Solve Quadratic Equations using Quadratic Formula",
     prompt: `Solve the equation using the quadratic formula. Give your answers correct to 3 significant figures.\n\n$$${eq}$$`,
-    expectedAnswer: `x = ${ans1} or x = ${ans2}`,
+    inputCount: 2,
+    inputLabels: ["x =", "x ="],
+    expectedAnswer: [ans1, ans2],
+    displayAnswer: `x = ${ans1} \\text{ or } x = ${ans2}`,
     steps: [
       `Expand all terms, collect like terms, and rearrange to $ax^2 + bx + c = 0$: $$${step1}$$`,
       `State $a$, $b$, and $c$: $$${step2}$$`,
