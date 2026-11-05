@@ -51,28 +51,30 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
   let inputsHTML = "";
   if (inputCount > 1) {
     inputsHTML = `
-      <div style="display: flex; gap: 8px; width: 100%; align-items: center;">
+      <div style="display: flex; gap: 6px; width: 100%; min-width: 0; align-items: center; flex: 1;">
         ${Array.from({ length: inputCount }).map((_, idx) => `
           <div class="math-field-wrapper" data-index="${idx}" style="
             flex: 1;
-            min-height: 52px;
-            max-height: 72px;
-            padding: 4px 10px;
+            min-width: 0;
+            min-height: 46px;
+            max-height: 64px;
+            padding: 2px 8px;
             background: #ffffff;
             border: 2px solid ${idx === 0 ? '#2563eb' : '#cbd5e1'};
             border-radius: 10px;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
             box-sizing: border-box;
             transition: all 0.15s ease-in-out;
-            overflow-y: auto;
+            overflow: hidden;
             cursor: pointer;
           ">
-            <span style="font-size: 0.85rem; font-weight: 800; color: #475569; white-space: nowrap;">${inputLabels[idx] || `x<sub>${idx + 1}</sub> =`}</span>
+            <span style="font-size: 0.82rem; font-weight: 800; color: #475569; white-space: nowrap; flex-shrink: 0;">${inputLabels[idx] || `x<sub>${idx + 1}</sub> =`}</span>
             <math-field class="math-input" data-index="${idx}" style="
               width: 100%;
-              font-size: 1.15rem;
+              min-width: 0;
+              font-size: 1.1rem;
               border: none;
               outline: none;
               background: transparent;
@@ -85,9 +87,10 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     inputsHTML = `
       <div class="math-field-wrapper active" data-index="0" style="
         flex: 1;
-        min-height: 52px;
-        max-height: 72px;
-        padding: 4px 10px;
+        min-width: 0;
+        min-height: 46px;
+        max-height: 64px;
+        padding: 2px 8px;
         background: #ffffff;
         border: 2px solid #cbd5e1;
         border-radius: 10px;
@@ -95,11 +98,12 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
         align-items: center;
         box-sizing: border-box;
         transition: all 0.15s ease-in-out;
-        overflow-y: auto;
+        overflow: hidden;
       ">
         <math-field class="math-input" data-index="0" style="
           width: 100%;
-          font-size: 1.2rem;
+          min-width: 0;
+          font-size: 1.15rem;
           border: none;
           outline: none;
           background: transparent;
@@ -109,14 +113,14 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
   }
 
   displayContainer.innerHTML = `
-    <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+    <div style="display: flex; gap: 6px; align-items: center; width: 100%; box-sizing: border-box;">
       ${inputsHTML}
 
       <!-- MODE TOGGLE BUTTON -->
       <button type="button" id="btn-toggle-keypad-mode" style="
-        height: 52px;
-        padding: 0 12px;
-        font-size: 0.82rem;
+        height: 46px;
+        padding: 0 10px;
+        font-size: 0.8rem;
         font-weight: 800;
         border-radius: 10px;
         border: 1.5px solid #cbd5e1;
@@ -127,7 +131,7 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
         flex-shrink: 0;
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 2px;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
       ">
         ∛ Math
@@ -139,7 +143,6 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
   const wrappers = Array.from(displayContainer.querySelectorAll(".math-field-wrapper"));
   const toggleBtn = displayContainer.querySelector("#btn-toggle-keypad-mode");
 
-  // Helper to collect current field values cleanly
   function getCurrentValues() {
     if (inputCount > 1) {
       return mathFields.map(f => cleanValue(f.value || ""));
@@ -147,7 +150,6 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     return mathFields[0] ? cleanValue(mathFields[0].value || "") : "";
   }
 
-  // Focus & Active Field Switcher
   function setActiveField(index) {
     activeFieldIndex = index;
     wrappers.forEach((wrap, idx) => {
@@ -161,11 +163,9 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     });
   }
 
-  // 2. ATTACH LISTENERS TO MATHLIVE FIELDS & DISABLE SMART FENCE
   mathFields.forEach((mf, idx) => {
     mf.mathVirtualKeyboardPolicy = "manual";
     
-    // Disable auto smart-fences to prevent duplicate parenthesis insertion
     if ("smartFence" in mf) {
       mf.smartFence = false;
     }
@@ -182,9 +182,9 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
       
       if (wrapper) {
         if (val.includes("\\frac") || val.includes("^{")) {
-          wrapper.style.minHeight = "66px";
+          wrapper.style.minHeight = "58px";
         } else {
-          wrapper.style.minHeight = "52px";
+          wrapper.style.minHeight = "46px";
         }
       }
 
@@ -196,7 +196,6 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
 
   setActiveField(0);
 
-  // 3. MODE TOGGLE LISTENER
   toggleBtn?.addEventListener("click", (e) => {
     e.preventDefault();
     activeTab = activeTab === "basic" ? "math" : "basic";
@@ -229,13 +228,12 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     return baseMath;
   }
 
-  // 4. GRID RENDERER
   function renderGrid() {
     const keysToRender = getKeysForTab(activeTab);
 
     const buttonsHTML = keysToRender.map(key => {
       if (key === "") {
-        return `<div style="background: #f8fafc; border-radius: 8px; border: 1px dashed #e2e8f0; opacity: 0.4;"></div>`;
+        return `<div style="background: #f8fafc; border-radius: 6px; border: 1px dashed #e2e8f0; opacity: 0.4;"></div>`;
       }
 
       const isClear = key === "Clear";
@@ -245,16 +243,17 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
 
       return `
         <button type="button" class="keypad-btn ${isAction ? 'action' : ''} ${isNav ? 'nav-btn' : ''}" data-key="${key}" style="
-          padding: 7px 2px;
-          font-size: 1.05rem;
+          padding: 5px 2px;
+          font-size: 0.95rem;
           font-weight: 700;
           border: 1px solid #cbd5e1;
           border-radius: 8px;
           cursor: pointer;
           background: ${isAction ? '#fee2e2' : '#ffffff'};
           color: ${isAction ? '#991b1b' : '#0f172a'};
-          box-shadow: 0 2px 0 #cbd5e1;
+          box-shadow: 0 1.5px 0 #cbd5e1;
           touch-action: manipulation;
+          box-sizing: border-box;
         ">
           ${key}
         </button>
@@ -264,16 +263,17 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     const submitHTML = `
       <button id="btn-keypad-submit" type="button" class="keypad-btn submit" style="
         grid-column: span 4;
-        margin-top: 4px;
-        padding: 10px;
-        font-size: 0.98rem;
+        margin-top: 2px;
+        padding: 8px 10px;
+        font-size: 0.92rem;
         font-weight: 800;
         background: ${isSubmitted ? '#10b981' : '#2563eb'};
         color: #ffffff;
         border: none;
         border-radius: 10px;
         cursor: pointer;
-        box-shadow: 0 3px 8px rgba(37, 99, 235, 0.25);
+        box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+        touch-action: manipulation;
       ">
         ${isSubmitted ? 'Next Question ➔' : 'Submit'}
       </button>
@@ -281,11 +281,11 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
 
     gridEl.style.display = "grid";
     gridEl.style.gridTemplateColumns = "repeat(4, minmax(0, 1fr))";
-    gridEl.style.gap = "5px";
+    gridEl.style.gap = "4px";
+    gridEl.style.boxSizing = "border-box";
     gridEl.innerHTML = buttonsHTML + submitHTML;
   }
 
-  // Prevent iPad focus loss on touch
   gridEl.addEventListener("pointerdown", (e) => {
     if (e.target.closest(".keypad-btn")) {
       e.preventDefault();
@@ -324,7 +324,6 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
 
     currentMathField.focus();
 
-    // Keypad Commands Execution
     if (key === "/" || key === "a/b") {
       currentMathField.executeCommand(["insert", "\\frac{#0}{#?}"]);
     } else if (key === "^" || key === "xⁿ") {
@@ -341,7 +340,6 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
       currentMathField.executeCommand("deleteBackward");
     } else if (key === "Clear") {
       currentMathField.setValue("");
-      // DISPATCH INPUT EVENT SO QUESTIONVIEW UPDATE SUBSCRIBERS AGREE
       currentMathField.dispatchEvent(new Event("input", { bubbles: true }));
     } else if (key === "-") {
       currentMathField.executeCommand(["insert", "-"]);
