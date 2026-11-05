@@ -2,10 +2,26 @@ import { state } from "../state.js";
 import { getStudentClass, getAutoDefaultTag } from "./teacher/helperUtils.js";
 import { renderOverviewTabHTML } from "./teacher/overviewTab.js";
 import { renderTaggingTabHTML } from "./teacher/taggingTab.js";
+import { renderLiveTabHTML, initLiveTabEvents } from "./teacher/liveTab.js";
 import { renderStudentDrawerHTML, openStudentDrawer } from "./teacher/studentDrawer.js";
 import { renderQuestionPreviewModalHTML, initQuestionPreviewModal } from "./teacher/questionPreviewModal.js";
 
 const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbwEsVnKapmwUFuv0vyG1wFvyAXoFKQMrpsNxibUqYh891PHXzFgmBThnT62lGoEPo_xiQ/exec";
+
+function getApiUrl() {
+  let apiUrl = state.apiUrl || 
+               state.config?.apiUrl || 
+               state.backendUrl || 
+               state.scriptUrl || 
+               window.APP_CONFIG?.apiUrl || 
+               window.API_URL || 
+               localStorage.getItem("math_app_api_url") || 
+               DEFAULT_API_URL;
+  if (apiUrl && !apiUrl.startsWith("http://") && !apiUrl.startsWith("https://")) {
+    apiUrl = "https://" + apiUrl;
+  }
+  return apiUrl;
+}
 
 export function renderTeacherDashboard(container, onLogout) {
   if (!container) return;
@@ -24,7 +40,7 @@ export function renderTeacherDashboard(container, onLogout) {
 
   const teacherName = currentUser.displayName || currentUser.name || state.user?.name || "Teacher Account";
 
-  let activeTab = "overview";
+  let activeTab = "overview"; // "overview" | "tagging" | "live"
   let selectedClass = "All";
   
   let selectedLevel = "All";
@@ -39,6 +55,11 @@ export function renderTeacherDashboard(container, onLogout) {
 
   let currentClassTagsBuffer = {};
   let lastLoadedClassForBuffer = null;
+
+  // Live Session State
+  let activeLiveSession = null;
+  let liveAttempts = [];
+  let livePollTimer = null;
 
   const revealedPins = new Set();
 
@@ -120,6 +141,283 @@ export function renderTeacherDashboard(container, onLogout) {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // LIVE POLLING MANAGEMENT
+  // ---------------------------------------------------------------------------
+  async function fetchLiveSessionData() {
+    if (selectedClass === "All") return;
+    try {
+      const response = await fetch(getApiUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "getLiveSessionData",
+          token: state.userToken || state.token || "TEACHER_SESSION",
+          className: selectedClass
+        })
+      });
+      const resData = await response.json();
+      if (resData.status === "success") {
+        activeLiveSession = resData.activeSession || null;
+        liveAttempts = resData.attempts || [];
+      }
+    } catch (err) {
+      console.error("Error fetching live session data:", err);
+    }
+  }
+
+  function startLivePolling() {
+    stopLivePolling();
+    fetchLiveSessionData().then(() => renderTabContentOnly());
+    livePollTimer = setInterval(async () => {
+      if (activeTab === "live" && selectedClass !== "All") {
+        await fetchLiveSessionData();
+        renderTabContentOnly();
+      }
+    }, 3000);
+  }
+
+  function stopLivePolling() {
+    if (livePollTimer) {
+      clearInterval(livePollTimer);
+      livePollTimer = null;
+    }
+  }
+
+  function renderTabContentOnly() {
+    const tabContainer = container.querySelector("#teacher-tab-content-container");
+    if (!tabContainer) return;
+
+    const filteredStudents = getFilteredStudents();
+    const filteredSkills = getFilteredSkills();
+    const taggingSkills = getTaggingFilteredSkills();
+
+    if (activeTab === "overview") {
+      tabContainer.innerHTML = renderOverviewTabHTML({
+        filteredStudents,
+        filteredSkills,
+        classMastery,
+        curriculum,
+        levels,
+        streams,
+        strands,
+        topics,
+        selectedClass,
+        selectedLevel,
+        selectedStream,
+        selectedStrand,
+        selectedTopic,
+        selectedMatrixTag,
+        currentClassTagsBuffer,
+        revealedPins
+      });
+      bindOverviewEvents();
+    } else if (activeTab === "tagging") {
+      tabContainer.innerHTML = renderTaggingTabHTML({
+        selectedClass,
+        taggingSkills,
+        levels,
+        streams,
+        strands,
+        tagFilterLevel,
+        tagFilterStream,
+        tagFilterStrand,
+        currentClassTagsBuffer
+      });
+      bindTaggingEvents();
+    } else if (activeTab === "live") {
+      tabContainer.innerHTML = renderLiveTabHTML({
+        selectedClass,
+        classes,
+        curriculum,
+        students,
+        activeSession: activeLiveSession,
+        liveAttempts,
+        onStartSession: async (targetClass, skillPaths) => {
+          try {
+            await fetch(getApiUrl(), {
+              method: "POST",
+              headers: { "Content-Type": "text/plain;charset=utf-8" },
+              body: JSON.stringify({
+                action: "setLiveSession",
+                token: state.userToken || state.token || "TEACHER_SESSION",
+                className: targetClass,
+                skillPaths: skillPaths,
+                status: "ACTIVE"
+              })
+            });
+            await fetchLiveSessionData();
+            startLivePolling();
+            render();
+          } catch (e) {
+            alert("Error starting live session: " + e.message);
+          }
+        },
+        onEndSession: async () => {
+          if (!activeLiveSession) return;
+          try {
+            await fetch(getApiUrl(), {
+              method: "POST",
+              headers: { "Content-Type": "text/plain;charset=utf-8" },
+              body: JSON.stringify({
+                action: "setLiveSession",
+                token: state.userToken || state.token || "TEACHER_SESSION",
+                className: activeLiveSession.className,
+                skillPaths: activeLiveSession.skillPaths,
+                status: "ENDED",
+                autoTagCurrent: true // Smart Session Autosave
+              })
+            });
+            activeLiveSession = null;
+            liveAttempts = [];
+            stopLivePolling();
+            render();
+          } catch (e) {
+            alert("Error ending live session: " + e.message);
+          }
+        }
+      });
+      initLiveTabEvents(tabContainer, {
+        onToggleProjector: () => renderTabContentOnly()
+      });
+    }
+  }
+
+  function bindOverviewEvents() {
+    container.querySelector("#filter-matrix-tag")?.addEventListener("change", (e) => { selectedMatrixTag = e.target.value; renderTabContentOnly(); });
+    container.querySelector("#filter-level")?.addEventListener("change", (e) => { selectedLevel = e.target.value; renderTabContentOnly(); });
+    container.querySelector("#filter-stream")?.addEventListener("change", (e) => { selectedStream = e.target.value; renderTabContentOnly(); });
+    container.querySelector("#filter-strand")?.addEventListener("change", (e) => { selectedStrand = e.target.value; renderTabContentOnly(); });
+    container.querySelector("#filter-topic")?.addEventListener("change", (e) => { selectedTopic = e.target.value; renderTabContentOnly(); });
+
+    container.querySelectorAll(".btn-toggle-pin").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const email = btn.getAttribute("data-email");
+        if (revealedPins.has(email)) revealedPins.delete(email);
+        else revealedPins.add(email);
+        renderTabContentOnly();
+      });
+    });
+
+    container.querySelectorAll(".student-matrix-row").forEach(row => {
+      row.addEventListener("click", (e) => {
+        if (e.target.classList.contains("btn-toggle-pin")) return;
+        const email = row.getAttribute("data-email");
+        openStudentDrawer(container, email, students, classMastery, curriculum);
+      });
+    });
+
+    const drawerEl = container.querySelector("#student-detail-drawer");
+    container.querySelector("#btn-close-drawer")?.addEventListener("click", () => {
+      if (drawerEl) drawerEl.style.display = "none";
+    });
+
+    container.querySelectorAll(".skill-header-cell").forEach(cell => {
+      cell.addEventListener("click", () => {
+        const generatorPath = cell.getAttribute("data-path");
+        const skillObj = curriculum.find(c => c.generatorPath === generatorPath);
+        if (skillObj) {
+          initQuestionPreviewModal(container, skillObj);
+        }
+      });
+    });
+  }
+
+  function bindTaggingEvents() {
+    container.querySelector("#tag-filter-level")?.addEventListener("change", (e) => { tagFilterLevel = e.target.value; renderTabContentOnly(); });
+    container.querySelector("#tag-filter-stream")?.addEventListener("change", (e) => { tagFilterStream = e.target.value; renderTabContentOnly(); });
+    container.querySelector("#tag-filter-strand")?.addEventListener("change", (e) => { tagFilterStrand = e.target.value; renderTabContentOnly(); });
+
+    function applyMassTag(targetTag) {
+      const skillsToTag = getTaggingFilteredSkills();
+      if (skillsToTag.length === 0) {
+        alert("No skills match the current filters.");
+        return;
+      }
+      skillsToTag.forEach(sk => { currentClassTagsBuffer[sk.generatorPath] = targetTag; });
+      renderTabContentOnly();
+    }
+
+    container.querySelector("#btn-mass-past")?.addEventListener("click", () => applyMassTag("Past"));
+    container.querySelector("#btn-mass-current")?.addEventListener("click", () => applyMassTag("Current"));
+    container.querySelector("#btn-mass-future")?.addEventListener("click", () => applyMassTag("Future"));
+
+    container.querySelectorAll(".tag-toggle-group").forEach(group => {
+      const path = group.getAttribute("data-path");
+      const buttons = group.querySelectorAll(".btn-tag-toggle");
+
+      buttons.forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const selectedTag = btn.getAttribute("data-tag");
+
+          if (path && selectedTag) {
+            currentClassTagsBuffer[path] = selectedTag;
+
+            buttons.forEach(b => {
+              const t = b.getAttribute("data-tag");
+              if (t === selectedTag) {
+                b.classList.add("active");
+                if (t === "Past") { b.style.background = "#0284c7"; b.style.color = "#fff"; b.style.borderColor = "#0284c7"; }
+                else if (t === "Current") { b.style.background = "#16a34a"; b.style.color = "#fff"; b.style.borderColor = "#16a34a"; }
+                else if (t === "Future") { b.style.background = "#64748b"; b.style.color = "#fff"; b.style.borderColor = "#64748b"; }
+              } else {
+                b.classList.remove("active");
+                b.style.background = "#ffffff";
+                b.style.color = "#475569";
+                b.style.borderColor = "#cbd5e1";
+              }
+            });
+          }
+        });
+      });
+    });
+
+    container.querySelector("#btn-save-class-tags")?.addEventListener("click", async (e) => {
+      const saveBtn = e.target;
+      const apiUrl = getApiUrl();
+
+      saveBtn.disabled = true;
+      saveBtn.innerText = "⏳ Saving...";
+
+      try {
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "saveClassSkillTags",
+            token: state.userToken || state.token || (state.profile?.email ? ("PIN_AUTH_" + state.profile.email) : "TEACHER_SESSION"),
+            className: selectedClass,
+            tags: currentClassTagsBuffer
+          })
+        });
+
+        const resData = await response.json();
+
+        if (resData.status === "success") {
+          if (!state.teacherData.classSkillTags) state.teacherData.classSkillTags = {};
+          state.teacherData.classSkillTags[selectedClass] = { ...currentClassTagsBuffer };
+          saveBtn.innerText = "✅ Saved Successfully!";
+          setTimeout(() => {
+            saveBtn.disabled = false;
+            saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
+          }, 2000);
+        } else {
+          alert("Failed to save tags: " + (resData.message || "Unknown error"));
+          saveBtn.disabled = false;
+          saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
+        }
+      } catch (err) {
+        console.error("Save class tags error:", err);
+        alert("Network error while saving skill tags: " + err.message);
+        saveBtn.disabled = false;
+        saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
+      }
+    });
+  }
+
   function render() {
     if (state.isLoadingTeacherData) {
       container.innerHTML = `
@@ -135,8 +433,7 @@ export function renderTeacherDashboard(container, onLogout) {
     syncClassTagsBufferIfNeeded();
 
     const filteredStudents = getFilteredStudents();
-    const filteredSkills = getFilteredSkills();
-    const taggingSkills = getTaggingFilteredSkills();
+    const isLiveActive = activeLiveSession && activeLiveSession.status === "ACTIVE";
 
     container.innerHTML = `
       <div class="teacher-dashboard-container" style="display: flex; flex-direction: column; gap: 16px; padding: 20px; height: 100%; box-sizing: border-box; background: #f8fafc; overflow-y: auto;">
@@ -174,37 +471,13 @@ export function renderTeacherDashboard(container, onLogout) {
           <button id="tab-btn-tagging" style="padding: 10px 20px; border-radius: 12px 12px 0 0; border: none; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 8px; ${activeTab === 'tagging' ? 'background: #2563eb; color: #ffffff;' : 'background: #ffffff; color: #64748b; border: 1px solid #e2e8f0; border-bottom: none;'}">
             📌 Class Skill Tagging ${selectedClass !== 'All' ? `(${selectedClass})` : ''}
           </button>
+          <button id="tab-btn-live" style="padding: 10px 20px; border-radius: 12px 12px 0 0; border: none; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 8px; ${activeTab === 'live' ? 'background: #2563eb; color: #ffffff;' : 'background: #ffffff; color: #64748b; border: 1px solid #e2e8f0; border-bottom: none;'}">
+            📡 Live Practice Stream ${isLiveActive ? '🔴' : ''}
+          </button>
         </div>
 
-        <!-- TAB CONTENT -->
-        ${activeTab === 'overview' ? renderOverviewTabHTML({
-          filteredStudents,
-          filteredSkills,
-          classMastery,
-          curriculum,
-          levels,
-          streams,
-          strands,
-          topics,
-          selectedClass,
-          selectedLevel,
-          selectedStream,
-          selectedStrand,
-          selectedTopic,
-          selectedMatrixTag,
-          currentClassTagsBuffer,
-          revealedPins
-        }) : renderTaggingTabHTML({
-          selectedClass,
-          taggingSkills,
-          levels,
-          streams,
-          strands,
-          tagFilterLevel,
-          tagFilterStream,
-          tagFilterStrand,
-          currentClassTagsBuffer
-        })}
+        <!-- TAB CONTENT CONTAINER -->
+        <div id="teacher-tab-content-container"></div>
 
       </div>
 
@@ -215,11 +488,27 @@ export function renderTeacherDashboard(container, onLogout) {
       ${renderQuestionPreviewModalHTML()}
     `;
 
-    // Event Bindings
-    container.querySelector("#tab-btn-overview")?.addEventListener("click", () => { activeTab = "overview"; render(); });
-    container.querySelector("#tab-btn-tagging")?.addEventListener("click", () => { activeTab = "tagging"; render(); });
+    // Global Event Bindings
+    container.querySelector("#tab-btn-overview")?.addEventListener("click", () => {
+      activeTab = "overview";
+      stopLivePolling();
+      render();
+    });
+
+    container.querySelector("#tab-btn-tagging")?.addEventListener("click", () => {
+      activeTab = "tagging";
+      stopLivePolling();
+      render();
+    });
+
+    container.querySelector("#tab-btn-live")?.addEventListener("click", () => {
+      activeTab = "live";
+      startLivePolling();
+      render();
+    });
 
     container.querySelector("#btn-dashboard-logout")?.addEventListener("click", () => {
+      stopLivePolling();
       if (typeof onLogout === "function") onLogout();
       else if (typeof state.logout === "function") state.logout();
       else window.location.reload();
@@ -228,153 +517,14 @@ export function renderTeacherDashboard(container, onLogout) {
     container.querySelector("#select-class-filter")?.addEventListener("change", (e) => {
       selectedClass = e.target.value;
       syncClassFilters(selectedClass);
-      render();
-    });
-
-    if (activeTab === "overview") {
-      container.querySelector("#filter-matrix-tag")?.addEventListener("change", (e) => { selectedMatrixTag = e.target.value; render(); });
-      container.querySelector("#filter-level")?.addEventListener("change", (e) => { selectedLevel = e.target.value; render(); });
-      container.querySelector("#filter-stream")?.addEventListener("change", (e) => { selectedStream = e.target.value; render(); });
-      container.querySelector("#filter-strand")?.addEventListener("change", (e) => { selectedStrand = e.target.value; render(); });
-      container.querySelector("#filter-topic")?.addEventListener("change", (e) => { selectedTopic = e.target.value; render(); });
-
-      container.querySelectorAll(".btn-toggle-pin").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const email = btn.getAttribute("data-email");
-          if (revealedPins.has(email)) revealedPins.delete(email);
-          else revealedPins.add(email);
-          render();
-        });
-      });
-
-      container.querySelectorAll(".student-matrix-row").forEach(row => {
-        row.addEventListener("click", (e) => {
-          if (e.target.classList.contains("btn-toggle-pin")) return;
-          const email = row.getAttribute("data-email");
-          openStudentDrawer(container, email, students, classMastery, curriculum);
-        });
-      });
-
-      const drawerEl = container.querySelector("#student-detail-drawer");
-      container.querySelector("#btn-close-drawer")?.addEventListener("click", () => {
-        if (drawerEl) drawerEl.style.display = "none";
-      });
-
-      container.querySelectorAll(".skill-header-cell").forEach(cell => {
-        cell.addEventListener("click", () => {
-          const generatorPath = cell.getAttribute("data-path");
-          const skillObj = curriculum.find(c => c.generatorPath === generatorPath);
-          if (skillObj) {
-            initQuestionPreviewModal(container, skillObj);
-          }
-        });
-      });
-    } else {
-      container.querySelector("#tag-filter-level")?.addEventListener("change", (e) => { tagFilterLevel = e.target.value; render(); });
-      container.querySelector("#tag-filter-stream")?.addEventListener("change", (e) => { tagFilterStream = e.target.value; render(); });
-      container.querySelector("#tag-filter-strand")?.addEventListener("change", (e) => { tagFilterStrand = e.target.value; render(); });
-
-      function applyMassTag(targetTag) {
-        const skillsToTag = getTaggingFilteredSkills();
-        if (skillsToTag.length === 0) {
-          alert("No skills match the current filters.");
-          return;
-        }
-        skillsToTag.forEach(sk => { currentClassTagsBuffer[sk.generatorPath] = targetTag; });
+      if (activeTab === "live") {
+        fetchLiveSessionData().then(() => render());
+      } else {
         render();
       }
+    });
 
-      container.querySelector("#btn-mass-past")?.addEventListener("click", () => applyMassTag("Past"));
-      container.querySelector("#btn-mass-current")?.addEventListener("click", () => applyMassTag("Current"));
-      container.querySelector("#btn-mass-future")?.addEventListener("click", () => applyMassTag("Future"));
-
-      container.querySelectorAll(".tag-toggle-group").forEach(group => {
-        const path = group.getAttribute("data-path");
-        const buttons = group.querySelectorAll(".btn-tag-toggle");
-
-        buttons.forEach(btn => {
-          btn.addEventListener("click", (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const selectedTag = btn.getAttribute("data-tag");
-
-            if (path && selectedTag) {
-              currentClassTagsBuffer[path] = selectedTag;
-
-              buttons.forEach(b => {
-                const t = b.getAttribute("data-tag");
-                if (t === selectedTag) {
-                  b.classList.add("active");
-                  if (t === "Past") { b.style.background = "#0284c7"; b.style.color = "#fff"; b.style.borderColor = "#0284c7"; }
-                  else if (t === "Current") { b.style.background = "#16a34a"; b.style.color = "#fff"; b.style.borderColor = "#16a34a"; }
-                  else if (t === "Future") { b.style.background = "#64748b"; b.style.color = "#fff"; b.style.borderColor = "#64748b"; }
-                } else {
-                  b.classList.remove("active");
-                  b.style.background = "#ffffff";
-                  b.style.color = "#475569";
-                  b.style.borderColor = "#cbd5e1";
-                }
-              });
-            }
-          });
-        });
-      });
-
-      container.querySelector("#btn-save-class-tags")?.addEventListener("click", async (e) => {
-        const saveBtn = e.target;
-
-        let apiUrl = state.apiUrl || 
-                     state.config?.apiUrl || 
-                     state.backendUrl || 
-                     state.scriptUrl || 
-                     window.APP_CONFIG?.apiUrl || 
-                     window.API_URL || 
-                     localStorage.getItem("math_app_api_url") || 
-                     DEFAULT_API_URL;
-
-        if (apiUrl && !apiUrl.startsWith("http://") && !apiUrl.startsWith("https://")) {
-          apiUrl = "https://" + apiUrl;
-        }
-
-        saveBtn.disabled = true;
-        saveBtn.innerText = "⏳ Saving...";
-
-        try {
-          const response = await fetch(apiUrl, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({
-              action: "saveClassSkillTags",
-              token: state.userToken || state.token || (state.profile?.email ? ("PIN_AUTH_" + state.profile.email) : "TEACHER_SESSION"),
-              className: selectedClass,
-              tags: currentClassTagsBuffer
-            })
-          });
-
-          const resData = await response.json();
-
-          if (resData.status === "success") {
-            if (!state.teacherData.classSkillTags) state.teacherData.classSkillTags = {};
-            state.teacherData.classSkillTags[selectedClass] = { ...currentClassTagsBuffer };
-            saveBtn.innerText = "✅ Saved Successfully!";
-            setTimeout(() => {
-              saveBtn.disabled = false;
-              saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
-            }, 2000);
-          } else {
-            alert("Failed to save tags: " + (resData.message || "Unknown error"));
-            saveBtn.disabled = false;
-            saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
-          }
-        } catch (err) {
-          console.error("Save class tags error:", err);
-          alert("Network error while saving skill tags: " + err.message);
-          saveBtn.disabled = false;
-          saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
-        }
-      });
-    }
+    renderTabContentOnly();
   }
 
   render();
