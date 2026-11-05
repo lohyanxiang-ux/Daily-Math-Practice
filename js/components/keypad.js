@@ -22,6 +22,38 @@ export const STANDARD_KEYPADS = {
   ]
 };
 
+/**
+ * Returns color-coding styles based on key type
+ */
+function getKeyStyle(key) {
+  // 1. Delete & Clear
+  if (key === "Clear" || key === "⌫") {
+    return { bg: "#fee2e2", color: "#991b1b", border: "#fca5a5", shadow: "#f87171" };
+  }
+  // 2. Navigation
+  if (key === "←" || key === "→") {
+    return { bg: "#f1f5f9", color: "#334155", border: "#cbd5e1", shadow: "#94a3b8" };
+  }
+  // 3. Basic Arithmetic Operators
+  if (["+", "-", "×", "/", "="].includes(key)) {
+    return { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe", shadow: "#93c5fd" };
+  }
+  // 4. Algebraic Variables & Constants
+  if (["x", "y", "a", "b", "c", "π", "θ"].includes(key)) {
+    return { bg: "#f5f3ff", color: "#6d28d9", border: "#ddd6fe", shadow: "#c4b5fd" };
+  }
+  // 5. Parentheses, Powers & Roots
+  if (["(", ")", "x²", "xⁿ", "√"].includes(key)) {
+    return { bg: "#ecfeff", color: "#0891b2", border: "#a5f3fc", shadow: "#67e8f9" };
+  }
+  // 6. Inequality Relations
+  if (["<", ">", "≤", "≥"].includes(key)) {
+    return { bg: "#fffbeb", color: "#b45309", border: "#fde68a", shadow: "#fcd34d" };
+  }
+  // 7. Numerals & Decimal (Default)
+  return { bg: "#ffffff", color: "#0f172a", border: "#cbd5e1", shadow: "#cbd5e1" };
+}
+
 export function initKeypad(container, config = null, onInputChange, onSubmit) {
   const displayContainer = container.querySelector("#keypad-display");
   const gridEl = container.querySelector(".keypad-grid");
@@ -37,7 +69,6 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
   let isSubmitted = false;
   let activeFieldIndex = 0;
 
-  // Helper to sanitize value (remove unfilled placeholders & normalize minus)
   function cleanValue(rawVal) {
     if (!rawVal) return "";
     return rawVal
@@ -47,7 +78,7 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
       .replace(/#0/g, "");
   }
 
-  // 1. RENDER DYNAMIC INPUT FIELD HTML (SINGLE vs MULTI-INPUT)
+  // 1. RENDER DYNAMIC INPUT FIELD HTML
   let inputsHTML = "";
   if (inputCount > 1) {
     inputsHTML = `
@@ -163,11 +194,9 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     });
   }
 
-  // 2. ATTACH LISTENERS TO MATHLIVE FIELDS & DISABLE DROPDOWN MENU
+  // 2. ATTACH LISTENERS TO MATHLIVE FIELDS
   mathFields.forEach((mf, idx) => {
     mf.mathVirtualKeyboardPolicy = "manual";
-
-    // REMOVE MATHLIVE CONTEXT DROPDOWN MENU BUTTON (☰)
     mf.menuItems = [];
     
     if ("smartFence" in mf) {
@@ -200,6 +229,7 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
 
   setActiveField(0);
 
+  // 3. MODE TOGGLE LISTENER
   toggleBtn?.addEventListener("click", (e) => {
     e.preventDefault();
     activeTab = activeTab === "basic" ? "math" : "basic";
@@ -232,6 +262,7 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     return baseMath;
   }
 
+  // 4. GRID RENDERER WITH COLOR CODING
   function renderGrid() {
     const keysToRender = getKeysForTab(activeTab);
 
@@ -240,24 +271,22 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
         return `<div style="background: #f8fafc; border-radius: 6px; border: 1px dashed #e2e8f0; opacity: 0.4;"></div>`;
       }
 
-      const isClear = key === "Clear";
-      const isBack = key === "⌫";
-      const isAction = isBack || isClear;
-      const isNav = key === "←" || key === "→";
+      const style = getKeyStyle(key);
 
       return `
-        <button type="button" class="keypad-btn ${isAction ? 'action' : ''} ${isNav ? 'nav-btn' : ''}" data-key="${key}" style="
+        <button type="button" class="keypad-btn" data-key="${key}" style="
           padding: 5px 2px;
           font-size: 0.95rem;
           font-weight: 700;
-          border: 1px solid #cbd5e1;
+          border: 1px solid ${style.border};
           border-radius: 8px;
           cursor: pointer;
-          background: ${isAction ? '#fee2e2' : '#ffffff'};
-          color: ${isAction ? '#991b1b' : '#0f172a'};
-          box-shadow: 0 1.5px 0 #cbd5e1;
+          background: ${style.bg};
+          color: ${style.color};
+          box-shadow: 0 1.5px 0 ${style.shadow};
           touch-action: manipulation;
           box-sizing: border-box;
+          transition: transform 0.05s ease;
         ">
           ${key}
         </button>
