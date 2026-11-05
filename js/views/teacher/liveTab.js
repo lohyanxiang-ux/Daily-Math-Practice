@@ -26,6 +26,16 @@ function getAnonymizedName(email, index) {
   return ANONYMOUS_ALIASES[(hash + index) % ANONYMOUS_ALIASES.length];
 }
 
+function parseTimestamp(ts) {
+  if (!ts) return Date.now();
+  if (typeof ts === 'number') return ts;
+  let parsed = new Date(ts).getTime();
+  if (!isNaN(parsed)) return parsed;
+  const safeStr = String(ts).replace(/-/g, "/");
+  parsed = new Date(safeStr).getTime();
+  return isNaN(parsed) ? Date.now() : parsed;
+}
+
 function formatElapsed(startMs) {
   if (!startMs) return "00:00";
   const diffSec = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
@@ -43,12 +53,10 @@ export function renderLiveTabHTML(props) {
     activeSession,
     liveAttempts,
     summaryData,
-    isLoadingSummary // True while fetching summary data from backend
+    isLoadingSummary
   } = props;
 
-  // ---------------------------------------------------------
-  // MODE A: PENDING SUMMARY CALCULATION LOADING SCREEN
-  // ---------------------------------------------------------
+  // MODE A: PENDING SUMMARY LOADING SCREEN
   if (isLoadingSummary) {
     return `
       <div style="background: #ffffff; border-radius: 16px; padding: 48px 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); max-width: 600px; margin: 40px auto; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 16px;">
@@ -62,9 +70,7 @@ export function renderLiveTabHTML(props) {
     `;
   }
 
-  // ---------------------------------------------------------
   // MODE B: POST-SESSION SUMMARY VIEW
-  // ---------------------------------------------------------
   if (summaryData) {
     return renderTeacherSummaryHTML(summaryData, curriculum);
   }
@@ -98,9 +104,7 @@ export function renderLiveTabHTML(props) {
 
   const classStudents = students.filter(s => getStudentClass(s) === selectedClass);
 
-  // ---------------------------------------------------------
   // MODE C: SETUP FORM (No Active Live Session)
-  // ---------------------------------------------------------
   if (!isActive) {
     const levels = Array.from(new Set(curriculum.map(c => c.level || c.year).filter(Boolean))).sort();
     const streams = Array.from(new Set(curriculum.map(c => c.stream).filter(Boolean))).sort();
@@ -137,7 +141,6 @@ export function renderLiveTabHTML(props) {
 
         <form id="form-start-live-session" style="display: flex; flex-direction: column; gap: 20px;">
           
-          <!-- CLASS SELECTION & TARGET GOAL OPTIONS -->
           <div style="display: flex; flex-wrap: wrap; gap: 16px;">
             <div style="flex: 1; min-width: 220px;">
               <label style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">1. Target Class:</label>
@@ -146,7 +149,6 @@ export function renderLiveTabHTML(props) {
               </select>
             </div>
 
-            <!-- PRESERVED TARGET TYPE SELECTION -->
             <div style="flex: 1; min-width: 220px;">
               <label style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">2. Session Target Goal:</label>
               <select id="live-target-type" style="width: 100%; padding: 10px 14px; border-radius: 10px; border: 1.5px solid #cbd5e1; font-weight: 700; font-size: 0.95rem; background: #fff; color: #0f172a;">
@@ -156,14 +158,12 @@ export function renderLiveTabHTML(props) {
               </select>
             </div>
 
-            <!-- PRESERVED TARGET VALUE INPUT -->
             <div id="live-target-input-container" style="flex: 1; min-width: 180px; display: ${isTargetActive ? 'block' : 'none'};">
               <label id="live-target-input-label" style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">${targetLabelText}</label>
               <input type="number" id="live-target-val-input" value="${activeTargetVal}" min="1" max="${targetMaxVal}" style="width: 100%; padding: 10px 14px; border-radius: 10px; border: 1.5px solid #cbd5e1; font-weight: 700; font-size: 0.95rem; box-sizing: border-box;" />
             </div>
           </div>
 
-          <!-- SKILL FILTERS BAR -->
           <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; padding: 14px 16px; border-radius: 12px;">
             <div style="font-weight: 800; font-size: 0.88rem; color: #1e293b; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between;">
               <span>🔍 Filter Available Skills</span>
@@ -197,7 +197,6 @@ export function renderLiveTabHTML(props) {
             </div>
           </div>
 
-          <!-- MULTI-SKILL SELECTION -->
           <div>
             <label style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">
               3. Select Skill(s) to Practice (Choose 1 to 3):
@@ -238,9 +237,7 @@ export function renderLiveTabHTML(props) {
     `;
   }
 
-  // ---------------------------------------------------------
   // MODE D: LIVE MONITORING DASHBOARD (Active Session)
-  // ---------------------------------------------------------
   const studentMetrics = classStudents.map((st, idx) => {
     const emailKey = (st.email || st.id || "").toLowerCase();
     const stAttempts = liveAttempts.filter(a => (a.studentEmail || "").toLowerCase() === emailKey);
@@ -261,7 +258,7 @@ export function renderLiveTabHTML(props) {
       if (a.hintsUsed >= 3) highHintCount++;
     });
 
-    const lastAttemptTime = stAttempts.length > 0 ? new Date(stAttempts[stAttempts.length - 1].timestamp).getTime() : 0;
+    const lastAttemptTime = stAttempts.length > 0 ? parseTimestamp(stAttempts[stAttempts.length - 1].timestamp) : 0;
     const isStalled = totalAttempted > 0 && (Date.now() - lastAttemptTime > 3 * 60 * 1000);
 
     let alertLevel = null;
@@ -301,28 +298,35 @@ export function renderLiveTabHTML(props) {
     return sk ? sk.title : p;
   }).join(", ");
 
-  let targetBadgeHtml = "";
-  if (activeSession.targetType === "SCORE" && activeSession.targetScore) {
-    targetBadgeHtml = `<span style="background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.8rem;">🎯 Target: ${activeSession.targetScore} pts</span>`;
-  } else if (activeSession.targetType === "TIME" && activeSession.targetTime) {
-    targetBadgeHtml = `<span style="background: #fef3c7; color: #92400e; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.8rem;">⏱️ Limit: ${activeSession.targetTime}m</span>`;
-  }
+  const sessTargetType = String(activeSession.targetType || "").toUpperCase();
+  const sessTargetTime = Number(activeSession.targetTime || 0);
+  const startMs = parseTimestamp(activeSession.startTime);
+  const elapsedSecs = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+  const isTimeExpired = sessTargetType === "TIME" && sessTargetTime > 0 && (elapsedSecs >= sessTargetTime * 60);
 
-  const startMs = activeSession.startTime ? new Date(activeSession.startTime).getTime() : Date.now();
+  let targetBadgeHtml = "";
+  if (sessTargetType === "SCORE" && activeSession.targetScore) {
+    targetBadgeHtml = `<span id="live-target-badge" style="background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.8rem;">🎯 Target: ${activeSession.targetScore} pts</span>`;
+  } else if (sessTargetType === "TIME" && sessTargetTime > 0) {
+    if (isTimeExpired) {
+      targetBadgeHtml = `<span id="live-target-badge" class="time-expired" style="background: #fee2e2; color: #991b1b; border: 1px solid #f87171; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.8rem; animation: pulse 1s infinite;">🚨 TIME EXPIRED! (${sessTargetTime}m limit reached)</span>`;
+    } else {
+      targetBadgeHtml = `<span id="live-target-badge" style="background: #fef3c7; color: #92400e; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.8rem;">⏱️ Limit: ${sessTargetTime}m</span>`;
+    }
+  }
 
   return `
     <div style="display: flex; flex-direction: column; gap: 16px;">
       
-      <!-- ACTIVE CONTROL HEADER BAR WITH REAL-TIME ELAPSED TIMER -->
+      <!-- ACTIVE CONTROL HEADER BAR -->
       <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; background: #1e293b; color: #ffffff; padding: 18px 24px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); gap: 12px;">
         <div>
           <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #22c55e; animation: pulse 1.5s infinite;"></span>
             <h3 style="font-size: 1.25rem; margin: 0; font-weight: 800; color: #ffffff;">LIVE PRACTICE: Class ${activeSession.className}</h3>
             
-            <!-- SESSION ELAPSED TIMER -->
             <span style="background: #334155; border: 1px solid #475569; color: #38bdf8; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.82rem; display: flex; align-items: center; gap: 4px;">
-              ⏱️ Elapsed: <span id="live-timer-readout" data-start="${startMs}">${formatElapsed(startMs)}</span>
+              ⏱️ Elapsed: <span id="live-timer-readout" data-start="${startMs}" data-target-type="${sessTargetType}" data-target-time="${sessTargetTime}">${formatElapsed(startMs)}</span>
             </span>
 
             ${targetBadgeHtml}
@@ -401,7 +405,6 @@ function renderTeacherSummaryHTML(summary, curriculum) {
   return `
     <div style="display: flex; flex-direction: column; gap: 20px; max-width: 1000px; margin: 0 auto;">
       
-      <!-- HEADER BANNER -->
       <div style="background: #ffffff; padding: 24px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
         <div>
           <span style="background: #dcfce7; color: #15803d; font-weight: 800; padding: 4px 10px; border-radius: 8px; font-size: 0.8rem;">🎉 LIVE PRACTICE SUMMARY</span>
@@ -410,7 +413,6 @@ function renderTeacherSummaryHTML(summary, curriculum) {
         </div>
 
         <div style="display: flex; gap: 10px;">
-          <!-- BUTTON WITH VISUAL CONFIRMATION REACTION -->
           <button id="btn-summary-save-tags" style="background: #16a34a; color: #ffffff; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 10px rgba(22, 163, 74, 0.25); transition: all 0.2s ease;">
             📌 Save & Auto-Tag Skills as Current
           </button>
@@ -420,7 +422,6 @@ function renderTeacherSummaryHTML(summary, curriculum) {
         </div>
       </div>
 
-      <!-- KPI HERO CARDS -->
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
         <div style="background: #ffffff; padding: 18px; border-radius: 14px; border: 1px solid #e2e8f0; text-align: center;">
           <div style="font-size: 0.8rem; font-weight: 700; color: #64748b;">CLASS AVG GROWTH</div>
@@ -449,7 +450,6 @@ function renderTeacherSummaryHTML(summary, curriculum) {
         </div>
       </div>
 
-      <!-- STUDENT PERFORMANCE ROSTER -->
       <div style="background: #ffffff; border-radius: 16px; padding: 20px; border: 1px solid #e2e8f0;">
         <h4 style="margin: 0 0 14px 0; color: #0f172a; font-size: 1.05rem; font-weight: 800;">Student Performance Roster</h4>
         
@@ -500,21 +500,44 @@ function renderTeacherSummaryHTML(summary, curriculum) {
 }
 
 export function initLiveTabEvents(container, props) {
-  const { onStartSession, onEndSession, onToggleProjector, onFilterChange, onDoneSummary, onSaveAutoTags } = props;
+  const { onStartSession, onEndSession, onToggleProjector, onFilterChange, onDoneSummary, onSaveAutoTags, onTargetTimeExpired } = props;
 
-  // Clear existing real-time timer
   if (liveTimerInterval) {
     clearInterval(liveTimerInterval);
     liveTimerInterval = null;
   }
 
-  // Active Live Session Elapsed Clock Ticker
+  // 1-SECOND TIMER + REAL-TIME TARGET TIME EXPIRY MONITOR
   const timerReadout = container.querySelector("#live-timer-readout");
   if (timerReadout) {
     const startMs = Number(timerReadout.getAttribute("data-start"));
+    const sessTargetType = String(timerReadout.getAttribute("data-target-type") || "").toUpperCase();
+    const sessTargetTimeMins = Number(timerReadout.getAttribute("data-target-time") || 0);
+
     liveTimerInterval = setInterval(() => {
       if (document.body.contains(timerReadout)) {
+        const elapsedSecs = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
         timerReadout.innerText = formatElapsed(startMs);
+
+        // CHECK REAL-TIME EXPIRY ACCURATE TO 1 SECOND
+        if (sessTargetType === "TIME" && sessTargetTimeMins > 0) {
+          const limitSecs = sessTargetTimeMins * 60;
+          if (elapsedSecs >= limitSecs) {
+            const targetBadge = container.querySelector("#live-target-badge");
+            if (targetBadge && !targetBadge.classList.contains("time-expired")) {
+              targetBadge.classList.add("time-expired");
+              targetBadge.style.background = "#fee2e2";
+              targetBadge.style.color = "#991b1b";
+              targetBadge.style.border = "1px solid #f87171";
+              targetBadge.style.animation = "pulse 1s infinite";
+              targetBadge.innerHTML = `🚨 TIME EXPIRED! (${sessTargetTimeMins}m limit reached)`;
+            }
+
+            if (typeof onTargetTimeExpired === "function") {
+              onTargetTimeExpired(sessTargetTimeMins);
+            }
+          }
+        }
       } else {
         clearInterval(liveTimerInterval);
         liveTimerInterval = null;
@@ -522,7 +545,6 @@ export function initLiveTabEvents(container, props) {
     }, 1000);
   }
 
-  // Target Type Change Event Handler
   container.querySelector("#live-target-type")?.addEventListener("change", (e) => {
     activeTargetType = e.target.value;
     if (activeTargetType === "SCORE") activeTargetVal = 80;
@@ -530,12 +552,10 @@ export function initLiveTabEvents(container, props) {
     if (typeof onFilterChange === "function") onFilterChange();
   });
 
-  // Target Value Input Event Handler
   container.querySelector("#live-target-val-input")?.addEventListener("input", (e) => {
     activeTargetVal = Number(e.target.value) || 0;
   });
 
-  // Skill Checkboxes Event Handlers
   container.querySelectorAll(".chk-live-skill").forEach(chk => {
     chk.addEventListener("change", (e) => {
       if (e.target.checked) {
@@ -546,7 +566,6 @@ export function initLiveTabEvents(container, props) {
     });
   });
 
-  // Filter Event Handlers
   container.querySelector("#live-filter-level")?.addEventListener("change", (e) => {
     activeFilterLevel = e.target.value;
     if (typeof onFilterChange === "function") onFilterChange();
@@ -570,7 +589,6 @@ export function initLiveTabEvents(container, props) {
     }
   });
 
-  // Start Live Session Form Submit
   const form = container.querySelector("#form-start-live-session");
   if (form) {
     form.addEventListener("submit", (e) => {
@@ -593,26 +611,22 @@ export function initLiveTabEvents(container, props) {
     });
   }
 
-  // End Session Button
   container.querySelector("#btn-stop-live-session")?.addEventListener("click", () => {
     if (confirm("End live practice session? Summary report will be generated and assigned skills auto-saved as 'Current'.")) {
       if (typeof onEndSession === "function") onEndSession();
     }
   });
 
-  // Toggle Projector Mode Button
   container.querySelector("#btn-toggle-projector")?.addEventListener("click", () => {
     isProjectorMode = !isProjectorMode;
     if (typeof onToggleProjector === "function") onToggleProjector(isProjectorMode);
   });
 
-  // Summary Actions
   container.querySelector("#btn-summary-done")?.addEventListener("click", () => {
     selectedSkillPaths.clear();
     if (typeof onDoneSummary === "function") onDoneSummary();
   });
 
-  // VISUAL FEEDBACK REACTION FOR AUTO-TAG BUTTON
   container.querySelector("#btn-summary-save-tags")?.addEventListener("click", async (e) => {
     const tagBtn = e.target;
     tagBtn.disabled = true;
