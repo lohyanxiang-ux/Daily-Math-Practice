@@ -231,8 +231,8 @@ export function renderTeacherDashboard(container, onLogout) {
         liveAttempts
       });
 
-      // BIND EVENTS WITH ONSTARTSESSION AND ONENDSESSION HANDLERS
       initLiveTabEvents(tabContainer, {
+        onFilterChange: () => renderTabContentOnly(),
         onStartSession: async (targetClass, skillPaths) => {
           try {
             const submitBtn = tabContainer.querySelector("#btn-launch-live");
@@ -491,8 +491,9 @@ export function renderTeacherDashboard(container, onLogout) {
           <button id="tab-btn-tagging" style="padding: 10px 20px; border-radius: 12px 12px 0 0; border: none; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 8px; ${activeTab === 'tagging' ? 'background: #2563eb; color: #ffffff;' : 'background: #ffffff; color: #64748b; border: 1px solid #e2e8f0; border-bottom: none;'}">
             📌 Class Skill Tagging ${selectedClass !== 'All' ? `(${selectedClass})` : ''}
           </button>
+          <!-- TAB NAME RENAMED TO LIVE PRACTICE -->
           <button id="tab-btn-live" style="padding: 10px 20px; border-radius: 12px 12px 0 0; border: none; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 8px; ${activeTab === 'live' ? 'background: #2563eb; color: #ffffff;' : 'background: #ffffff; color: #64748b; border: 1px solid #e2e8f0; border-bottom: none;'}">
-            📡 Live Practice Stream ${isLiveActive ? '🔴' : ''}
+            📡 Live Practice ${isLiveActive ? '🔴' : ''}
           </button>
         </div>
 
