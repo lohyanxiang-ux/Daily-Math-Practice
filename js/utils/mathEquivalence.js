@@ -1,4 +1,32 @@
 /**
+ * Canonicalizes raw LaTeX strings to ensure syntactic alignment
+ * between user inputs and generator outputs.
+ */
+export function canonicalizeLatex(str) {
+  if (str == null) return "";
+  let s = String(str).trim();
+
+  // 1. Normalize unicode minus / dashes / text minus
+  s = s.replace(/[\u2212\u2013\u2014]|\\text\{-\}/g, '-');
+
+  // 2. Normalize LaTeX inequality operators to standard symbols
+  s = s.replace(/\\lt\b/g, '<')
+       .replace(/\\gt\b/g, '>')
+       .replace(/\\le\b|\\leq\b/g, '≤')
+       .replace(/\\ge\b|\\geq\b/g, '≥');
+
+  // 3. Normalize multiplication & division operators
+  s = s.replace(/\\times\b|\\cdot\b|\\ast\b|\\star\b|\\cdotp\b|\\centerdot\b/g, '*')
+       .replace(/\\div\b/g, '/');
+
+  // 4. Strip MathLive placeholders & artifacts
+  s = s.replace(/\\placeholder(\{[^{}]*\}|\[[^{}]*\])?/g, '')
+       .replace(/#\?|#0/g, '');
+
+  return s;
+}
+
+/**
  * Evaluates whether a user's answer is mathematically equivalent to the expected answer,
  * respecting required form constraints (factorised, completed square) and commutative/associative laws.
  */
@@ -34,14 +62,10 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
     return expectedAns.split("|").some(exp => isAlgebraicallyEquivalent(userAns, exp.trim(), requiredForm));
   }
 
-  // Standardize LaTeX strings
+  // Standardize LaTeX strings using canonicalizer
   const clean = (str) => {
-    let s = String(str)
-      .trim()
-      .replace(/\u2212|\u2013|\u2014|\\text\{-\}/g, '-')                     // Normalize minus signs
-      .replace(/^[a-zA-Z]\s*=\s*/, '')                                       // Strip equation prefixes (e.g., "x = ")
-      .replace(/\\placeholder(\{[^{}]*\}|\[[^{}]*\])?/g, '')                 // Strip placeholders
-      .replace(/#\?|#0/g, '');
+    let s = canonicalizeLatex(str)
+      .replace(/^[a-zA-Z]\s*=\s*/, '');                                       // Strip equation prefixes (e.g., "x = ")
 
     // Recursively strip LaTeX font & text wrappers: \mathrm{x}, \mathit{x}, \text{x}, etc.
     let prevText;
@@ -53,15 +77,13 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
     // Strip formatting commands & invisible spacers
     s = s.replace(/\\(displaystyle|style|limits|nolimits|left\.|right\.|quad|qquad|;|!|,|:)/g, '');
 
-    // Standardize delimiters & operators (handles both \left( and unescaped left() from template literals)
+    // Standardize delimiters & operators
     s = s.replace(/\\left\(|left\(|\\left\[|left\[|\\left\{|left\{/g, '(');
     s = s.replace(/\\right\)|right\)|\\right\]|right\]|\\right\}|right\}/g, ')');
     s = s.replace(/\\left|left|\\right|right/g, '');
-    s = s.replace(/\\times|\\cdot|\\ast|\\star|\\cdotp|\\centerdot/g, '*');
-    s = s.replace(/\\div/g, '/');
     s = s.replace(/\\pi/g, 'Math.PI');
 
-    // Robust \frac conversion handling all LaTeX variants (\frac{3}{2}, \frac32, \frac{3}2, \frac3{2})
+    // Robust \frac conversion handling all LaTeX variants
     let prevFrac;
     do {
       prevFrac = s;
@@ -100,7 +122,7 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
       /\([^\)]+\)\s*\^/.test(expStr);
 
     if (isExpectedCompletedSquare) {
-      const hasSquaredTerm = /\([^\)]+\)\s*(\^2|\^\{2\}|\*\*\s*2|\*\*\s*\(2\))/ .test(userClean);
+      const hasSquaredTerm = /\([^\)]+\)\s*(\^2|\^\{2\}|\*\*\s*2|\*\*\s*\(2\))/.test(userClean);
       if (!hasSquaredTerm) return false;
     }
 
@@ -136,7 +158,14 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
   const toJS = (expr) => {
     let e = expr;
 
-    // Robustly convert ^ exponents into Math.pow(...) to prevent JS unary minus syntax errors
+    // Convert compound inequalities like a < b < c or a <= b <= c
+    e = e.replace(/([^\s<>=]+)\s*(<|<=|>|>=|≤|≥)\s*([^\s<>=]+)\s*(<|<=|>|>=|≤|≥)\s*([^\s<>=]+)/g, (match, a, op1, b, op2, c) => {
+      const o1 = op1 === '≤' ? '<=' : (op1 === '≥' ? '>=' : op1);
+      const o2 = op2 === '≤' ? '<=' : (op2 === '≥' ? '>=' : op2);
+      return `((${a}) ${o1} (${b}) && (${b}) ${o2} (${c}))`;
+    });
+
+    // Robustly convert ^ exponents into Math.pow(...)
     let prev;
     do {
       prev = e;
@@ -146,7 +175,7 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
 
     e = e.replace(/\{/g, '(').replace(/\}/g, ')').replace(/\[/g, '(').replace(/\]/g, ')');
 
-    // Insert implicit multiplications safely (excluding function names like Math.pow or Math.sqrt)
+    // Insert implicit multiplications safely
     e = e.replace(/([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z\(])/g, '$1*$2');
     e = e.replace(/(\))\s*\(/g, ')*(');
     e = e.replace(/(\))\s*([0-9a-zA-Z])/g, ')*$2');
