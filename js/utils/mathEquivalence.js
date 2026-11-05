@@ -10,7 +10,7 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns) {
   if (expectedAns == null) return false;
 
   // ------------------------------------------------------------------
-  // MULTI-INPUT / ARRAY EVALUATION (e.g. expectedAns = ["1.23", "-4.56"])
+  // MULTI-INPUT / ARRAY EVALUATION
   // ------------------------------------------------------------------
   if (Array.isArray(expectedAns)) {
     const userArr = Array.isArray(userAns)
@@ -19,7 +19,6 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns) {
 
     if (userArr.length !== expectedAns.length) return false;
 
-    // Order-independent set matching: check that every expected root has a match
     const remainingUser = [...userArr];
     for (const exp of expectedAns) {
       const idx = remainingUser.findIndex(u => isAlgebraicallyEquivalent(u, exp));
@@ -34,30 +33,45 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns) {
     return expectedAns.split("|").some(exp => isAlgebraicallyEquivalent(userAns, exp.trim()));
   }
 
-  // Standardize single strings
+  // Standardize single strings and strip LaTeX font/styling wrappers
   const clean = (str) => {
-    let s = String(str)
-      .trim()
-      .replace(/^[a-zA-Z]\s*=\s*/, '')
-      .replace(/\\left\(|\\left\[/g, '(')
-      .replace(/\\right\)|\\right\]/g, ')')
-      .replace(/\\left|\\right/g, '')
-      .replace(/\\times|\\cdot/g, '*')
-      .replace(/\\div/g, '/')
-      .replace(/\\pi/g, 'Math.PI');
+    let s = String(str).trim();
+
+    // Remove equations prefix (e.g. "x = ")
+    s = s.replace(/^[a-zA-Z]\s*=\s*/, '');
+
+    // Recursively strip LaTeX font & text wrappers: \mathrm{x}, \mathit{x}, \text{x}, \mathbf{x}, etc.
+    let prevText;
+    do {
+      prevText = s;
+      s = s.replace(/\\(mathrm|mathit|mathbf|mathsf|mathtt|text|operatorname|d)\{([^{}]+)\}/g, '$2');
+    } while (s !== prevText);
+
+    // Strip formatting commands & invisible spacers
+    s = s.replace(/\\(displaystyle|style|limits|nolimits|left\.|right\.|quad|qquad|;|!|,|:)/g, '');
+    s = s.replace(/\\placeholder(\{[^{}]*\})?/g, '');
+
+    // Standardize delimiters & math operators
+    s = s.replace(/\\left\(|\\left\[|\\left\{/g, '(');
+    s = s.replace(/\\right\)|\\right\]|\\right\}/g, ')');
+    s = s.replace(/\\left|\\right/g, '');
+    s = s.replace(/\\times|\\cdot|\\ast|\\star|\\cdotp|\\centerdot/g, '*');
+    s = s.replace(/\\div/g, '/');
+    s = s.replace(/\\pi/g, 'Math.PI');
 
     // Handle nested \frac{a}{b} recursively
-    let prev;
+    let prevFrac;
     do {
-      prev = s;
+      prevFrac = s;
       s = s.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '(($1)/($2))');
-    } while (s !== prev);
+    } while (s !== prevFrac);
 
     // Handle nested \sqrt{a} recursively
+    let prevSqrt;
     do {
-      prev = s;
+      prevSqrt = s;
       s = s.replace(/\\sqrt\{([^{}]+)\}/g, 'Math.sqrt($1)');
-    } while (s !== prev);
+    } while (s !== prevSqrt);
 
     return s.replace(/\s+/g, '');
   };
@@ -68,14 +82,23 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns) {
   if (str1 === str2) return true;
 
   const toJS = (expr) => {
-    return expr
+    let e = expr
       .replace(/\^\{([^{}]+)\}/g, '**($1)')  // Converts ^{2} to **(2)
       .replace(/\^([0-9a-zA-Z])/g, '**($1)')
       .replace(/\{/g, '(')
       .replace(/\}/g, ')')
-      .replace(/([0-9.]+)\s*([a-zA-Z])/g, '$1*$2')
-      .replace(/([0-9a-zA-Z\)])\(/g, '$1*(')
-      .replace(/\)([\(0-9a-zA-Z])/g, ')*$1');
+      .replace(/\[/g, '(')
+      .replace(/\]/g, ')');
+
+    // Insert implicit multiplications:
+    // 1. Number before variable or function (e.g. 2x -> 2*x)
+    e = e.replace(/([0-9.]+)\s*([a-zA-Z])/g, '$1*$2');
+    // 2. Number, variable, or closing bracket before opening parenthesis (e.g. 2( -> 2*(, x( -> x*(, )( -> )*( )
+    e = e.replace(/([0-9a-zA-Z\)])\s*\(/g, '$1*(');
+    // 3. Closing bracket before number or variable (e.g. )2 -> )*2, )x -> )*x)
+    e = e.replace(/\)\s*([0-9a-zA-Z])/g, ')*$1');
+
+    return e;
   };
 
   try {
@@ -84,23 +107,26 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns) {
 
     if (js1 === js2) return true;
 
-    const vars = {
-      x: 2.13, y: 3.47, p: 5.19, q: 7.23,
-      m: 1.81, n: 4.37, a: 3.11, b: 2.71
-    };
+    // Test multiple sample points to ensure equivalence
+    const sampleSets = [
+      { x: 2.13, y: 3.47, p: 5.19, q: 7.23, m: 1.81, n: 4.37, a: 3.11, b: 2.71 },
+      { x: 5.71, y: 1.93, p: 2.45, q: 8.11, m: 3.22, n: 1.09, a: 4.56, b: 6.82 }
+    ];
 
-    const evalExpr = (jsStr) => {
+    for (const vars of sampleSets) {
       const keys = Object.keys(vars);
       const vals = Object.values(vars);
-      const fn = new Function(...keys, `return (${jsStr});`);
-      return fn(...vals);
-    };
+      const evalExpr = (jsStr) => {
+        const fn = new Function(...keys, `return (${jsStr});`);
+        return fn(...vals);
+      };
 
-    const val1 = evalExpr(js1);
-    const val2 = evalExpr(js2);
+      const val1 = evalExpr(js1);
+      const val2 = evalExpr(js2);
 
-    if (typeof val1 === 'number' && typeof val2 === 'number' && !isNaN(val1) && !isNaN(val2)) {
-      return Math.abs(val1 - val2) < 1e-4;
+      if (typeof val1 === 'number' && typeof val2 === 'number' && !isNaN(val1) && !isNaN(val2)) {
+        if (Math.abs(val1 - val2) < 1e-4) return true;
+      }
     }
   } catch (e) {
     // Fall back to string comparison
