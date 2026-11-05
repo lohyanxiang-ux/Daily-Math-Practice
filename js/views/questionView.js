@@ -7,6 +7,23 @@ import { initKeypad } from "../components/keypad.js";
 import { renderKaTeX } from "../utils/katexHelper.js";
 import { isAlgebraicallyEquivalent } from "../utils/mathEquivalence.js";
 
+const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbwEsVnKapmwUFuv0vyG1wFvyAXoFKQMrpsNxibUqYh891PHXzFgmBThnT62lGoEPo_xiQ/exec";
+
+function getApiUrl() {
+  let apiUrl = state.apiUrl || 
+               state.config?.apiUrl || 
+               state.backendUrl || 
+               state.scriptUrl || 
+               window.APP_CONFIG?.apiUrl || 
+               window.API_URL || 
+               localStorage.getItem("math_app_api_url") || 
+               DEFAULT_API_URL;
+  if (apiUrl && !apiUrl.startsWith("http://") && !apiUrl.startsWith("https://")) {
+    apiUrl = "https://" + apiUrl;
+  }
+  return apiUrl;
+}
+
 /**
  * Refined 2-Column Question Practice Runner
  * Left Column: Top Scratchpad Toolbar + Question Prompt + Canvas Overlay
@@ -17,6 +34,7 @@ export function renderQuestionView(container, options = {}) {
   const isDailyQuest = mode === "dailyQuest";
   const isSkillTree = mode === "skillTree";
   const isSRS = mode === "srsReview" || mode === "smartReview";
+  const isLiveSession = mode === "liveSession";
 
   let queue = Array.isArray(options.queue) && options.queue.length > 0 ? options.queue : [];
   let activeGeneratorPath = options.generatorPath || "";
@@ -75,7 +93,7 @@ export function renderQuestionView(container, options = {}) {
     let queueItem = null;
 
     if (queue.length > 0) {
-      queueItem = isSkillTree ? queue[questionIndex % queue.length] : queue[questionIndex];
+      queueItem = (isSkillTree || isLiveSession) ? queue[questionIndex % queue.length] : queue[questionIndex];
     }
 
     if (queueItem) {
@@ -123,9 +141,10 @@ export function renderQuestionView(container, options = {}) {
     let modeBadgeColor = "#0369a1";
     if (isSkillTree) { modeBadgeText = "🌳 Skill Mastery"; modeBadgeBg = "#f0fdf4"; modeBadgeColor = "#15803d"; }
     if (isSRS) { modeBadgeText = "🔄 Memory Refresher"; modeBadgeBg = "#fef3c7"; modeBadgeColor = "#b45309"; }
+    if (isLiveSession) { modeBadgeText = "📡 Live Class Practice"; modeBadgeBg = "#f0fdf4"; modeBadgeColor = "#15803d"; }
 
-    const exitBtnText = isSkillTree ? "💾 Save & Exit" : "← Exit";
-    const progressText = isSkillTree ? `Question ${questionIndex + 1}` : `Q${questionIndex + 1} of ${totalQuestions}`;
+    const exitBtnText = (isSkillTree || isLiveSession) ? "💾 Save & Exit" : "← Exit";
+    const progressText = (isSkillTree || isLiveSession) ? `Question ${questionIndex + 1}` : `Q${questionIndex + 1} of ${totalQuestions}`;
 
     const displayName = state.profile ? (state.profile.displayName || state.profile.name || "Student") : "Student";
     const userXp = state.profile ? (state.profile.xp || 0) : 0;
@@ -167,7 +186,7 @@ export function renderQuestionView(container, options = {}) {
 
   // Render 2-Column Workspace
   async function loadQuestion() {
-    if (!isSkillTree && questionIndex >= totalQuestions) {
+    if (!isSkillTree && !isLiveSession && questionIndex >= totalQuestions) {
       finishSession();
       return;
     }
@@ -296,7 +315,7 @@ export function renderQuestionView(container, options = {}) {
       (val) => { handleSubmission(val); }
     );
 
-    // Progressive Hint Rendering (Hint button appears directly below revealed hints)
+    // Progressive Hint Rendering
     const hintsContainer = container.querySelector("#hints-container");
     const hintsScrollArea = container.querySelector("#hints-scroll-area");
 
@@ -376,6 +395,27 @@ export function renderQuestionView(container, options = {}) {
     const topMasteryEl = document.querySelector("#top-nav-mastery-val");
     if (topMasteryEl) topMasteryEl.innerText = newScore;
 
+    // -------------------------------------------------------------------------
+    // LIVE PRACTICE MODE ATTEMPT HEARTBEAT SYNC
+    // -------------------------------------------------------------------------
+    if ((isLiveSession || options.sessionId) && options.sessionId) {
+      fetch(getApiUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "syncLiveAttempt",
+          token: state.userToken || state.token || (state.profile?.email ? ("PIN_AUTH_" + state.profile.email) : "STUDENT_SESSION"),
+          sessionId: options.sessionId,
+          studentEmail: state.profile?.email || state.profile?.studentEmail,
+          generatorPath: activeGeneratorPath,
+          isCorrect: isCorrect,
+          hintsUsed: currentHintStep,
+          newScore: newScore,
+          oldScore: oldScore
+        })
+      }).catch(err => console.error("Live attempt sync error:", err));
+    }
+
     if (isCorrect) {
       sessionScore++;
       
@@ -438,7 +478,7 @@ export function renderQuestionView(container, options = {}) {
       state.dailySession.completedToday = Math.max(state.dailySession.completedToday || 0, totalQuestions);
     }
 
-    const bonusXP = (!isSkillTree && sessionScore === totalQuestions) ? 20 : 0;
+    const bonusXP = (!isSkillTree && !isLiveSession && sessionScore === totalQuestions) ? 20 : 0;
     if (bonusXP > 0) {
       addXP(bonusXP);
       const topXpEl = document.querySelector("#top-nav-xp-val");
