@@ -33,13 +33,8 @@ function formatFrac(num, den) {
 }
 
 export function generateQuestion(tier = 1) {
-  const defaultKeypad = [
-    "x", "<", ">", "/",
-    "7", "8", "9", "-",
-    "4", "5", "6", "≤",
-    "1", "2", "3", "≥",
-    "0", "no solution", "⌫", "Clear"
-  ];
+  // Pass extra keys to populate keypad spare slots
+  const extraKeys = ["no solution"];
 
   // =========================================================
   // TIER 1: BASIC (Level 1 Linear Inequalities)
@@ -59,7 +54,6 @@ export function generateQuestion(tier = 1) {
     const num = (const_val / g) * (coeff < 0 ? -1 : 1);
     const den = Math.abs(coeff / g);
 
-    // Use LaTeX robust inequality symbols to avoid HTML entity parsing errors (<)
     const symList = ["\\gt", "\\lt", "\\ge", "\\le"];
     const sym = symList[op_idx - 1];
 
@@ -90,9 +84,12 @@ export function generateQuestion(tier = 1) {
       tier: 1,
       tierName: "Basic",
       skillTitle: "Solving Inequalities",
+      inputCount: 1,
+      inputLabels: ["Ans ="],
       prompt: `Solve the inequality: $\\displaystyle ${lhs} ${sym} ${rhs}$`,
       expectedAnswer: ans,
-      keypad: defaultKeypad,
+      displayAnswer: ans,
+      extraKeys: extraKeys,
       steps: [
         `Rearrange terms to collect $x$ on one side and constant terms on the other: $$${step1}$$`,
         `Divide by the coefficient of $x$ (reversing the inequality sign if dividing by a negative number): $$${ans}$$`
@@ -107,7 +104,6 @@ export function generateQuestion(tier = 1) {
     const subType = randInt(1, 2);
 
     if (subType === 1) {
-      // Sub-type A: Fractional Inequalities
       const denom1 = randInt(2, 5);
       const denom2 = randInt(2, 5);
       const num_a = randIntExclude(-4, 5, true);
@@ -153,9 +149,12 @@ export function generateQuestion(tier = 1) {
         tier: 2,
         tierName: "Intermediate",
         skillTitle: "Solving Inequalities",
+        inputCount: 1,
+        inputLabels: ["Ans ="],
         prompt: `Solve the inequality: $\\displaystyle ${expr}$`,
         expectedAnswer: ans,
-        keypad: defaultKeypad,
+        displayAnswer: ans,
+        extraKeys: extraKeys,
         steps: [
           `Multiply both sides by the common denominator to eliminate fractions: $$${step1}$$`,
           `Expand brackets and collect like terms: $$${step2}$$`,
@@ -163,7 +162,6 @@ export function generateQuestion(tier = 1) {
         ]
       };
     } else {
-      // Sub-type B: Compound Inequalities (a <= mx + c < b)
       const x1_raw_num = randIntExclude(-12, 2, true);
       const x1_raw_den = randInt(1, 3);
       const gap = randInt(3, 6);
@@ -220,9 +218,12 @@ export function generateQuestion(tier = 1) {
         tier: 2,
         tierName: "Intermediate",
         skillTitle: "Solving Inequalities",
+        inputCount: 1,
+        inputLabels: ["Ans ="],
         prompt: `Solve the inequality: $\\displaystyle ${expr}$`,
         expectedAnswer: ans,
-        keypad: defaultKeypad,
+        displayAnswer: ans,
+        extraKeys: extraKeys,
         steps: [
           `Split into two separate inequalities connected by "and": $$${ineq1} \\quad \\text{and} \\quad ${ineq2}$$`,
           `Solve each inequality independently: $$${sol1} \\quad \\text{and} \\quad ${sol2}$$`,
@@ -335,9 +336,12 @@ export function generateQuestion(tier = 1) {
     tier: 3,
     tierName: "Advanced",
     skillTitle: "Solving Inequalities",
+    inputCount: 1,
+    inputLabels: ["Ans ="],
     prompt: `Solve the inequalities:\n\n$\\displaystyle ${expr1}$\n\nand\n\n$\\displaystyle ${expr2}$`,
-    expectedAnswer: ans,
-    keypad: defaultKeypad,
+    expectedAnswer: ans_latex,
+    displayAnswer: ans_latex,
+    extraKeys: extraKeys,
     steps: [
       `Solve the first inequality independently: $$${sol1}$$`,
       `Solve the second inequality independently: $$${sol2}$$`,
