@@ -1,10 +1,11 @@
 /**
- * Evaluates whether a user's answer is mathematically equivalent to the expected answer.
+ * Evaluates whether a user's answer is mathematically equivalent to the expected answer,
+ * respecting required form constraints (factorised, completed square) and commutative/associative laws.
  */
-export function isAlgebraicallyEquivalent(userAns, expectedAns) {
+export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = null) {
   if (userAns == null) return false;
 
-  // TESTING BACKDOOR
+  // Testing backdoor
   if (String(userAns).trim() === "3005") return true;
 
   if (expectedAns == null) return false;
@@ -21,26 +22,28 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns) {
 
     const remainingUser = [...userArr];
     for (const exp of expectedAns) {
-      const idx = remainingUser.findIndex(u => isAlgebraicallyEquivalent(u, exp));
+      const idx = remainingUser.findIndex(u => isAlgebraicallyEquivalent(u, exp, requiredForm));
       if (idx === -1) return false;
       remainingUser.splice(idx, 1);
     }
     return remainingUser.length === 0;
   }
 
-  // Handle pipe-separated strings
+  // Handle pipe-separated expected strings
   if (typeof expectedAns === "string" && expectedAns.includes("|")) {
-    return expectedAns.split("|").some(exp => isAlgebraicallyEquivalent(userAns, exp.trim()));
+    return expectedAns.split("|").some(exp => isAlgebraicallyEquivalent(userAns, exp.trim(), requiredForm));
   }
 
-  // Standardize single strings and strip LaTeX font/styling wrappers
+  // Standardize LaTeX strings
   const clean = (str) => {
-    let s = String(str).trim();
+    let s = String(str)
+      .trim()
+      .replace(/\u2212|\u2013|\u2014|\\text\{-\}/g, '-') // Normalize minus signs
+      .replace(/^[a-zA-Z]\s*=\s*/, '')                   // Strip equation prefixes (e.g., "x = ")
+      .replace(/\\placeholder(\{[^{}]*\}|\[[^{}]*\])?/g, '') // Strip placeholders
+      .replace(/#\?|#0/g, '');
 
-    // Remove equations prefix (e.g. "x = ")
-    s = s.replace(/^[a-zA-Z]\s*=\s*/, '');
-
-    // Recursively strip LaTeX font & text wrappers: \mathrm{x}, \mathit{x}, \text{x}, \mathbf{x}, etc.
+    // Recursively strip LaTeX font & text wrappers: \mathrm{x}, \mathit{x}, \text{x}, etc.
     let prevText;
     do {
       prevText = s;
@@ -49,9 +52,8 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns) {
 
     // Strip formatting commands & invisible spacers
     s = s.replace(/\\(displaystyle|style|limits|nolimits|left\.|right\.|quad|qquad|;|!|,|:)/g, '');
-    s = s.replace(/\\placeholder(\{[^{}]*\})?/g, '');
 
-    // Standardize delimiters & math operators
+    // Standardize delimiters & operators
     s = s.replace(/\\left\(|\\left\[|\\left\{/g, '(');
     s = s.replace(/\\right\)|\\right\]|\\right\}/g, ')');
     s = s.replace(/\\left|\\right/g, '');
@@ -79,23 +81,67 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns) {
   const str1 = clean(userAns);
   const str2 = clean(expectedAns);
 
+  if (!str1) return false;
   if (str1 === str2) return true;
 
+  // ------------------------------------------------------------------
+  // STEP 1: STRUCTURAL FORM CHECK (FACTORISED / COMPLETED SQUARE)
+  // ------------------------------------------------------------------
+  const checkForm = (userClean, expectedRaw, reqForm) => {
+    const expStr = String(expectedRaw).replace(/\s+/g, '');
+
+    const isExpectedFactorised = reqForm === 'factorised' || 
+      (/(\([^\)]+\)|\b[a-zA-Z0-9]+\b)\s*\(/.test(expStr) && !/\)\s*\^/.test(expStr));
+
+    const isExpectedCompletedSquare = reqForm === 'completed_square' || 
+      /\([^\)]+\)\s*\^/.test(expStr);
+
+    if (isExpectedCompletedSquare) {
+      const hasSquaredTerm = /\([^\)]+\)\s*(\^2|\^\{2\}|\*\*\s*2|\*\*\s*\(2\))/.test(userClean);
+      if (!hasSquaredTerm) return false;
+    }
+
+    if (isExpectedFactorised && !isExpectedCompletedSquare) {
+      let depth = 0;
+      let hasTopLevelAddSub = false;
+
+      for (let i = 0; i < userClean.length; i++) {
+        const char = userClean[i];
+        if (char === '(' || char === '[' || char === '{') depth++;
+        else if (char === ')' || char === ']' || char === '}') depth--;
+        else if (depth === 0 && (char === '+' || char === '-')) {
+          if (i > 0 && !/[*\/^+\-(]/.test(userClean[i - 1])) {
+            hasTopLevelAddSub = True;
+            break;
+          }
+        }
+      }
+
+      if (hasTopLevelAddSub) return false;
+    }
+
+    return true;
+  };
+
+  if (!checkForm(str1, expectedAns, requiredForm)) {
+    return false;
+  }
+
+  // ------------------------------------------------------------------
+  // STEP 2: MULTI-POINT NUMERICAL EQUIVALENCE EVALUATION
+  // ------------------------------------------------------------------
   const toJS = (expr) => {
     let e = expr
-      .replace(/\^\{([^{}]+)\}/g, '**($1)')  // Converts ^{2} to **(2)
+      .replace(/\^\{([^{}]+)\}/g, '**($1)')
       .replace(/\^([0-9a-zA-Z])/g, '**($1)')
       .replace(/\{/g, '(')
       .replace(/\}/g, ')')
       .replace(/\[/g, '(')
       .replace(/\]/g, ')');
 
-    // Insert implicit multiplications:
-    // 1. Number before variable or function (e.g. 2x -> 2*x)
+    // Insert implicit multiplications
     e = e.replace(/([0-9.]+)\s*([a-zA-Z])/g, '$1*$2');
-    // 2. Number, variable, or closing bracket before opening parenthesis (e.g. 2( -> 2*(, x( -> x*(, )( -> )*( )
     e = e.replace(/([0-9a-zA-Z\)])\s*\(/g, '$1*(');
-    // 3. Closing bracket before number or variable (e.g. )2 -> )*2, )x -> )*x)
     e = e.replace(/\)\s*([0-9a-zA-Z])/g, ')*$1');
 
     return e;
@@ -107,15 +153,16 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns) {
 
     if (js1 === js2) return true;
 
-    // Test multiple sample points to ensure equivalence
+    // Test across distinct sample points
     const sampleSets = [
-      { x: 2.13, y: 3.47, p: 5.19, q: 7.23, m: 1.81, n: 4.37, a: 3.11, b: 2.71 },
-      { x: 5.71, y: 1.93, p: 2.45, q: 8.11, m: 3.22, n: 1.09, a: 4.56, b: 6.82 }
+      { x: 2.13, y: 3.47, p: 5.19, q: 7.23, m: 1.81, n: 4.37, a: 3.11, b: 2.71, theta: 0.785 },
+      { x: -1.45, y: -2.89, p: 1.12, q: 4.05, m: 2.93, n: 0.54, a: 1.67, b: 5.23, theta: 1.256 }
     ];
 
     for (const vars of sampleSets) {
       const keys = Object.keys(vars);
       const vals = Object.values(vars);
+
       const evalExpr = (jsStr) => {
         const fn = new Function(...keys, `return (${jsStr});`);
         return fn(...vals);
@@ -125,11 +172,15 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns) {
       const val2 = evalExpr(js2);
 
       if (typeof val1 === 'number' && typeof val2 === 'number' && !isNaN(val1) && !isNaN(val2)) {
-        if (Math.abs(val1 - val2) < 1e-4) return true;
+        if (Math.abs(val1 - val2) > 1e-4) return false;
+      } else {
+        return false;
       }
     }
+
+    return true;
   } catch (e) {
-    // Fall back to string comparison
+    // Fall back to direct string matching
   }
 
   return false;
