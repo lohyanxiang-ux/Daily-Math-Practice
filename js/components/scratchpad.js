@@ -4,9 +4,14 @@ export function initScratchpad(containerEl) {
 
   if (!canvas || !wrapper) return;
 
-  // Ultra low-latency 2D context configuration
+  // Detect iOS / iPadOS for low-latency desynchronized rendering (prevents desktop GPU black canvas bug)
+  const isAppleTouchDevice = 
+    /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  // 2D Context setup (desynchronized enabled only on iOS/iPadOS)
   const ctx = canvas.getContext("2d", {
-    desynchronized: true,
+    desynchronized: isAppleTouchDevice,
     alpha: true
   });
 
@@ -37,7 +42,7 @@ export function initScratchpad(containerEl) {
   function resizeCanvas() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     
-    // Dynamic sizing strictly matching the actual wrapper height (eliminates huge overdraw)
+    // Dynamic sizing strictly matching the actual wrapper height
     const width = wrapper.clientWidth || wrapper.offsetWidth || 300;
     const height = Math.max(wrapper.clientHeight || wrapper.offsetHeight || 400, wrapper.scrollHeight || 0);
 
@@ -59,6 +64,9 @@ export function initScratchpad(containerEl) {
     canvas.height = height * dpr;
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
+
+    // Clear buffer explicitly to prevent solid black desktop compositor fill
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     ctx.scale(dpr, dpr);
     ctx.lineCap = "round";
@@ -184,14 +192,14 @@ export function initScratchpad(containerEl) {
     }
   }
 
-  // Register listeners with { passive: false } for immediate iOS touch dispatch
+  // Register listeners with { passive: false } for immediate touch dispatch
   canvas.addEventListener("pointerdown", startDrawing, { passive: false });
   canvas.addEventListener("pointermove", draw, { passive: false });
   canvas.addEventListener("pointerup", stopDrawing);
   canvas.addEventListener("pointercancel", stopDrawing);
   canvas.addEventListener("pointerleave", stopDrawing);
 
-  // Prevent Safari gesture intervention during active drawing
+  // Prevent gesture intervention during active drawing
   canvas.addEventListener("touchstart", (e) => {
     if (currentMode !== "pointer" && e.touches.length === 1) {
       if (e.cancelable) e.preventDefault();
