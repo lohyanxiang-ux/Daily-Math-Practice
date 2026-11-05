@@ -37,6 +37,16 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
   let isSubmitted = false;
   let activeFieldIndex = 0;
 
+  // Helper to sanitize value (remove unfilled placeholders & normalize minus)
+  function cleanValue(rawVal) {
+    if (!rawVal) return "";
+    return rawVal
+      .replace(/\u2212|\u2013|\u2014|\\text\{-\}/g, "-")
+      .replace(/\\placeholder(\{[^{}]*\}|\[[^{}]*\])?/g, "")
+      .replace(/#\?/g, "")
+      .replace(/#0/g, "");
+  }
+
   // 1. RENDER DYNAMIC INPUT FIELD HTML (SINGLE vs MULTI-INPUT)
   let inputsHTML = "";
   if (inputCount > 1) {
@@ -102,7 +112,7 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
       ${inputsHTML}
 
-      <!-- MODE TOGGLE BUTTON (BESIDE INPUT) -->
+      <!-- MODE TOGGLE BUTTON -->
       <button type="button" id="btn-toggle-keypad-mode" style="
         height: 52px;
         padding: 0 12px;
@@ -129,12 +139,12 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
   const wrappers = Array.from(displayContainer.querySelectorAll(".math-field-wrapper"));
   const toggleBtn = displayContainer.querySelector("#btn-toggle-keypad-mode");
 
-  // Helper to collect current field values
+  // Helper to collect current field values cleanly
   function getCurrentValues() {
     if (inputCount > 1) {
-      return mathFields.map(f => f.value || "");
+      return mathFields.map(f => cleanValue(f.value || ""));
     }
-    return mathFields[0] ? (mathFields[0].value || "") : "";
+    return mathFields[0] ? cleanValue(mathFields[0].value || "") : "";
   }
 
   // Focus & Active Field Switcher
@@ -151,9 +161,14 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     });
   }
 
-  // 2. ATTACH LISTENERS TO MATHLIVE FIELDS
+  // 2. ATTACH LISTENERS TO MATHLIVE FIELDS & DISABLE SMART FENCE
   mathFields.forEach((mf, idx) => {
     mf.mathVirtualKeyboardPolicy = "manual";
+    
+    // Disable auto smart-fences to prevent duplicate parenthesis insertion
+    if ("smartFence" in mf) {
+      mf.smartFence = false;
+    }
 
     mf.addEventListener("focus", () => setActiveField(idx));
     mf.parentElement?.addEventListener("click", () => {
@@ -179,7 +194,6 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     });
   });
 
-  // Set default focus border on initial load
   setActiveField(0);
 
   // 3. MODE TOGGLE LISTENER
@@ -197,7 +211,6 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     renderGrid();
   });
 
-  // Helper to retrieve keys per mode tab
   function getKeysForTab(tab) {
     if (tab === "basic") return STANDARD_KEYPADS.basic;
 
@@ -272,7 +285,7 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     gridEl.innerHTML = buttonsHTML + submitHTML;
   }
 
-  // 5. EVENT DELEGATION FOR KEYPAD GRID
+  // Prevent iPad focus loss on touch
   gridEl.addEventListener("pointerdown", (e) => {
     if (e.target.closest(".keypad-btn")) {
       e.preventDefault();
@@ -286,7 +299,6 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
 
     const key = btn.getAttribute("data-key");
 
-    // Handle Submit / Next Action
     if (btn.id === "btn-keypad-submit") {
       if (!isSubmitted) {
         const currentVals = getCurrentValues();
@@ -312,7 +324,7 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
 
     currentMathField.focus();
 
-    // MathLive Command Execution
+    // Keypad Commands Execution
     if (key === "/" || key === "a/b") {
       currentMathField.executeCommand(["insert", "\\frac{#0}{#?}"]);
     } else if (key === "^" || key === "xⁿ") {
@@ -329,6 +341,14 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
       currentMathField.executeCommand("deleteBackward");
     } else if (key === "Clear") {
       currentMathField.setValue("");
+      // DISPATCH INPUT EVENT SO QUESTIONVIEW UPDATE SUBSCRIBERS AGREE
+      currentMathField.dispatchEvent(new Event("input", { bubbles: true }));
+    } else if (key === "-") {
+      currentMathField.executeCommand(["insert", "-"]);
+    } else if (key === "(") {
+      currentMathField.executeCommand(["insert", "("]);
+    } else if (key === ")") {
+      currentMathField.executeCommand(["insert", ")"]);
     } else if (key === "×") {
       currentMathField.executeCommand(["insert", "\\times"]);
     } else if (key === "≤") {
@@ -348,6 +368,5 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     }
   });
 
-  // Initial render call
   renderGrid();
 }
