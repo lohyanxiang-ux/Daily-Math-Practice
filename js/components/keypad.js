@@ -163,8 +163,12 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     });
   }
 
+  // 2. ATTACH LISTENERS TO MATHLIVE FIELDS & DISABLE DROPDOWN MENU
   mathFields.forEach((mf, idx) => {
     mf.mathVirtualKeyboardPolicy = "manual";
+
+    // REMOVE MATHLIVE CONTEXT DROPDOWN MENU BUTTON (☰)
+    mf.menuItems = [];
     
     if ("smartFence" in mf) {
       mf.smartFence = false;
