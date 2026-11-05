@@ -88,7 +88,7 @@ export function renderQuestionView(container, options = {}) {
     }
   }
 
-  // Live Session Status Monitoring Timer & Target Goal Resolver
+  // Live Session Status Monitoring Timer
   if (isLiveSession) {
     const studentClass = state.profile?.class || state.profile?.className || state.user?.class || "";
     const studentEmail = state.profile?.email || state.profile?.studentEmail || state.user?.email || "";
@@ -116,10 +116,6 @@ export function renderQuestionView(container, options = {}) {
           if (isEnded) {
             cleanupListeners();
             renderStudentLiveSummary();
-          } else {
-            if (activeSession.targetType === "SCORE" && activeSession.targetVal) {
-              options.targetScore = Number(activeSession.targetVal);
-            }
           }
         }
       } catch (err) {
@@ -128,7 +124,6 @@ export function renderQuestionView(container, options = {}) {
     }, 4000);
   }
 
-  // Fetch Next Question with RANDOM Selection for Live Practice
   async function fetchNextQuestion() {
     let queueItem = null;
 
@@ -269,7 +264,7 @@ export function renderQuestionView(container, options = {}) {
     container.innerHTML = `
       <main style="display: flex; height: calc(100dvh - 76px); width: 100vw; overflow: hidden; padding: 8px 14px; gap: 12px; box-sizing: border-box; background: #f1f5f9;">
         
-        <!-- LEFT COLUMN: WORKSPACE -->
+        <!-- LEFT COLUMN WORKSPACE -->
         <section id="left-column-workspace" style="flex: 0 0 55%; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden;">
           
           <div class="scratchpad-toolbar" style="padding: 8px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
@@ -313,24 +308,22 @@ export function renderQuestionView(container, options = {}) {
 
         </section>
 
-        <!-- RIGHT COLUMN: FIXED HINT BOX + AUTO-EXPANDING INPUT + FIXED KEYPAD -->
+        <!-- RIGHT COLUMN: FIXED HINT BOX + KEYPAD -->
         <section style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; padding: 10px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
           
-          <!-- FIXED SIZE HINT & SOLUTION AREA WITH TOUCH SCROLLING -->
-          <div id="hints-scroll-area" style="height: 210px; flex-shrink: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 4px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; touch-action: pan-y;">
+          <div id="hints-scroll-area" style="height: 220px; flex-shrink: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 4px; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
             <div id="hints-container" class="hints-list"></div>
             <div id="daily-feedback" class="feedback-area" style="margin-top: 4px; font-weight: 700; border-radius: 8px;"></div>
-            <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 4px; padding: 8px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;"></div>
+            
+            <!-- TROUBLESHOOTING DEBUG CONTAINER (DISPLAY RAW LATEX INPUT VS EXPECTED) -->
+            <div id="troubleshoot-debug-box" style="display: none; margin-top: 8px; padding: 10px 12px; background: #0f172a; color: #f8fafc; border-radius: 10px; font-family: monospace; font-size: 0.8rem; line-height: 1.6; overflow-x: auto; border: 1px solid #334155;"></div>
+
+            <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 4px; padding: 8px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; max-height: 180px; overflow-y: auto; -webkit-overflow-scrolling: touch;"></div>
           </div>
 
-          <!-- KEYPAD & AUTO-EXPANDING INPUT SECTION -->
-          <div id="keypad-dock-section" style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; overflow: hidden;">
-            
-            <!-- AUTO-EXPANDING INPUT CONTAINER (Adapts height to tall fractions/exponents so nothing is blocked) -->
-            <div id="keypad-display" style="width: 100%; min-height: 56px; max-height: 110px; overflow-y: auto; -webkit-overflow-scrolling: touch; flex-shrink: 0; display: flex; flex-direction: column; justify-content: center;"></div>
-            
-            <!-- FIXED HEIGHT KEYPAD GRID -->
-            <div class="keypad-grid" style="height: 260px; flex-shrink: 0;"></div>
+          <div id="keypad-dock-section" style="flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 4px;">
+            <div id="keypad-display" style="width: 100%;"></div>
+            <div class="keypad-grid" style="flex: 1; min-height: 0;"></div>
           </div>
 
         </section>
@@ -405,11 +398,13 @@ export function renderQuestionView(container, options = {}) {
 
     totalAttemptedCount++;
     const feedbackEl = container.querySelector("#daily-feedback");
+    const debugBox = container.querySelector("#troubleshoot-debug-box");
     const solutionBox = container.querySelector("#full-solution-container");
     const hintsScrollArea = container.querySelector("#hints-scroll-area");
     const stepsList = currentQuestion.steps || currentQuestion.hints || [];
 
-    const isCorrect = isAlgebraicallyEquivalent(userAns, currentQuestion.expectedAnswer);
+    const requiredForm = currentQuestion.requiredForm || currentQuestion.form || null;
+    const isCorrect = isAlgebraicallyEquivalent(userAns, currentQuestion.expectedAnswer, requiredForm);
     const oldScore = state.mastery[activeGeneratorPath]?.score || 0;
 
     recordQuestionAttempt(activeGeneratorPath, isCorrect, currentHintStep, stepsList.length || 3);
@@ -424,12 +419,11 @@ export function renderQuestionView(container, options = {}) {
 
     // TARGET SCORE MILESTONE NOTIFICATION
     let targetAchievedBanner = "";
-    const activeTargetScore = options.targetScore || options.targetVal;
-    if (activeTargetScore && newScore >= Number(activeTargetScore) && !targetScoreAchievedAlertShown) {
+    if (options.targetScore && newScore >= options.targetScore && !targetScoreAchievedAlertShown) {
       targetScoreAchievedAlertShown = true;
       targetAchievedBanner = `
         <div style="margin-top: 6px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 6px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 800;">
-          🎯 Target Mastery Score of ${activeTargetScore} Achieved! 🎉 Keep practicing to push higher!
+          🎯 Target Mastery Score of ${options.targetScore} Achieved! 🎉 Keep practicing to push higher!
         </div>
       `;
     }
@@ -451,6 +445,26 @@ export function renderQuestionView(container, options = {}) {
           oldScore: oldScore
         })
       }).catch(err => console.error("Live attempt sync error:", err));
+    }
+
+    // Format raw strings for troubleshooting debug display
+    const rawUserInputStr = Array.isArray(userAns) ? JSON.stringify(userAns) : String(userAns || "");
+    const rawExpectedStr = Array.isArray(currentQuestion.expectedAnswer)
+      ? JSON.stringify(currentQuestion.expectedAnswer)
+      : String(currentQuestion.expectedAnswer || "");
+
+    // DISPLAY TROUBLESHOOTING DEBUG BOX
+    if (debugBox) {
+      debugBox.style.display = "block";
+      debugBox.innerHTML = `
+        <div style="font-weight: 800; color: #38bdf8; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center;">
+          <span>🔍 RAW LATEX TROUBLESHOOTING DEBUGGER</span>
+          <span style="color: ${isCorrect ? '#4ade80' : '#f87171'}; font-weight: 900;">${isCorrect ? '✅ MATCHED' : '❌ MISMATCHED'}</span>
+        </div>
+        <div><strong>Submitted Input (Raw LaTeX):</strong> <code style="color:#facc15;">${rawUserInputStr || '(empty)'}</code></div>
+        <div><strong>Expected Answer (Raw LaTeX):</strong> <code style="color:#4ade80;">${rawExpectedStr}</code></div>
+        ${requiredForm ? `<div><strong>Required Form Enforcement:</strong> <code>${requiredForm}</code></div>` : ''}
+      `;
     }
 
     if (isCorrect) {
@@ -496,7 +510,7 @@ export function renderQuestionView(container, options = {}) {
       renderKaTeX(solutionBox);
     }
 
-    // Auto-scroll the fixed hints/solution container down on submission
+    // Auto-scroll the hints/solution container down on submission
     if (hintsScrollArea) {
       setTimeout(() => {
         hintsScrollArea.scrollTop = hintsScrollArea.scrollHeight;
