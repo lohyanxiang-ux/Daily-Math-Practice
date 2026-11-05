@@ -25,6 +25,16 @@ function getApiUrl() {
   return apiUrl;
 }
 
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&")
+    .replace(/</g, "<")
+    .replace(/>/g, ">")
+    .replace(/"/g, """)
+    .replace(/'/g, "'");
+}
+
 export function renderQuestionView(container, options = {}) {
   const mode = options.mode || "dailyQuest";
   const isDailyQuest = mode === "dailyQuest";
@@ -178,7 +188,9 @@ export function renderQuestionView(container, options = {}) {
         if (resData.status === "success") {
           const activeSession = resData.activeSession;
           const isEnded = !activeSession || 
-                          activeSession.status !== "ACTIVE" || 
+                          activeSession.status === "ENDED" || 
+                          activeSession.status === "CLOSED" ||
+                          activeSession.isEnded === true ||
                           (options.sessionId && activeSession.sessionId !== options.sessionId);
 
           if (isEnded) {
@@ -295,7 +307,7 @@ export function renderQuestionView(container, options = {}) {
     }
 
     container.innerHTML = `
-      <div style="display: flex; justify-content: center; align-items: center; height: calc(100dvh - 60px); background: #f8fafc; color: #64748b; font-weight: 700;">
+      <div style="display: flex; justify-content: center; align-items: center; height: calc(100dvh - 82px); background: #f8fafc; color: #64748b; font-weight: 700;">
         <h3>🎲 Loading Question ${questionIndex + 1}...</h3>
       </div>
     `;
@@ -306,7 +318,7 @@ export function renderQuestionView(container, options = {}) {
 
     if (!currentQuestion) {
       container.innerHTML = `
-        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: calc(100dvh - 60px);">
+        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: calc(100dvh - 82px);">
           <h3>Unable to load question generator.</h3>
           <button id="btn-exit-err" class="secondary-btn" style="margin-top: 12px; padding: 10px 20px; cursor: pointer;">Back</button>
         </div>
@@ -330,7 +342,7 @@ export function renderQuestionView(container, options = {}) {
     ` : "";
 
     container.innerHTML = `
-      <main style="display: flex; height: calc(100dvh - 60px); max-height: calc(100dvh - 60px); width: 100%; overflow: hidden; padding: 4px 8px; gap: 8px; box-sizing: border-box; background: #f1f5f9;">
+      <main style="display: flex; height: calc(100dvh - 82px); max-height: calc(100dvh - 82px); width: 100%; overflow: hidden; padding: 4px 8px; gap: 8px; box-sizing: border-box; background: #f1f5f9;">
         
         <!-- LEFT COLUMN WORKSPACE -->
         <section id="left-column-workspace" style="flex: 1 1 52%; min-width: 0; display: flex; flex-direction: column; background: #ffffff; border-radius: 14px; border: 1px solid #cbd5e1; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
@@ -377,7 +389,7 @@ export function renderQuestionView(container, options = {}) {
         </section>
 
         <!-- RIGHT COLUMN: STRICTLY BOUNDED HEIGHT HINTS & KEYPAD -->
-        <section style="flex: 1 1 48%; min-width: 310px; max-width: 50%; display: flex; flex-direction: column; background: #ffffff; border-radius: 14px; border: 1px solid #cbd5e1; padding: 8px 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
+        <section style="flex: 1 1 48%; min-width: 310px; max-width: 50%; display: flex; flex-direction: column; background: #ffffff; border-radius: 14px; border: 1px solid #cbd5e1; padding: 6px 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
           
           <!-- HINTS & SOLUTION SCROLL AREA: DYNAMICALLY COMPRESSES TO FIT KEYPAD -->
           <div id="hints-scroll-area" style="
@@ -387,7 +399,7 @@ export function renderQuestionView(container, options = {}) {
             -webkit-overflow-scrolling: touch;
             touch-action: pan-y;
             padding-right: 4px;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
             border-bottom: 1.5px solid #e2e8f0;
             position: relative;
             z-index: 5;
@@ -408,11 +420,12 @@ export function renderQuestionView(container, options = {}) {
             flex: 0 0 auto;
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 3px;
             z-index: 10;
             position: relative;
             background: #ffffff;
             box-sizing: border-box;
+            padding-bottom: 2px;
           ">
             <div id="keypad-display" style="width: 100%; box-sizing: border-box;"></div>
             <div class="keypad-grid" style="width: 100%; box-sizing: border-box;"></div>
@@ -545,9 +558,9 @@ export function renderQuestionView(container, options = {}) {
           <span>🔍 RAW LATEX TROUBLESHOOTING DEBUGGER</span>
           <span style="color: ${isCorrect ? '#4ade80' : '#f87171'}; font-weight: 900;">${isCorrect ? '✅ MATCHED' : '❌ MISMATCHED'}</span>
         </div>
-        <div><strong>Submitted Input (Raw LaTeX):</strong> <code style="color:#facc15;">${rawUserInputStr || '(empty)'}</code></div>
-        <div><strong>Expected Answer (Raw LaTeX):</strong> <code style="color:#4ade80;">${rawExpectedStr}</code></div>
-        ${requiredForm ? `<div><strong>Required Form Enforcement:</strong> <code>${requiredForm}</code></div>` : ''}
+        <div><strong>Submitted Input (Raw LaTeX):</strong> <code style="color:#facc15;">${escapeHtml(rawUserInputStr) || '(empty)'}</code></div>
+        <div><strong>Expected Answer (Raw LaTeX):</strong> <code style="color:#4ade80;">${escapeHtml(rawExpectedStr)}</code></div>
+        ${requiredForm ? `<div><strong>Required Form Enforcement:</strong> <code>${escapeHtml(requiredForm)}</code></div>` : ''}
       `;
     }
 
@@ -632,7 +645,7 @@ export function renderQuestionView(container, options = {}) {
     }).join("");
 
     container.innerHTML = `
-      <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: calc(100dvh - 60px); padding: 20px; background: #f1f5f9;">
+      <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: calc(100dvh - 82px); padding: 20px; background: #f1f5f9;">
         <div class="card" style="max-width: 500px; width: 100%; text-align: center; padding: 32px; background: #ffffff; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box;">
           <h2 style="font-size: 1.6rem; color: #0f172a; margin: 0 0 6px 0; font-weight: 800;">🎉 Live Practice Completed!</h2>
           <p style="font-size: 0.92rem; color: #64748b; margin: 0 0 20px 0;">Your teacher has ended today's live session. Great work!</p>
@@ -722,7 +735,7 @@ export function renderQuestionView(container, options = {}) {
     const titleText = summary.isMastered ? "🏆 Skill Mastered (90+ Score)!" : "🎉 Session Completed!";
 
     container.innerHTML = `
-      <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: calc(100dvh - 60px); padding: 20px;">
+      <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: calc(100dvh - 82px); padding: 20px;">
         <div class="card" style="max-width: 520px; width: 100%; text-align: center; padding: 32px; background: #ffffff; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
           <h2 style="font-size: 1.8rem; color: #0f172a; margin-bottom: 6px;">${titleText}</h2>
           <p style="font-size: 1rem; color: var(--text-muted); margin: 8px 0 20px 0;">
