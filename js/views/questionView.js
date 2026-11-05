@@ -309,13 +309,13 @@ export function renderQuestionView(container, options = {}) {
 
         </section>
 
-        <!-- RIGHT COLUMN -->
+        <!-- RIGHT COLUMN (With iPad Touch Scroll Fix & Dynamic Scroll height) -->
         <section style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; padding: 10px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
           
-          <div id="hints-scroll-area" style="height: 140px; flex-shrink: 0; overflow-y: auto; padding-right: 4px; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
+          <div id="hints-scroll-area" style="max-height: 260px; min-height: 80px; flex-shrink: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 4px; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
             <div id="hints-container" class="hints-list"></div>
             <div id="daily-feedback" class="feedback-area" style="margin-top: 4px; font-weight: 700; border-radius: 8px;"></div>
-            <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 4px; padding: 6px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;"></div>
+            <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 4px; padding: 8px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; max-height: 180px; overflow-y: auto; -webkit-overflow-scrolling: touch;"></div>
           </div>
 
           <div id="keypad-dock-section" style="flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 4px;">
@@ -331,7 +331,6 @@ export function renderQuestionView(container, options = {}) {
     renderKaTeX(container.querySelector("#question-prompt"));
     initScratchpad(container);
 
-    // Pass currentQuestion payload to allow multi-input (inputCount & inputLabels) detection
     initKeypad(
       container,
       currentQuestion,
@@ -343,7 +342,11 @@ export function renderQuestionView(container, options = {}) {
     const hintsScrollArea = container.querySelector("#hints-scroll-area");
 
     function scrollHintsToBottom() {
-      if (hintsScrollArea) hintsScrollArea.scrollTop = hintsScrollArea.scrollHeight;
+      if (hintsScrollArea) {
+        setTimeout(() => {
+          hintsScrollArea.scrollTop = hintsScrollArea.scrollHeight;
+        }, 50);
+      }
     }
 
     function renderHintButton() {
@@ -393,6 +396,7 @@ export function renderQuestionView(container, options = {}) {
     totalAttemptedCount++;
     const feedbackEl = container.querySelector("#daily-feedback");
     const solutionBox = container.querySelector("#full-solution-container");
+    const hintsScrollArea = container.querySelector("#hints-scroll-area");
     const stepsList = currentQuestion.steps || currentQuestion.hints || [];
 
     const isCorrect = isAlgebraicallyEquivalent(userAns, currentQuestion.expectedAnswer);
@@ -479,6 +483,13 @@ export function renderQuestionView(container, options = {}) {
         </ol>
       `;
       renderKaTeX(solutionBox);
+    }
+
+    // Auto-scroll the hints/solution container down on submission
+    if (hintsScrollArea) {
+      setTimeout(() => {
+        hintsScrollArea.scrollTop = hintsScrollArea.scrollHeight;
+      }, 100);
     }
 
     const currentScore = state.mastery[activeGeneratorPath]?.score || 0;
