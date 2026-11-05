@@ -88,6 +88,75 @@ export function renderQuestionView(container, options = {}) {
     }
   }
 
+  /**
+   * Prompts the student with an interactive target achievement modal.
+   * Allows explicit acknowledgment while letting them continue practice.
+   */
+  function showTargetScoreAchievedModal(targetScore, currentScore) {
+    const existingModal = document.querySelector("#target-achieved-modal-overlay");
+    if (existingModal) existingModal.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "target-achieved-modal-overlay";
+    overlay.style.cssText = `
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 99999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      box-sizing: border-box;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    overlay.innerHTML = `
+      <div style="
+        background: #ffffff;
+        border-radius: 20px;
+        max-width: 420px;
+        width: 100%;
+        padding: 28px 24px;
+        text-align: center;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        border: 2px solid #3b82f6;
+        box-sizing: border-box;
+      ">
+        <div style="font-size: 3.2rem; margin-bottom: 10px; line-height: 1;">🎯🎉</div>
+        <h3 style="margin: 0 0 8px 0; font-size: 1.4rem; font-weight: 800; color: #0f172a;">Target Score Reached!</h3>
+        <p style="margin: 0 0 16px 0; font-size: 0.95rem; color: #475569; line-height: 1.5;">
+          Awesome job! You reached the target mastery score of <strong style="color: #2563eb;">${targetScore}</strong> (Current Score: <strong>${currentScore}</strong>).
+        </p>
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px; margin-bottom: 22px; color: #1e40af; font-size: 0.85rem; font-weight: 700;">
+          💪 Keep practicing to push your mastery even higher!
+        </div>
+        <button id="btn-ack-target-achieved" style="
+          width: 100%;
+          padding: 12px 20px;
+          font-size: 1rem;
+          font-weight: 800;
+          color: #ffffff;
+          background: #2563eb;
+          border: none;
+          border-radius: 12px;
+          cursor: pointer;
+          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+          transition: background 0.15s ease;
+        ">
+          Continue Practice ➔
+        </button>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    overlay.querySelector("#btn-ack-target-achieved")?.addEventListener("click", () => {
+      overlay.remove();
+    });
+  }
+
   if (isLiveSession) {
     const studentClass = state.profile?.class || state.profile?.className || state.user?.class || "";
     const studentEmail = state.profile?.email || state.profile?.studentEmail || state.user?.email || "";
@@ -440,14 +509,10 @@ export function renderQuestionView(container, options = {}) {
     const topMasteryEl = document.querySelector("#top-nav-mastery-val");
     if (topMasteryEl) topMasteryEl.innerText = newScore;
 
-    let targetAchievedBanner = "";
+    // Check target score threshold and present acknowledgment modal
     if (options.targetScore && newScore >= options.targetScore && !targetScoreAchievedAlertShown) {
       targetScoreAchievedAlertShown = true;
-      targetAchievedBanner = `
-        <div style="margin-top: 6px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 6px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 800;">
-          🎯 Target Mastery Score of ${options.targetScore} Achieved! 🎉 Keep practicing to push higher!
-        </div>
-      `;
+      showTargetScoreAchievedModal(options.targetScore, newScore);
     }
 
     if ((isLiveSession || options.sessionId) && options.sessionId) {
@@ -501,7 +566,7 @@ export function renderQuestionView(container, options = {}) {
         feedbackEl.style.padding = "8px 12px";
         feedbackEl.style.background = "#d1fae5";
         feedbackEl.style.color = "#065f46";
-        feedbackEl.innerHTML = `Correct! 🎉 +10 XP  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span> ${targetAchievedBanner}`;
+        feedbackEl.innerHTML = `Correct! 🎉 +10 XP  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span>`;
       }
     } else {
       if (feedbackEl) {
@@ -513,7 +578,7 @@ export function renderQuestionView(container, options = {}) {
         feedbackEl.style.padding = "8px 12px";
         feedbackEl.style.background = "#fee2e2";
         feedbackEl.style.color = "#991b1b";
-        feedbackEl.innerHTML = `Incorrect. Expected: <strong>$${formattedExpected}$</strong>  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span> ${targetAchievedBanner}`;
+        feedbackEl.innerHTML = `Incorrect. Expected: <strong>$${formattedExpected}$</strong>  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span>`;
         renderKaTeX(feedbackEl);
       }
     }
