@@ -25,9 +25,7 @@ function getApiUrl() {
 }
 
 /**
- * Refined 2-Column Question Practice Runner
- * Left Column: Top Scratchpad Toolbar + Question Prompt + Canvas Overlay
- * Right Column: Progressive Hints + Dynamic Mastery & Live XP Sync + Standard Keypad
+ * 2-Column Question Practice Runner with Real-Time Teacher Termination Monitoring
  */
 export function renderQuestionView(container, options = {}) {
   const mode = options.mode || "dailyQuest";
@@ -49,6 +47,9 @@ export function renderQuestionView(container, options = {}) {
   let currentHintStep = 0;
   let currentSkillTitle = "Practice Skill";
   const sessionInitialScores = {};
+
+  // Live session status polling timer for students
+  let liveSessionCheckTimer = null;
 
   // Background Mastery Batch Sync on page visibility change
   function flushMasterySync() {
@@ -80,12 +81,59 @@ export function renderQuestionView(container, options = {}) {
     document.removeEventListener("visibilitychange", visibilityHandler);
     container.removeEventListener("triggerNextQuestion", handleNextQuestionTrigger);
     
+    // Clear live monitoring timer if active
+    if (liveSessionCheckTimer) {
+      clearInterval(liveSessionCheckTimer);
+      liveSessionCheckTimer = null;
+    }
+
     // Restore original global top nav on session exit
     const topNav = document.querySelector(".top-nav");
     if (topNav && window._originalTopNavHtml) {
       topNav.innerHTML = window._originalTopNavHtml;
       delete window._originalTopNavHtml;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // LIVE SESSION MONITORING TIMER (Auto-End when Teacher stops session)
+  // -------------------------------------------------------------------------
+  if (isLiveSession) {
+    const studentClass = state.profile?.class || state.profile?.className || state.user?.class || "";
+    const studentEmail = state.profile?.email || state.profile?.studentEmail || state.user?.email || "";
+
+    liveSessionCheckTimer = setInterval(async () => {
+      if (!studentClass) return;
+      try {
+        const response = await fetch(getApiUrl(), {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "getLiveSessionData",
+            token: state.userToken || state.token || (studentEmail ? ("PIN_AUTH_" + studentEmail) : "STUDENT_SESSION"),
+            className: studentClass
+          })
+        });
+
+        const resData = await response.json();
+
+        // Check if teacher ended the session
+        if (resData.status === "success") {
+          const activeSession = resData.activeSession;
+          const isEnded = !activeSession || 
+                          activeSession.status !== "ACTIVE" || 
+                          (options.sessionId && activeSession.sessionId !== options.sessionId);
+
+          if (isEnded) {
+            cleanupListeners();
+            alert("📢 Your teacher has ended the Live Practice Session!");
+            finishSession(false);
+          }
+        }
+      } catch (err) {
+        console.error("Error monitoring live session status:", err);
+      }
+    }, 4000);
   }
 
   // Fetch Next Question from Generator Module
@@ -127,7 +175,7 @@ export function renderQuestionView(container, options = {}) {
     }
   }
 
-  // Updates Global Top Header Bar to integrate Exit, Mode, Mastery Score, Live XP, and Progress
+  // Updates Global Top Header Bar
   function updateGlobalTopNav() {
     const topNav = document.querySelector(".top-nav");
     if (!topNav) return;
@@ -162,11 +210,9 @@ export function renderQuestionView(container, options = {}) {
       </div>
 
       <div style="display: flex; align-items: center; gap: 14px;">
-        <!-- MASTERY SCORE BADGE -->
         <span class="stat" style="background: #eff6ff; color: #1d4ed8; padding: 3px 8px; border-radius: 6px; border: 1px solid #bfdbfe; font-size: 0.82rem;">
           🎯 Mastery <b id="top-nav-mastery-val">${currentMastery}</b>
         </span>
-        <!-- LIVE XP BADGE -->
         <span class="stat">XP <b id="top-nav-xp-val">${userXp}</b></span>
         <span class="stat">Streak <b>${userStreak}</b> 🔥</span>
         <span style="font-size: 0.85rem; font-weight: 700; color: #475569; background: #f1f5f9; padding: 4px 10px; border-radius: 8px;">${displayName}</span>
@@ -216,7 +262,6 @@ export function renderQuestionView(container, options = {}) {
       return;
     }
 
-    // Update global top nav bar with Exit, Mode, Mastery, XP, and Progress
     updateGlobalTopNav();
 
     const stepsList = currentQuestion.steps || currentQuestion.hints || [];
@@ -227,14 +272,12 @@ export function renderQuestionView(container, options = {}) {
       </div>
     ` : "";
 
-    // 2-COLUMN DOM STRUCTURE
     container.innerHTML = `
       <main style="display: flex; height: calc(100dvh - 76px); width: 100vw; overflow: hidden; padding: 8px 14px; gap: 12px; box-sizing: border-box; background: #f1f5f9;">
         
-        <!-- LEFT COLUMN (55% Width): TOOLBAR AT TOP + QUESTION PROMPT + CANVAS OVERLAY -->
+        <!-- LEFT COLUMN -->
         <section id="left-column-workspace" style="flex: 0 0 55%; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden;">
           
-          <!-- SCRATCHPAD TOOLBAR (TOP OF LEFT COLUMN ABOVE QUESTION) -->
           <div class="scratchpad-toolbar" style="padding: 8px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
             <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">✏️ Scratchpad Workspace</div>
             <div style="display: flex; gap: 8px; align-items: center;">
@@ -257,21 +300,16 @@ export function renderQuestionView(container, options = {}) {
             </div>
           </div>
 
-          <!-- SCROLLABLE QUESTION PROMPT & CANVAS OVERLAY PAPER WRAPPER -->
           <div style="flex: 1; overflow-y: auto; position: relative;">
             <div id="scratchpad-scroll-wrapper" style="position: relative; min-height: 1200px; width: 100%; padding: 18px; box-sizing: border-box;">
               
-              <!-- UNDERLAY: QUESTION PROMPT & DIAGRAM -->
               <div id="question-underlay" style="position: relative; z-index: 1; pointer-events: none; max-width: 100%;">
-                
                 <div id="question-prompt" class="math-display" style="font-size: 1.1rem; line-height: 1.9; color: #1e293b; background: #f8fafc; border-left: 4px solid #2563eb; padding: 20px 18px; border-radius: 10px; overflow-x: auto; overflow-y: visible; margin-bottom: 12px; box-sizing: border-box;">
                   ${currentQuestion.prompt}
                 </div>
-
                 ${diagramHtml}
               </div>
 
-              <!-- OVERLAY: TRANSPARENT SCRATCHPAD CANVAS -->
               <div class="canvas-wrapper" style="position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; background: transparent;">
                 <canvas id="scratchpad-canvas" style="width: 100%; height: 100%; display: block; touch-action: none;"></canvas>
               </div>
@@ -281,17 +319,15 @@ export function renderQuestionView(container, options = {}) {
 
         </section>
 
-        <!-- RIGHT COLUMN (45% Width): PROGRESSIVE HINTS & KEYPAD -->
+        <!-- RIGHT COLUMN -->
         <section style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; padding: 10px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
           
-          <!-- TOP HALF: SCROLLABLE HINTS & SOLUTION FEEDBACK (HEIGHT: 140px) -->
           <div id="hints-scroll-area" style="height: 140px; flex-shrink: 0; overflow-y: auto; padding-right: 4px; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
             <div id="hints-container" class="hints-list"></div>
             <div id="daily-feedback" class="feedback-area" style="margin-top: 4px; font-weight: 700; border-radius: 8px;"></div>
             <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 4px; padding: 6px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;"></div>
           </div>
 
-          <!-- BOTTOM HALF: UNIFIED STANDARDIZED KEYPAD DOCK SECTION -->
           <div id="keypad-dock-section" style="flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 4px;">
             <div id="keypad-display" style="width: 100%;"></div>
             <div class="keypad-grid" style="flex: 1; min-height: 0;"></div>
@@ -303,11 +339,8 @@ export function renderQuestionView(container, options = {}) {
     `;
 
     renderKaTeX(container.querySelector("#question-prompt"));
-    
-    // Initialize Scratchpad Canvas Component
     initScratchpad(container);
 
-    // Initialize Unified Standardized Keypad
     initKeypad(
       container,
       currentQuestion.keypad || null,
@@ -315,14 +348,11 @@ export function renderQuestionView(container, options = {}) {
       (val) => { handleSubmission(val); }
     );
 
-    // Progressive Hint Rendering
     const hintsContainer = container.querySelector("#hints-container");
     const hintsScrollArea = container.querySelector("#hints-scroll-area");
 
     function scrollHintsToBottom() {
-      if (hintsScrollArea) {
-        hintsScrollArea.scrollTop = hintsScrollArea.scrollHeight;
-      }
+      if (hintsScrollArea) hintsScrollArea.scrollTop = hintsScrollArea.scrollHeight;
     }
 
     function renderHintButton() {
@@ -336,10 +366,7 @@ export function renderQuestionView(container, options = {}) {
         btn.style.cssText = "margin: 6px 0; padding: 6px 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: block; width: 100%; border-radius: 6px; background: #fffbeb; border: 1px solid #f59e0b; color: #78350f; text-align: center;";
         btn.innerText = `💡 Ask for Hint (${nextStepNum}/${stepsList.length})`;
 
-        btn.addEventListener("click", () => {
-          revealNextHint();
-        });
-
+        btn.addEventListener("click", () => { revealNextHint(); });
         hintsContainer.appendChild(btn);
         scrollHintsToBottom();
       }
@@ -365,9 +392,7 @@ export function renderQuestionView(container, options = {}) {
       scrollHintsToBottom();
     }
 
-    if (stepsList.length > 0) {
-      renderHintButton();
-    }
+    if (stepsList.length > 0) renderHintButton();
   }
 
   // Submission Evaluator & Dynamic Mastery/XP Tracker
@@ -379,25 +404,18 @@ export function renderQuestionView(container, options = {}) {
     const stepsList = currentQuestion.steps || currentQuestion.hints || [];
 
     const isCorrect = isAlgebraicallyEquivalent(userAns, currentQuestion.expectedAnswer);
-
-    // Capture score prior to recording attempt
     const oldScore = state.mastery[activeGeneratorPath]?.score || 0;
 
     recordQuestionAttempt(activeGeneratorPath, isCorrect, currentHintStep, stepsList.length || 3);
 
-    // Calculate mastery score difference
     const newScore = state.mastery[activeGeneratorPath]?.score || 0;
     const scoreDiff = newScore - oldScore;
     const diffBadge = scoreDiff >= 0 ? `+${scoreDiff}` : `${scoreDiff}`;
     const diffColor = scoreDiff >= 0 ? "#15803d" : "#b91c1c";
 
-    // Live update top banner mastery value
     const topMasteryEl = document.querySelector("#top-nav-mastery-val");
     if (topMasteryEl) topMasteryEl.innerText = newScore;
 
-    // -------------------------------------------------------------------------
-    // LIVE PRACTICE MODE ATTEMPT HEARTBEAT SYNC
-    // -------------------------------------------------------------------------
     if ((isLiveSession || options.sessionId) && options.sessionId) {
       fetch(getApiUrl(), {
         method: "POST",
@@ -418,24 +436,13 @@ export function renderQuestionView(container, options = {}) {
 
     if (isCorrect) {
       sessionScore++;
-      
-      // 1. AWARD +10 XP IN STATE
       addXP(10);
 
-      // 2. LIVE UPDATE TOP NAV BAR XP DISPLAY
       const topXpEl = document.querySelector("#top-nav-xp-val");
-      if (topXpEl && state.profile) {
-        topXpEl.innerText = state.profile.xp;
-      }
+      if (topXpEl && state.profile) topXpEl.innerText = state.profile.xp;
 
-      // 3. IMMEDIATELY SYNC XP & PROGRESS TO GOOGLE SHEETS BACKEND
       if (state.userToken && state.profile) {
-        syncUserProgress(
-          state.userToken,
-          state.profile.xp,
-          state.profile.streakCount,
-          state.profile.lastDailyQuestDate
-        );
+        syncUserProgress(state.userToken, state.profile.xp, state.profile.streakCount, state.profile.lastDailyQuestDate);
       }
 
       if (feedbackEl) {
@@ -552,7 +559,8 @@ export function renderQuestionView(container, options = {}) {
     `;
 
     container.querySelector("#btn-return-dash")?.addEventListener("click", () => {
-      navigateTo("dashboard");
+      if (typeof options.onExit === "function") options.onExit();
+      else navigateTo("dashboard");
     });
   }
 
