@@ -2,6 +2,7 @@ import { state } from "../../state.js";
 import { getStudentClass } from "./helperUtils.js";
 
 let isProjectorMode = false;
+let liveTimerInterval = null;
 
 // Persistent Filter & Setup State Variables
 let activeFilterLevel = null;
@@ -25,6 +26,14 @@ function getAnonymizedName(email, index) {
   return ANONYMOUS_ALIASES[(hash + index) % ANONYMOUS_ALIASES.length];
 }
 
+function formatElapsed(startMs) {
+  if (!startMs) return "00:00";
+  const diffSec = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+  const mins = String(Math.floor(diffSec / 60)).padStart(2, '0');
+  const secs = String(diffSec % 60).padStart(2, '0');
+  return `${mins}:${secs}`;
+}
+
 export function renderLiveTabHTML(props) {
   const {
     selectedClass,
@@ -33,11 +42,28 @@ export function renderLiveTabHTML(props) {
     students,
     activeSession,
     liveAttempts,
-    summaryData
+    summaryData,
+    isLoadingSummary // True while fetching summary data from backend
   } = props;
 
   // ---------------------------------------------------------
-  // MODE A: POST-SESSION SUMMARY VIEW
+  // MODE A: PENDING SUMMARY CALCULATION LOADING SCREEN
+  // ---------------------------------------------------------
+  if (isLoadingSummary) {
+    return `
+      <div style="background: #ffffff; border-radius: 16px; padding: 48px 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); max-width: 600px; margin: 40px auto; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 16px;">
+        <div style="width: 48px; height: 48px; border: 4px solid #cbd5e1; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+        <div>
+          <h3 style="font-size: 1.3rem; color: #0f172a; margin: 0; font-weight: 800;">📊 Generating Live Session Summary...</h3>
+          <p style="color: #64748b; font-size: 0.9rem; margin: 6px 0 0 0;">Fetching final student attempts and calculating class mastery growth.</p>
+        </div>
+        <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+      </div>
+    `;
+  }
+
+  // ---------------------------------------------------------
+  // MODE B: POST-SESSION SUMMARY VIEW
   // ---------------------------------------------------------
   if (summaryData) {
     return renderTeacherSummaryHTML(summaryData, curriculum);
@@ -48,7 +74,7 @@ export function renderLiveTabHTML(props) {
   // AUTO-DEFAULT FILTERS WHEN CLASS CHANGES
   if (selectedClass !== lastSelectedClass) {
     lastSelectedClass = selectedClass;
-    selectedSkillPaths.clear(); // Reset skill selection for new class
+    selectedSkillPaths.clear();
     
     let defaultLevel = "All";
     let defaultStream = "All";
@@ -73,7 +99,7 @@ export function renderLiveTabHTML(props) {
   const classStudents = students.filter(s => getStudentClass(s) === selectedClass);
 
   // ---------------------------------------------------------
-  // MODE B: SETUP FORM (No Active Live Session)
+  // MODE C: SETUP FORM (No Active Live Session)
   // ---------------------------------------------------------
   if (!isActive) {
     const levels = Array.from(new Set(curriculum.map(c => c.level || c.year).filter(Boolean))).sort();
@@ -171,7 +197,7 @@ export function renderLiveTabHTML(props) {
             </div>
           </div>
 
-          <!-- MULTI-SKILL SELECTION (WITH PRESERVED CHECKBOXES) -->
+          <!-- MULTI-SKILL SELECTION -->
           <div>
             <label style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">
               3. Select Skill(s) to Practice (Choose 1 to 3):
@@ -213,7 +239,7 @@ export function renderLiveTabHTML(props) {
   }
 
   // ---------------------------------------------------------
-  // MODE C: LIVE MONITORING DASHBOARD (Active Session)
+  // MODE D: LIVE MONITORING DASHBOARD (Active Session)
   // ---------------------------------------------------------
   const studentMetrics = classStudents.map((st, idx) => {
     const emailKey = (st.email || st.id || "").toLowerCase();
@@ -277,23 +303,31 @@ export function renderLiveTabHTML(props) {
 
   let targetBadgeHtml = "";
   if (activeSession.targetType === "SCORE" && activeSession.targetScore) {
-    targetBadgeHtml = `<span style="background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.8rem;">🎯 Target Score: ${activeSession.targetScore} pts</span>`;
+    targetBadgeHtml = `<span style="background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.8rem;">🎯 Target: ${activeSession.targetScore} pts</span>`;
   } else if (activeSession.targetType === "TIME" && activeSession.targetTime) {
-    targetBadgeHtml = `<span id="live-timer-badge" style="background: #fef3c7; color: #92400e; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.8rem;">⏱️ Time Limit: ${activeSession.targetTime}m</span>`;
+    targetBadgeHtml = `<span style="background: #fef3c7; color: #92400e; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.8rem;">⏱️ Limit: ${activeSession.targetTime}m</span>`;
   }
+
+  const startMs = activeSession.startTime ? new Date(activeSession.startTime).getTime() : Date.now();
 
   return `
     <div style="display: flex; flex-direction: column; gap: 16px;">
       
-      <!-- ACTIVE CONTROL HEADER BAR -->
+      <!-- ACTIVE CONTROL HEADER BAR WITH REAL-TIME ELAPSED TIMER -->
       <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; background: #1e293b; color: #ffffff; padding: 18px 24px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); gap: 12px;">
         <div>
-          <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #22c55e; animation: pulse 1.5s infinite;"></span>
             <h3 style="font-size: 1.25rem; margin: 0; font-weight: 800; color: #ffffff;">LIVE PRACTICE: Class ${activeSession.className}</h3>
+            
+            <!-- SESSION ELAPSED TIMER -->
+            <span style="background: #334155; border: 1px solid #475569; color: #38bdf8; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.82rem; display: flex; align-items: center; gap: 4px;">
+              ⏱️ Elapsed: <span id="live-timer-readout" data-start="${startMs}">${formatElapsed(startMs)}</span>
+            </span>
+
             ${targetBadgeHtml}
           </div>
-          <p style="color: #94a3b8; font-size: 0.88rem; margin: 4px 0 0 0;">
+          <p style="color: #94a3b8; font-size: 0.88rem; margin: 6px 0 0 0;">
             Assigned Skills: <strong style="color: #60a5fa;">${activeSkillsList}</strong>
           </p>
         </div>
@@ -372,11 +406,12 @@ function renderTeacherSummaryHTML(summary, curriculum) {
         <div>
           <span style="background: #dcfce7; color: #15803d; font-weight: 800; padding: 4px 10px; border-radius: 8px; font-size: 0.8rem;">🎉 LIVE PRACTICE SUMMARY</span>
           <h2 style="margin: 6px 0 0 0; font-size: 1.4rem; color: #0f172a; font-weight: 800;">Class ${className} Performance Report</h2>
-          <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.88rem;">Duration: <strong>${durationMins} mins</strong> | Assigned Skills: <strong>${skillPaths.length}</strong> | Participants: <strong>${studentStats.length}</strong></p>
+          <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.88rem;">Duration: <strong>${durationMins} mins</strong> | Assigned Skills: <strong>${skillPaths.length}</strong> | Participants: <strong>${studentStats.filter(s => s.totalAttempted > 0).length}</strong></p>
         </div>
 
         <div style="display: flex; gap: 10px;">
-          <button id="btn-summary-save-tags" style="background: #16a34a; color: #ffffff; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 10px rgba(22, 163, 74, 0.25);">
+          <!-- BUTTON WITH VISUAL CONFIRMATION REACTION -->
+          <button id="btn-summary-save-tags" style="background: #16a34a; color: #ffffff; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 10px rgba(22, 163, 74, 0.25); transition: all 0.2s ease;">
             📌 Save & Auto-Tag Skills as Current
           </button>
           <button id="btn-summary-done" style="background: #2563eb; color: #ffffff; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 800; cursor: pointer;">
@@ -467,7 +502,27 @@ function renderTeacherSummaryHTML(summary, curriculum) {
 export function initLiveTabEvents(container, props) {
   const { onStartSession, onEndSession, onToggleProjector, onFilterChange, onDoneSummary, onSaveAutoTags } = props;
 
-  // 1. Target Type Change Event Handler (Persists in State)
+  // Clear existing real-time timer
+  if (liveTimerInterval) {
+    clearInterval(liveTimerInterval);
+    liveTimerInterval = null;
+  }
+
+  // Active Live Session Elapsed Clock Ticker
+  const timerReadout = container.querySelector("#live-timer-readout");
+  if (timerReadout) {
+    const startMs = Number(timerReadout.getAttribute("data-start"));
+    liveTimerInterval = setInterval(() => {
+      if (document.body.contains(timerReadout)) {
+        timerReadout.innerText = formatElapsed(startMs);
+      } else {
+        clearInterval(liveTimerInterval);
+        liveTimerInterval = null;
+      }
+    }, 1000);
+  }
+
+  // Target Type Change Event Handler
   container.querySelector("#live-target-type")?.addEventListener("change", (e) => {
     activeTargetType = e.target.value;
     if (activeTargetType === "SCORE") activeTargetVal = 80;
@@ -475,12 +530,12 @@ export function initLiveTabEvents(container, props) {
     if (typeof onFilterChange === "function") onFilterChange();
   });
 
-  // 2. Target Value Input Event Handler (Persists in State)
+  // Target Value Input Event Handler
   container.querySelector("#live-target-val-input")?.addEventListener("input", (e) => {
     activeTargetVal = Number(e.target.value) || 0;
   });
 
-  // 3. Skill Checkboxes Event Handlers (Persists Selections in Set)
+  // Skill Checkboxes Event Handlers
   container.querySelectorAll(".chk-live-skill").forEach(chk => {
     chk.addEventListener("change", (e) => {
       if (e.target.checked) {
@@ -557,7 +612,19 @@ export function initLiveTabEvents(container, props) {
     if (typeof onDoneSummary === "function") onDoneSummary();
   });
 
-  container.querySelector("#btn-summary-save-tags")?.addEventListener("click", () => {
-    if (typeof onSaveAutoTags === "function") onSaveAutoTags();
+  // VISUAL FEEDBACK REACTION FOR AUTO-TAG BUTTON
+  container.querySelector("#btn-summary-save-tags")?.addEventListener("click", async (e) => {
+    const tagBtn = e.target;
+    tagBtn.disabled = true;
+    tagBtn.innerText = "⏳ Saving Tags...";
+    
+    if (typeof onSaveAutoTags === "function") {
+      await onSaveAutoTags();
+    }
+
+    tagBtn.style.background = "#15803d";
+    tagBtn.style.color = "#ffffff";
+    tagBtn.style.boxShadow = "none";
+    tagBtn.innerText = "✓ Skills Tagged as Current!";
   });
 }
