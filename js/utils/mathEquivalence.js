@@ -36,13 +36,30 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns) {
 
   // Standardize single strings
   const clean = (str) => {
-    return String(str)
+    let s = String(str)
       .trim()
-      .replace(/\s+/g, '')
+      .replace(/^[a-zA-Z]\s*=\s*/, '')
+      .replace(/\\left\(|\\left\[/g, '(')
+      .replace(/\\right\)|\\right\]/g, ')')
       .replace(/\\left|\\right/g, '')
-      .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1)/($2)')
       .replace(/\\times|\\cdot/g, '*')
-      .replace(/\\div/g, '/');
+      .replace(/\\div/g, '/')
+      .replace(/\\pi/g, 'Math.PI');
+
+    // Handle nested \frac{a}{b} recursively
+    let prev;
+    do {
+      prev = s;
+      s = s.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '(($1)/($2))');
+    } while (s !== prev);
+
+    // Handle nested \sqrt{a} recursively
+    do {
+      prev = s;
+      s = s.replace(/\\sqrt\{([^{}]+)\}/g, 'Math.sqrt($1)');
+    } while (s !== prev);
+
+    return s.replace(/\s+/g, '');
   };
 
   const str1 = clean(userAns);
@@ -52,15 +69,20 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns) {
 
   const toJS = (expr) => {
     return expr
-      .replace(/\^/g, '**')
+      .replace(/\^\{([^{}]+)\}/g, '**($1)')
+      .replace(/\^([0-9a-zA-Z])/g, '**($1)')
+      .replace(/\{/g, '(')
+      .replace(/\}/g, ')')
+      .replace(/([0-9.]+)\s*([a-zA-Z])/g, '$1*$2')
       .replace(/([0-9a-zA-Z\)])\(/g, '$1*(')
-      .replace(/\)([\(0-9a-zA-Z])/g, ')*$1')
-      .replace(/([0-9])([a-zA-Z])/g, '$1*$2');
+      .replace(/\)([\(0-9a-zA-Z])/g, ')*$1');
   };
 
   try {
     const js1 = toJS(str1);
     const js2 = toJS(str2);
+
+    if (js1 === js2) return true;
 
     const vars = {
       x: 2.13, y: 3.47, p: 5.19, q: 7.23,
