@@ -2,6 +2,20 @@ import { state } from "../state.js";
 import { syncUserProgress } from "../services/backend.js";
 
 /**
+ * Extracts numeric level from academic grade strings (e.g. "Sec 3" -> 3)
+ */
+function parseYearNumber(val) {
+  if (typeof val === "number") return val;
+  if (!val) return null;
+  const str = String(val).trim();
+  const secMatch = str.match(/(?:Sec|P|Grade|Year)\s*(\d+)/i);
+  if (secMatch) return parseInt(secMatch[1], 10);
+  const digitMatch = str.match(/\d+/);
+  if (digitMatch) return parseInt(digitMatch[0], 10);
+  return null;
+}
+
+/**
  * Returns today's date string in local YYYY-MM-DD format
  */
 export function getTodayDateString() {
@@ -97,16 +111,18 @@ export function markDailyQuestCompletedToday() {
 }
 
 /**
- * Builds a 5-question Bento Box queue for Daily Quest habit building.
- * Refined to filter out FUTURE skills and pick from CURRENT & PAST skills based on teacher tagging.
+ * Builds a 5-question Daily Quest queue based on strict rules:
+ * 1. Must match the student's current stream (e.g., G3).
+ * 2. Must ONLY be Past or Current skills (Future skills & out-of-stream skills are strictly excluded).
  */
 export function buildDailyQuestQueue(userState = state) {
   const curriculum = userState.curriculum || [];
   const mastery = userState.mastery || {};
   const skillTags = userState.skillTags || {};
   
-  const now = Date.now();
-  const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
+  const studentStream = String(userState.profile?.stream || "G3").trim().toUpperCase();
+  const studentYear = userState.profile?.year || userState.profile?.grade || "Sec 1";
+  const studentYearNum = parseYearNumber(studentYear);
 
   const currentTopicPool = [];
   const pastTopicPool = [];
@@ -114,24 +130,45 @@ export function buildDailyQuestQueue(userState = state) {
 
   curriculum.forEach((skill) => {
     const path = skill.generatorPath;
-    const tag = (skillTags[path] || "Current").toUpperCase();
 
-    // STRICTLY SKIP FUTURE SKILLS FROM DAILY QUEST
-    if (tag === "FUTURE") {
+    // RULE 1: STREAM MATCHING - Exclude skills from other streams
+    const skillStream = String(skill.stream || "").trim().toUpperCase();
+    if (studentStream && skillStream && skillStream !== studentStream) {
+      return;
+    }
+
+    // RESOLVE SKILL TAG: Check explicit teacher tag or fallback to year comparison
+    let rawTag = skillTags[path];
+    if (!rawTag) {
+      const skillYearNum = parseYearNumber(skill.year || skill.level);
+      if (studentYearNum !== null && skillYearNum !== null) {
+        rawTag = skillYearNum < studentYearNum ? "Past" : "Future";
+      } else {
+        rawTag = "Current";
+      }
+    }
+
+    const tag = String(rawTag).toUpperCase();
+
+    // RULE 2: STRICT TAG MATCHING - Only allow CURRENT or PAST (strictly exclude FUTURE)
+    if (tag !== "CURRENT" && tag !== "PAST") {
       return;
     }
 
     const record = mastery[path];
     const score = record ? (Number(record.score) || 0) : 0;
-    const lastPracticedMs = record && record.lastPracticed ? new Date(record.lastPracticed).getTime() : 0;
-    const isRecentlyPracticed = (now - lastPracticedMs) <= FOURTEEN_DAYS_MS && lastPracticedMs > 0;
 
-    const queueItem = { generatorPath: path, skill, score, primaryReason: "Daily Quest Practice" };
+    const queueItem = { 
+      generatorPath: path, 
+      skill, 
+      score, 
+      primaryReason: tag === "CURRENT" ? "🟢 Current Unit Practice" : "🔵 Spaced Repetition (Past Unit)" 
+    };
 
     if (tag === "CURRENT") {
-      currentTopicPool.push({ ...queueItem, primaryReason: "🟢 Current Unit Practice" });
+      currentTopicPool.push(queueItem);
     } else if (tag === "PAST") {
-      pastTopicPool.push({ ...queueItem, primaryReason: "🔵 Spaced Repetition (Past Unit)" });
+      pastTopicPool.push(queueItem);
     }
 
     fallbackEligiblePool.push(queueItem);
@@ -142,7 +179,7 @@ export function buildDailyQuestQueue(userState = state) {
   const selectedQueue = [];
   const usedPaths = new Set();
 
-  // 1. Pick up to 3 questions from CURRENT skills
+  // 1. Pick up to 3 questions from SAME STREAM + CURRENT skills
   for (const item of shuffle(currentTopicPool)) {
     if (selectedQueue.length < 3 && !usedPaths.has(item.generatorPath)) {
       selectedQueue.push(item);
@@ -150,7 +187,7 @@ export function buildDailyQuestQueue(userState = state) {
     }
   }
 
-  // 2. Pick up to 2 questions from PAST skills for spaced repetition
+  // 2. Pick up to 2 questions from SAME STREAM + PAST skills for spaced repetition
   for (const item of shuffle(pastTopicPool)) {
     if (selectedQueue.length < 5 && !usedPaths.has(item.generatorPath)) {
       selectedQueue.push(item);
@@ -158,7 +195,7 @@ export function buildDailyQuestQueue(userState = state) {
     }
   }
 
-  // 3. Fallback fill remaining slots from any non-Future eligible skills
+  // 3. Fallback fill remaining slots from any eligible SAME STREAM (Past/Current) skills
   for (const item of shuffle(fallbackEligiblePool)) {
     if (selectedQueue.length < 5 && !usedPaths.has(item.generatorPath)) {
       selectedQueue.push(item);
