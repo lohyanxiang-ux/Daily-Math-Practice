@@ -45,6 +45,16 @@ export function renderOverviewTabHTML(props) {
   const classAvgScore = totalScoreCount > 0 ? Math.round(totalScoreSum / totalScoreCount) : 0;
   const avgMeta = safeGetMasteryMetadata(classAvgScore);
 
+  // Group filtered skills by topic
+  const skillsByTopic = {};
+  filteredSkills.forEach(sk => {
+    const topic = sk.topic || "General Topics";
+    if (!skillsByTopic[topic]) skillsByTopic[topic] = [];
+    skillsByTopic[topic].push(sk);
+  });
+
+  const topicEntries = Object.entries(skillsByTopic);
+
   return `
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
       <div style="background: #fff; padding: 16px; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); border: 1px solid #e2e8f0;">
@@ -99,9 +109,9 @@ export function renderOverviewTabHTML(props) {
         <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
           <select id="filter-matrix-tag" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #2563eb; font-size: 0.82rem; font-weight: 700; background: #eff6ff; color: #1e40af;">
             <option value="All">Tag: All</option>
-            <option value="Current" ${selectedMatrixTag === 'Current' ? 'selected' : ''}>🟢 Current Unit</option>
-            <option value="Past" ${selectedMatrixTag === 'Past' ? 'selected' : ''}>🔵 Past Topic</option>
-            <option value="Future" ${selectedMatrixTag === 'Future' ? 'selected' : ''}>⚪ Future Unit</option>
+            <option value="Current" ${selectedMatrixTag === 'Current' ? 'selected' : ''}>🟢 Current Skill</option>
+            <option value="Past" ${selectedMatrixTag === 'Past' ? 'selected' : ''}>🔵 Past Skill</option>
+            <option value="Future" ${selectedMatrixTag === 'Future' ? 'selected' : ''}>⚪ Future Skill</option>
           </select>
 
           <select id="filter-level" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 600; background: #fff;">
@@ -129,25 +139,45 @@ export function renderOverviewTabHTML(props) {
       <div style="overflow-x: auto; overflow-y: auto; flex: 1; border: 1px solid #e2e8f0; border-radius: 12px; min-height: 320px;">
         <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left;">
           <thead>
-            <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
-              <th style="padding: 12px 16px; position: sticky; left: 0; background: #f8fafc; z-index: 3; min-width: 220px; border-right: 1px solid #e2e8f0;">
+            <!-- ROW 1: TOPIC SUPER-HEADERS -->
+            <tr style="background: #f1f5f9;">
+              <th rowspan="2" style="padding: 12px 16px; position: sticky; left: 0; background: #f8fafc; z-index: 3; min-width: 220px; border-right: 1px solid #cbd5e1; border-bottom: 2px solid #e2e8f0;">
                 Student Profile
               </th>
-              <th style="padding: 12px 10px; text-align: center; background: #f8fafc;">Class</th>
-              ${filteredSkills.map(sk => {
-                const tagVal = selectedClass !== "All" ? (currentClassTagsBuffer[sk.generatorPath] || "Future") : "";
-                const tagBadge = tagVal === "Current" ? "🟢" : (tagVal === "Past" ? "🔵" : (tagVal === "Future" ? "⚪" : ""));
+              <th rowspan="2" style="padding: 12px 10px; text-align: center; background: #f8fafc; border-right: 2px solid #cbd5e1; border-bottom: 2px solid #e2e8f0;">
+                Class
+              </th>
 
-                return `
-                  <th class="skill-header-cell" data-path="${sk.generatorPath}" data-title="${sk.title}" style="padding: 12px; text-align: center; min-width: 140px; cursor: pointer; user-select: none; background: #f8fafc;" title="Click to preview sample questions">
-                    <div style="display: flex; flex-direction: column; gap: 2px; align-items: center;">
-                      <span style="font-weight: 700; color: #2563eb; text-decoration: underline;">${tagBadge} ${sk.title} 🔍</span>
-                      <span style="font-size: 0.72rem; color: #64748b; font-weight: 500;">${sk.strand || ''}</span>
-                    </div>
-                  </th>
-                `;
-              }).join('')}
-              <th style="padding: 12px 14px; text-align: center; min-width: 110px; background: #f8fafc;">Avg Score</th>
+              ${topicEntries.map(([topicName, skills], tIdx) => `
+                <th colspan="${skills.length}" style="padding: 8px 12px; text-align: center; background: #e2e8f0; color: #0f172a; font-weight: 800; font-size: 0.84rem; border-bottom: 1px solid #cbd5e1; border-right: ${tIdx === topicEntries.length - 1 ? '1px solid #cbd5e1' : '2px solid #94a3b8'};">
+                  📂 ${topicName} (${skills.length})
+                </th>
+              `).join('')}
+
+              <th rowspan="2" style="padding: 12px 14px; text-align: center; min-width: 110px; background: #f8fafc; border-left: 2px solid #cbd5e1; border-bottom: 2px solid #e2e8f0;">
+                Avg Score
+              </th>
+            </tr>
+
+            <!-- ROW 2: INDIVIDUAL SKILL HEADERS -->
+            <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+              ${topicEntries.map(([topicName, skills], tIdx) => `
+                ${skills.map((sk, sIdx) => {
+                  const tagVal = selectedClass !== "All" ? (currentClassTagsBuffer[sk.generatorPath] || "Future") : "";
+                  const tagBadge = tagVal === "Current" ? "🟢" : (tagVal === "Past" ? "🔵" : (tagVal === "Future" ? "⚪" : ""));
+                  const isLastInTopic = sIdx === skills.length - 1;
+                  const borderRight = isLastInTopic ? '2px solid #94a3b8' : '1px solid #e2e8f0';
+
+                  return `
+                    <th class="skill-header-cell" data-path="${sk.generatorPath}" data-title="${sk.title}" style="padding: 10px 8px; text-align: center; min-width: 140px; cursor: pointer; user-select: none; background: #f8fafc; border-right: ${borderRight};" title="Click to preview sample questions">
+                      <div style="display: flex; flex-direction: column; gap: 2px; align-items: center;">
+                        <span style="font-weight: 700; color: #2563eb; text-decoration: underline; font-size: 0.82rem;">${tagBadge} ${sk.title} 🔍</span>
+                        <span style="font-size: 0.72rem; color: #64748b; font-weight: 500;">${sk.strand || ''}</span>
+                      </div>
+                    </th>
+                  `;
+                }).join('')}
+              `).join('')}
             </tr>
           </thead>
           <tbody>
@@ -180,35 +210,40 @@ export function renderOverviewTabHTML(props) {
                     </div>
                   </td>
 
-                  <td style="padding: 12px 10px; text-align: center; color: #475569; font-weight: 600;">${getStudentClass(st)}</td>
+                  <td style="padding: 12px 10px; text-align: center; color: #475569; font-weight: 600; border-right: 2px solid #cbd5e1;">${getStudentClass(st)}</td>
 
-                  ${filteredSkills.map(sk => {
-                    const m = stMastery[sk.generatorPath];
-                    if (m && m.totalAttempted > 0) {
-                      sumScore += m.score;
-                      countSkills++;
-                      const meta = safeGetMasteryMetadata(m.score);
-                      return `
-                        <td style="padding: 10px; text-align: center;">
-                          <span style="${meta.badgeCss} padding: 4px 8px; border-radius: 10px; font-size: 0.8rem; font-weight: 700;">
-                            ${meta.score}
-                          </span>
-                        </td>
-                      `;
-                    } else {
-                      return `
-                        <td style="padding: 10px; text-align: center; color: #cbd5e1; font-weight: 600;">
-                          -
-                        </td>
-                      `;
-                    }
-                  }).join('')}
+                  ${topicEntries.map(([topicName, skills], tIdx) => `
+                    ${skills.map((sk, sIdx) => {
+                      const m = stMastery[sk.generatorPath];
+                      const isLastInTopic = sIdx === skills.length - 1;
+                      const borderRight = isLastInTopic ? '2px solid #cbd5e1' : '1px solid #e2e8f0';
+
+                      if (m && m.totalAttempted > 0) {
+                        sumScore += m.score;
+                        countSkills++;
+                        const meta = safeGetMasteryMetadata(m.score);
+                        return `
+                          <td style="padding: 10px; text-align: center; border-right: ${borderRight};">
+                            <span style="${meta.badgeCss} padding: 4px 8px; border-radius: 10px; font-size: 0.8rem; font-weight: 700;">
+                              ${meta.score}
+                            </span>
+                          </td>
+                        `;
+                      } else {
+                        return `
+                          <td style="padding: 10px; text-align: center; color: #cbd5e1; font-weight: 600; border-right: ${borderRight};">
+                            -
+                          </td>
+                        `;
+                      }
+                    }).join('')}
+                  `).join('')}
 
                   ${(() => {
                     const studentAvg = countSkills > 0 ? Math.round(sumScore / countSkills) : 0;
                     const avgMeta = safeGetMasteryMetadata(studentAvg);
                     return `
-                      <td style="padding: 10px; text-align: center;">
+                      <td style="padding: 10px; text-align: center; border-left: 2px solid #cbd5e1;">
                         <span style="${countSkills > 0 ? avgMeta.badgeCss : 'color:#94a3b8;'} padding: 4px 8px; border-radius: 10px; font-size: 0.82rem; font-weight: 800;">
                           ${countSkills > 0 ? studentAvg : 'N/A'}
                         </span>
