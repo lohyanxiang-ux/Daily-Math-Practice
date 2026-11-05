@@ -1,3 +1,5 @@
+import { canonicalizeLatex } from "../utils/mathEquivalence.js";
+
 // Globally disable MathLive error beep audio alerts
 if (window.MathfieldElement) {
   window.MathfieldElement.soundsDirectory = null;
@@ -71,11 +73,7 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
 
   function cleanValue(rawVal) {
     if (!rawVal) return "";
-    return rawVal
-      .replace(/\u2212|\u2013|\u2014|\\text\{-\}/g, "-")
-      .replace(/\\placeholder(\{[^{}]*\}|\[[^{}]*\])?/g, "")
-      .replace(/#\?/g, "")
-      .replace(/#0/g, "");
+    return canonicalizeLatex(rawVal);
   }
 
   // 1. RENDER DYNAMIC INPUT FIELD HTML
@@ -87,8 +85,8 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
           <div class="math-field-wrapper" data-index="${idx}" style="
             flex: 1;
             min-width: 0;
-            min-height: 46px;
-            max-height: 64px;
+            min-height: 44px;
+            max-height: 60px;
             padding: 2px 8px;
             background: #ffffff;
             border: 2px solid ${idx === 0 ? '#2563eb' : '#cbd5e1'};
@@ -119,8 +117,8 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
       <div class="math-field-wrapper active" data-index="0" style="
         flex: 1;
         min-width: 0;
-        min-height: 46px;
-        max-height: 64px;
+        min-height: 44px;
+        max-height: 60px;
         padding: 2px 8px;
         background: #ffffff;
         border: 2px solid #cbd5e1;
@@ -151,7 +149,7 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
 
       <!-- MODE TOGGLE BUTTON WITH EXTRA KEYS BADGE -->
       <button type="button" id="btn-toggle-keypad-mode" style="
-        height: 46px;
+        height: 44px;
         padding: 0 10px;
         font-size: 0.8rem;
         font-weight: 800;
@@ -218,9 +216,9 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
       
       if (wrapper) {
         if (val.includes("\\frac") || val.includes("^{")) {
-          wrapper.style.minHeight = "58px";
+          wrapper.style.minHeight = "54px";
         } else {
-          wrapper.style.minHeight = "46px";
+          wrapper.style.minHeight = "44px";
         }
       }
 
@@ -281,8 +279,8 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
 
       return `
         <button type="button" class="keypad-btn" data-key="${key}" style="
-          padding: 5px 2px;
-          font-size: ${isLongText ? '0.72rem' : '0.95rem'};
+          padding: 4px 2px;
+          font-size: ${isLongText ? '0.72rem' : '0.92rem'};
           font-weight: 700;
           border: 1px solid ${style.border};
           border-radius: 8px;
@@ -306,7 +304,7 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
       <button id="btn-keypad-submit" type="button" class="keypad-btn submit" style="
         grid-column: span 4;
         margin-top: 2px;
-        padding: 8px 10px;
+        padding: 7px 10px;
         font-size: 0.92rem;
         font-weight: 800;
         background: ${isSubmitted ? '#10b981' : '#2563eb'};
@@ -323,7 +321,7 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
 
     gridEl.style.display = "grid";
     gridEl.style.gridTemplateColumns = "repeat(4, minmax(0, 1fr))";
-    gridEl.style.gap = "4px";
+    gridEl.style.gap = "3px";
     gridEl.style.boxSizing = "border-box";
     gridEl.innerHTML = buttonsHTML + submitHTML;
   }
