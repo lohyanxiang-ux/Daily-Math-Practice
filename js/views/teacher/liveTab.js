@@ -295,6 +295,12 @@ export function renderLiveTabHTML(props) {
   }
 
   // MODE D: LIVE MONITORING DASHBOARD (Active Session)
+  // Resolve unified targetVal from any matching backend property
+  const targetValNum = Number(activeSession.targetVal ?? activeSession.targetValue ?? activeSession.targetScore ?? activeSession.targetTime ?? 0);
+  const sessTargetType = String(activeSession.targetType || "").toUpperCase();
+  const sessTargetTime = sessTargetType === "TIME" ? targetValNum : 0;
+  const sessTargetScore = sessTargetType === "SCORE" ? targetValNum : 0;
+
   const studentMetrics = classStudents.map((st, idx) => {
     const emailKey = (st.email || st.id || "").toLowerCase();
     const stAttempts = liveAttempts.filter(a => (a.studentEmail || "").toLowerCase() === emailKey);
@@ -335,6 +341,7 @@ export function renderLiveTabHTML(props) {
       alertMsg = `⏱️ Stalled (>3m)`;
     }
 
+    const hasReachedTargetScore = sessTargetScore > 0 && latestScore >= sessTargetScore;
     const displayName = isProjectorMode ? getAnonymizedName(emailKey, idx) : (st.displayName || st.name || "Student");
 
     return {
@@ -347,6 +354,7 @@ export function renderLiveTabHTML(props) {
       latestSkillPath,
       alertLevel,
       alertMsg,
+      hasReachedTargetScore,
       priority: alertLevel === "RED" ? 3 : (alertLevel === "YELLOW" ? 2 : (alertLevel === "ORANGE" ? 1 : 0))
     };
   });
@@ -358,15 +366,13 @@ export function renderLiveTabHTML(props) {
     return sk ? sk.title : p;
   }).join(", ");
 
-  const sessTargetType = String(activeSession.targetType || "").toUpperCase();
-  const sessTargetTime = Number(activeSession.targetTime || 0);
   const startMs = parseTimestamp(activeSession.startTime);
   const elapsedSecs = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
   const isTimeExpired = sessTargetType === "TIME" && sessTargetTime > 0 && (elapsedSecs >= sessTargetTime * 60);
 
   let targetBadgeHtml = "";
-  if (sessTargetType === "SCORE" && activeSession.targetScore) {
-    targetBadgeHtml = `<span id="live-target-badge" style="background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.8rem;">🎯 Target: ${activeSession.targetScore} pts</span>`;
+  if (sessTargetType === "SCORE" && sessTargetScore > 0) {
+    targetBadgeHtml = `<span id="live-target-badge" style="background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.8rem;">🎯 Target: ${sessTargetScore} pts</span>`;
   } else if (sessTargetType === "TIME" && sessTargetTime > 0) {
     if (isTimeExpired) {
       targetBadgeHtml = `<span id="live-target-badge" class="time-expired" style="background: #fee2e2; color: #991b1b; border: 1px solid #f87171; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.8rem; animation: pulse 1s infinite;">🚨 TIME EXPIRED! (${sessTargetTime}m limit reached)</span>`;
@@ -422,7 +428,10 @@ export function renderLiveTabHTML(props) {
               <div>
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
                   <span style="font-weight: 800; color: #0f172a; font-size: 1rem;">${m.displayName}</span>
-                  ${m.alertMsg ? `<span style="background: #ffffff; padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; font-weight: 800; border: 1px solid #cbd5e1;">${m.alertMsg}</span>` : ''}
+                  <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end;">
+                    ${m.hasReachedTargetScore ? `<span style="background: #dcfce7; color: #15803d; font-size: 0.74rem; font-weight: 800; padding: 2px 6px; border-radius: 6px; border: 1px solid #bbf7d0;">🎯 Target Reached</span>` : ''}
+                    ${m.alertMsg ? `<span style="background: #ffffff; padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; font-weight: 800; border: 1px solid #cbd5e1;">${m.alertMsg}</span>` : ''}
+                  </div>
                 </div>
 
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px;">
@@ -708,6 +717,12 @@ export function initLiveTabEvents(container, props) {
       e.preventDefault();
       const selectedClass = container.querySelector("#live-select-class")?.value;
       const checkedArray = Array.from(selectedSkillPaths);
+
+      // Read target value directly from input to guarantee accuracy on launch
+      const valInput = container.querySelector("#live-target-val-input");
+      if (valInput) {
+        activeTargetVal = Number(valInput.value) || activeTargetVal;
+      }
 
       if (!checkedArray || checkedArray.length === 0) {
         alert("Please select at least 1 skill to assign for live practice.");
