@@ -23,6 +23,10 @@ function getApiUrl() {
   return apiUrl;
 }
 
+function cleanClassStr(c) {
+  return String(c || "").trim().toLowerCase().replace(/^class\s*/i, "");
+}
+
 export function renderTeacherDashboard(container, onLogout) {
   if (!container) return;
 
@@ -71,7 +75,7 @@ export function renderTeacherDashboard(container, onLogout) {
 
   function syncClassFilters(className) {
     if (!className || className === "All") return;
-    const repStudent = students.find(s => getStudentClass(s) === className);
+    const repStudent = students.find(s => cleanClassStr(getStudentClass(s)) === cleanClassStr(className));
     if (repStudent) {
       if (repStudent.year || repStudent.level || repStudent.grade) {
         const parsedLevel = String(repStudent.year || repStudent.level || repStudent.grade).trim();
@@ -87,7 +91,7 @@ export function renderTeacherDashboard(container, onLogout) {
   }
 
   function getFilteredStudents() {
-    return students.filter(s => selectedClass === "All" || getStudentClass(s) === selectedClass);
+    return students.filter(s => selectedClass === "All" || cleanClassStr(getStudentClass(s)) === cleanClassStr(selectedClass));
   }
 
   function getFilteredSkills() {
@@ -166,7 +170,6 @@ export function renderTeacherDashboard(container, onLogout) {
     }
   }
 
-  // SMART POLLING: Does NOT wipe out the setup form DOM if no session is active
   function startLivePolling() {
     stopLivePolling();
     fetchLiveSessionData().then(() => renderTabContentOnly());
@@ -177,7 +180,6 @@ export function renderTeacherDashboard(container, onLogout) {
         await fetchLiveSessionData();
         const currentStatus = activeLiveSession?.status;
 
-        // Only re-render DOM if a live session is currently running OR session status changed
         if (currentStatus === "ACTIVE" || prevStatus !== currentStatus) {
           renderTabContentOnly();
         }
@@ -192,12 +194,17 @@ export function renderTeacherDashboard(container, onLogout) {
     }
   }
 
+  // End Session and Generate Diagnostic Summary
   async function endLiveSessionAndSummarize() {
     if (!activeLiveSession) return;
     const sessionToSummarize = { ...activeLiveSession };
-    const attemptsToSummarize = [...liveAttempts];
 
     try {
+      // 1. Fetch freshest attempt data right before terminating
+      await fetchLiveSessionData();
+      const attemptsToSummarize = [...liveAttempts];
+
+      // 2. Terminate session on backend
       await fetch(getApiUrl(), {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -211,17 +218,27 @@ export function renderTeacherDashboard(container, onLogout) {
         })
       });
 
-      const classSts = students.filter(s => getStudentClass(s) === sessionToSummarize.className);
+      // 3. Bulletproof Roster Matching
+      const sessionClassClean = cleanClassStr(sessionToSummarize.className);
+      
+      // Match students by class name OR by email present in attempts
+      const attemptedEmails = new Set(attemptsToSummarize.map(a => (a.studentEmail || "").toLowerCase()));
+      const classSts = students.filter(s => {
+        const sClassClean = cleanClassStr(getStudentClass(s));
+        const sEmailClean = (s.email || s.id || "").toLowerCase();
+        return (sessionClassClean === "all" || sClassClean === sessionClassClean) || attemptedEmails.has(sEmailClean);
+      });
+
       const durationMins = sessionToSummarize.startTime 
         ? Math.max(1, Math.round((Date.now() - new Date(sessionToSummarize.startTime).getTime()) / (60 * 1000))) 
         : 15;
 
-      let totalAttemptsCount = attemptsToSummarize.length;
-      let totalCorrectCount = attemptsToSummarize.filter(a => a.isCorrect).length;
-      let overallAccuracy = totalAttemptsCount > 0 ? Math.round((totalCorrectCount / totalAttemptsCount) * 100) : 0;
+      const totalAttemptsCount = attemptsToSummarize.length;
+      const totalCorrectCount = attemptsToSummarize.filter(a => a.isCorrect).length;
+      const overallAccuracy = totalAttemptsCount > 0 ? Math.round((totalCorrectCount / totalAttemptsCount) * 100) : 0;
 
       const studentStats = classSts.map(st => {
-        const eKey = (st.email || "").toLowerCase();
+        const eKey = (st.email || st.id || "").toLowerCase();
         const stAtt = attemptsToSummarize.filter(a => (a.studentEmail || "").toLowerCase() === eKey);
         const tAtt = stAtt.length;
         const tCorr = stAtt.filter(a => a.isCorrect).length;
@@ -230,8 +247,8 @@ export function renderTeacherDashboard(container, onLogout) {
         const endScore = stAtt.length > 0 ? stAtt[stAtt.length - 1].newScore : startScore;
 
         let status = "SOLID";
-        if (acc >= 85 && (endScore - startScore) >= 15) status = "TOP_PERFORMER";
-        else if (acc < 50 || stAtt.filter(a => a.hintsUsed >= 3).length >= 2) status = "NEEDS_SUPPORT";
+        if (tAtt > 0 && acc >= 85 && (endScore - startScore) >= 15) status = "TOP_PERFORMER";
+        else if (tAtt > 0 && (acc < 50 || stAtt.filter(a => a.hintsUsed >= 3).length >= 2)) status = "NEEDS_SUPPORT";
 
         return {
           name: st.displayName || st.name || "Student",
@@ -245,8 +262,10 @@ export function renderTeacherDashboard(container, onLogout) {
         };
       });
 
-      const startScores = studentStats.map(s => s.startScore);
-      const endScores = studentStats.map(s => s.endScore);
+      // Filter out students with 0 attempts if desired, or show full class roster
+      const activeParticipants = studentStats.filter(s => s.totalAttempted > 0);
+      const startScores = activeParticipants.map(s => s.startScore);
+      const endScores = activeParticipants.map(s => s.endScore);
       const avgScoreStart = startScores.length > 0 ? Math.round(startScores.reduce((a, b) => a + b, 0) / startScores.length) : 0;
       const avgScoreEnd = endScores.length > 0 ? Math.round(endScores.reduce((a, b) => a + b, 0) / endScores.length) : 0;
 
@@ -254,7 +273,7 @@ export function renderTeacherDashboard(container, onLogout) {
         className: sessionToSummarize.className,
         durationMins,
         skillPaths: sessionToSummarize.skillPaths,
-        studentStats,
+        studentStats: studentStats, // Roster includes all class students with attempt breakdowns
         overallAccuracy,
         avgScoreStart,
         avgScoreEnd
