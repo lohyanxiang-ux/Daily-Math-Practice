@@ -67,7 +67,6 @@ export function renderTeacherDashboard(container, onLogout) {
   let liveAttempts = [];
   let livePollTimer = null;
   let overviewPollTimer = null;
-  let targetTimePromptShown = false;
   let isLoadingSummary = false;
   let isRefreshingData = false;
   let postSessionSummaryData = null;
@@ -205,26 +204,6 @@ export function renderTeacherDashboard(container, onLogout) {
   // --------------------------------------------------------------------------
   // LIVE SESSION POLLING
   // --------------------------------------------------------------------------
-  function checkTargetTimeExpiryAlert(session) {
-    if (!session || targetTimePromptShown) return;
-    const sessTargetType = String(session.targetType || "").toUpperCase();
-    const sessTargetTime = Number(session.targetTime || 0);
-
-    if (sessTargetType === "TIME" && sessTargetTime > 0 && session.startTime) {
-      const startTimeMs = parseTimestamp(session.startTime);
-      const targetDurationMs = sessTargetTime * 60 * 1000;
-
-      if (Date.now() - startTimeMs >= targetDurationMs) {
-        targetTimePromptShown = true;
-        setTimeout(() => {
-          if (confirm(`⏱️ Target time limit of ${sessTargetTime} minutes has expired! End the live practice session now?`)) {
-            endLiveSessionAndSummarize();
-          }
-        }, 150);
-      }
-    }
-  }
-
   async function fetchLiveSessionData() {
     if (selectedClass === "All") return;
     try {
@@ -241,10 +220,6 @@ export function renderTeacherDashboard(container, onLogout) {
       if (resData.status === "success") {
         activeLiveSession = resData.activeSession || null;
         liveAttempts = resData.attempts || [];
-
-        if (activeLiveSession) {
-          checkTargetTimeExpiryAlert(activeLiveSession);
-        }
       }
     } catch (err) {
       console.error("Error fetching live session data:", err);
@@ -457,7 +432,8 @@ export function renderTeacherDashboard(container, onLogout) {
         activeSession: activeLiveSession,
         liveAttempts,
         summaryData: postSessionSummaryData,
-        isLoadingSummary: isLoadingSummary
+        isLoadingSummary: isLoadingSummary,
+        classMastery: classMastery
       });
 
       initLiveTabEvents(tabContainer, {
@@ -468,7 +444,6 @@ export function renderTeacherDashboard(container, onLogout) {
             if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "⏳ Launching Session..."; }
 
             postSessionSummaryData = null;
-            targetTimePromptShown = false;
 
             const response = await fetch(getApiUrl(), {
               method: "POST",
@@ -506,15 +481,29 @@ export function renderTeacherDashboard(container, onLogout) {
           startOverviewPolling();
           render();
         },
-        onTargetTimeExpired: (targetMins) => {
-          if (!targetTimePromptShown) {
-            targetTimePromptShown = true;
-            setTimeout(() => {
-              if (confirm(`⏱️ Target time limit of ${targetMins} minutes has expired! End the live practice session now?`)) {
-                endLiveSessionAndSummarize();
-              }
-            }, 100);
+        onExtendTime: async (additionalMins) => {
+          if (!activeLiveSession) return;
+          const newTargetTime = Number(activeLiveSession.targetTime || 0) + additionalMins;
+          activeLiveSession.targetTime = newTargetTime;
+
+          try {
+            await fetch(getApiUrl(), {
+              method: "POST",
+              headers: { "Content-Type": "text/plain;charset=utf-8" },
+              body: JSON.stringify({
+                action: "setLiveSession",
+                token: state.userToken || state.token || "TEACHER_SESSION",
+                className: activeLiveSession.className,
+                skillPaths: activeLiveSession.skillPaths,
+                status: "ACTIVE",
+                targetType: "TIME",
+                targetTime: newTargetTime
+              })
+            });
+          } catch (err) {
+            console.error("Error extending live session target time:", err);
           }
+          renderTabContentOnly();
         },
         onSaveAutoTags: async () => {
           if (!postSessionSummaryData || !postSessionSummaryData.skillPaths) return;
