@@ -1,6 +1,23 @@
 import { state } from "../../state.js";
 import { getStudentClass } from "./helperUtils.js";
 
+const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbwEsVnKapmwUFuv0vyG1wFvyAXoFKQMrpsNxibUqYh891PHXzFgmBThnT62lGoEPo_xiQ/exec";
+
+function getApiUrl() {
+  let apiUrl = state.apiUrl || 
+               state.config?.apiUrl || 
+               state.backendUrl || 
+               state.scriptUrl || 
+               window.APP_CONFIG?.apiUrl || 
+               window.API_URL || 
+               localStorage.getItem("math_app_api_url") || 
+               DEFAULT_API_URL;
+  if (apiUrl && !apiUrl.startsWith("http://") && !apiUrl.startsWith("https://")) {
+    apiUrl = "https://" + apiUrl;
+  }
+  return apiUrl;
+}
+
 let isProjectorMode = false;
 let liveTimerInterval = null;
 let hasChimedForCurrentExpiry = false;
@@ -584,7 +601,6 @@ function renderTeacherSummaryHTML(summary, curriculum) {
               ${studentStats.map(st => {
                 let badgeHtml = `<span style="background: #f1f5f9; color: #475569; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.78rem;">✅ Solid Progress</span>`;
                 
-                // Badge assignment logic including non-participants
                 if (st.totalAttempted === 0 || st.status === "DID_NOT_PARTICIPATE") {
                   badgeHtml = `<span style="background: #f1f5f9; color: #64748b; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.78rem;">⚪ Did Not Participate</span>`;
                 } else if (st.status === "TOP_PERFORMER") {
@@ -673,22 +689,60 @@ export function initLiveTabEvents(container, props) {
     }, 1000);
   }
 
-  // TARGET TIME EXPIRED BANNER BUTTON EVENT LISTENERS
-  const expiredBanner = container.querySelector("#live-time-expired-banner");
-
-  container.querySelector("#btn-banner-extend-5")?.addEventListener("click", () => {
+  // TIME EXTENSION SYNC HANDLER (LOCAL UI + SERVER DATABASE)
+  const extendTimeHandler = async (addedMins) => {
+    const expiredBanner = container.querySelector("#live-time-expired-banner");
     if (expiredBanner) expiredBanner.style.display = "none";
-    hasChimedForCurrentExpiry = false; // Reset trigger for extended practice window
-    if (typeof onExtendTime === "function") onExtendTime(5);
-  });
+    hasChimedForCurrentExpiry = false;
 
-  container.querySelector("#btn-banner-extend-10")?.addEventListener("click", () => {
-    if (expiredBanner) expiredBanner.style.display = "none";
-    hasChimedForCurrentExpiry = false; // Reset trigger for extended practice window
-    if (typeof onExtendTime === "function") onExtendTime(10);
-  });
+    // 1. Immediately update activeSession in local state/props
+    if (props.activeSession) {
+      const currentVal = Number(props.activeSession.targetVal ?? props.activeSession.targetTime ?? activeTargetVal);
+      const newVal = currentVal + addedMins;
+      props.activeSession.targetVal = newVal;
+      props.activeSession.targetTime = newVal;
+      activeTargetVal = newVal;
+
+      const targetBadge = container.querySelector("#live-target-badge");
+      if (targetBadge) {
+        targetBadge.classList.remove("time-expired");
+        targetBadge.style.background = "#fef3c7";
+        targetBadge.style.color = "#92400e";
+        targetBadge.style.border = "none";
+        targetBadge.style.animation = "none";
+        targetBadge.innerHTML = `⏱️ Limit: ${newVal}m`;
+      }
+
+      if (timerReadout) {
+        timerReadout.setAttribute("data-target-time", String(newVal));
+      }
+    }
+
+    // 2. Sync extended time limit to server database
+    try {
+      await fetch(getApiUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "extendLiveSession",
+          token: state.userToken || state.token || "TEACHER_SESSION",
+          className: props.activeSession?.className || props.selectedClass,
+          addedMinutes: addedMins,
+          sessionId: props.activeSession?.sessionId
+        })
+      });
+    } catch (err) {
+      console.error("Error extending live session time on backend:", err);
+    }
+
+    if (typeof onExtendTime === "function") onExtendTime(addedMins);
+  };
+
+  container.querySelector("#btn-banner-extend-5")?.addEventListener("click", () => extendTimeHandler(5));
+  container.querySelector("#btn-banner-extend-10")?.addEventListener("click", () => extendTimeHandler(10));
 
   container.querySelector("#btn-banner-end-session")?.addEventListener("click", () => {
+    const expiredBanner = container.querySelector("#live-time-expired-banner");
     if (expiredBanner) expiredBanner.style.display = "none";
     if (typeof onEndSession === "function") onEndSession();
   });
