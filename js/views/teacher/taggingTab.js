@@ -73,9 +73,9 @@ export function renderTaggingTabHTML(props) {
 
           <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             <span style="font-weight: 800; font-size: 0.82rem; color: #64748b;">Bulk Tag (${taggingSkills.length}):</span>
-            <button type="button" id="btn-mass-past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #0284c7; background: #e0f2fe; color: #0369a1; font-weight: 700; font-size: 0.82rem; cursor: pointer;">🔵 Set All Past</button>
-            <button type="button" id="btn-mass-current" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #16a34a; background: #dcfce7; color: #15803d; font-weight: 700; font-size: 0.82rem; cursor: pointer;">🟢 Set All Current</button>
-            <button type="button" id="btn-mass-future" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #64748b; background: #f1f5f9; color: #475569; font-weight: 700; font-size: 0.82rem; cursor: pointer;">⚪ Set All Future</button>
+            <button type="button" id="btn-mass-past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #0284c7; background: #e0f2fe; color: #0369a1; font-weight: 700; font-size: 0.82rem; cursor: pointer; touch-action: manipulation;">🔵 Set All Past</button>
+            <button type="button" id="btn-mass-current" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #16a34a; background: #dcfce7; color: #15803d; font-weight: 700; font-size: 0.82rem; cursor: pointer; touch-action: manipulation;">🟢 Set All Current</button>
+            <button type="button" id="btn-mass-future" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #64748b; background: #f1f5f9; color: #475569; font-weight: 700; font-size: 0.82rem; cursor: pointer; touch-action: manipulation;">⚪ Set All Future</button>
           </div>
 
         </div>
@@ -110,13 +110,13 @@ export function renderTaggingTabHTML(props) {
 
                       <div style="display: flex; gap: 6px; flex-shrink: 0;" class="tag-toggle-group" data-path="${sk.generatorPath}">
                         <button type="button" class="btn-tag-toggle ${currentTag === 'Past' ? 'active' : ''}" data-tag="Past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; touch-action: manipulation; ${currentTag === 'Past' ? 'background:#0284c7; color:#fff; border-color:#0284c7;' : 'background:#fff; color:#475569;'}">
-                          🔵 Past Skill
+                          <span style="pointer-events: none;">🔵 Past Skill</span>
                         </button>
                         <button type="button" class="btn-tag-toggle ${currentTag === 'Current' ? 'active' : ''}" data-tag="Current" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; touch-action: manipulation; ${currentTag === 'Current' ? 'background:#16a34a; color:#fff; border-color:#16a34a;' : 'background:#fff; color:#475569;'}">
-                          🟢 Current Skill
+                          <span style="pointer-events: none;">🟢 Current Skill</span>
                         </button>
                         <button type="button" class="btn-tag-toggle ${currentTag === 'Future' ? 'active' : ''}" data-tag="Future" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; touch-action: manipulation; ${currentTag === 'Future' ? 'background:#64748b; color:#fff; border-color:#64748b;' : 'background:#fff; color:#475569;'}">
-                          ⚪ Future Skill
+                          <span style="pointer-events: none;">⚪ Future Skill</span>
                         </button>
                       </div>
 
@@ -135,7 +135,7 @@ export function renderTaggingTabHTML(props) {
 }
 
 /**
- * Initializes Event Handlers for Skill Tagging Interactions
+ * Initializes Event Handlers using Event Delegation (Guarantees touch/click responsiveness)
  */
 export function initTaggingTabEvents(container, props) {
   const {
@@ -178,28 +178,7 @@ export function initTaggingTabEvents(container, props) {
     });
   }
 
-  // 2. Individual Skill Tag Toggle Buttons (Instant Reaction on Touch/Click)
-  container.querySelectorAll(".btn-tag-toggle").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      const targetBtn = e.currentTarget;
-      const group = targetBtn.closest(".tag-toggle-group");
-      if (!group) return;
-
-      const generatorPath = group.getAttribute("data-path");
-      const selectedTag = targetBtn.getAttribute("data-tag");
-
-      if (!generatorPath || !selectedTag) return;
-
-      // Update memory buffer
-      currentClassTagsBuffer[generatorPath] = selectedTag;
-
-      // Update button visual state immediately
-      updateGroupUI(group, selectedTag);
-    });
-  });
-
-  // 3. Bulk Mass Tag Buttons
+  // Helper to apply bulk tags across all currently filtered skills
   function applyBulkTag(targetTag) {
     if (!taggingSkills || taggingSkills.length === 0) return;
 
@@ -207,7 +186,6 @@ export function initTaggingTabEvents(container, props) {
       currentClassTagsBuffer[sk.generatorPath] = targetTag;
     });
 
-    // Update all visible DOM toggle groups
     container.querySelectorAll(".tag-toggle-group").forEach(group => {
       const path = group.getAttribute("data-path");
       if (path && currentClassTagsBuffer[path]) {
@@ -216,14 +194,40 @@ export function initTaggingTabEvents(container, props) {
     });
   }
 
-  container.querySelector("#btn-mass-past")?.addEventListener("click", () => applyBulkTag("Past"));
-  container.querySelector("#btn-mass-current")?.addEventListener("click", () => applyBulkTag("Current"));
-  container.querySelector("#btn-mass-future")?.addEventListener("click", () => applyBulkTag("Future"));
+  // 2. EVENT DELEGATION: Catches ALL taps & clicks on individual skill buttons & bulk buttons
+  container.addEventListener("click", (e) => {
+    // Individual Tag Toggle Button Tapped/Clicked
+    const tagBtn = e.target.closest(".btn-tag-toggle");
+    if (tagBtn) {
+      e.preventDefault();
+      const group = tagBtn.closest(".tag-toggle-group");
+      if (!group) return;
 
-  // 4. Save Button
-  container.querySelector("#btn-save-class-tags")?.addEventListener("click", (e) => {
-    if (typeof onSaveClassTags === "function") {
-      onSaveClassTags(e);
+      const generatorPath = group.getAttribute("data-path");
+      const selectedTag = tagBtn.getAttribute("data-tag");
+
+      if (generatorPath && selectedTag) {
+        currentClassTagsBuffer[generatorPath] = selectedTag;
+        updateGroupUI(group, selectedTag);
+      }
+      return;
+    }
+
+    // Bulk Mass Tag Button Tapped/Clicked
+    const massBtn = e.target.closest("#btn-mass-past, #btn-mass-current, #btn-mass-future");
+    if (massBtn) {
+      e.preventDefault();
+      if (massBtn.id === "btn-mass-past") applyBulkTag("Past");
+      else if (massBtn.id === "btn-mass-current") applyBulkTag("Current");
+      else if (massBtn.id === "btn-mass-future") applyBulkTag("Future");
+      return;
+    }
+
+    // Save to Google Sheet Button Tapped/Clicked
+    const saveBtn = e.target.closest("#btn-save-class-tags");
+    if (saveBtn && typeof onSaveClassTags === "function") {
+      e.preventDefault();
+      onSaveClassTags(saveBtn);
     }
   });
 }
