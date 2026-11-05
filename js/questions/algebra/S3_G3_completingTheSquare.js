@@ -34,20 +34,36 @@ function simplifyFrac(n, d) {
   const g = gcd(n, d);
   n = n / g;
   d = d / g;
+
   let str = "";
+  let latex = "";
   if (d === 1) {
     str = n.toString();
+    latex = n.toString();
   } else if (n < 0) {
     str = `-${Math.abs(n)}/${d}`;
+    latex = `-\\frac{${Math.abs(n)}}{${d}}`;
   } else {
     str = `${n}/${d}`;
+    latex = `\\frac{${n}}{${d}}`;
   }
-  return { num: n, den: d, str: str };
+  return { num: n, den: d, str: str, latex: latex };
 }
 
 function formatFracAbsLatex(fracObj) {
   if (fracObj.den === 1) return Math.abs(fracObj.num).toString();
   return `\\frac{${Math.abs(fracObj.num)}}{${fracObj.den}}`;
+}
+
+// Formats a fraction or integer into signed LaTeX term: e.g., "+\frac{3}{2}" or "-\frac{11}{4}"
+function formatSignedFracTermLatex(fracObj) {
+  if (fracObj.num === 0) return "";
+  if (fracObj.den === 1) {
+    return fracObj.num > 0 ? `+${fracObj.num}` : `${fracObj.num}`;
+  }
+  return fracObj.num > 0
+    ? `+\\frac{${fracObj.num}}{${fracObj.den}}`
+    : `-\\frac{${Math.abs(fracObj.num)}}{${fracObj.den}}`;
 }
 
 function formatPoly(a, b, c) {
@@ -93,13 +109,14 @@ export function generateQuestion(tier = 1) {
 
     const ansK = k > 0 ? `+${k}` : `${k}`;
     const ansQ = q > 0 ? `+${q}` : (q < 0 ? `${q}` : "");
-    const ans = `(x${ansK})^2${ansQ}`;
+    const ans = `\\left(x${ansK}\\right)^2${ansQ}`;
 
     return {
       strand: "Algebra & Functions",
       tier: 1,
       tierName: "Basic",
       skillTitle: "Completing the Square",
+      requiredForm: "completed_square",
       prompt: `Express $$${poly}$$ in completed square form:`,
       expectedAnswer: ans,
       keypad: defaultKeypad,
@@ -131,15 +148,16 @@ export function generateQuestion(tier = 1) {
     const qSign = qFrac.num > 0 ? "+ " : "- ";
     const step3 = `\\left(x ${pSign}${formatFracAbsLatex(pFrac)}\\right)^2 ${qSign}${formatFracAbsLatex(qFrac)}`;
 
-    const ansP = pFrac.num > 0 ? `+${pFrac.str}` : `${pFrac.str}`;
-    const ansQ = qFrac.num > 0 ? `+${qFrac.str}` : (qFrac.num < 0 ? `${qFrac.str}` : "");
-    const ans = `(x${ansP})^2${ansQ}`;
+    const ansP = formatSignedFracTermLatex(pFrac);
+    const ansQ = formatSignedFracTermLatex(qFrac);
+    const ans = `\\left(x${ansP}\\right)^2${ansQ}`;
 
     return {
       strand: "Algebra & Functions",
       tier: 2,
       tierName: "Intermediate",
       skillTitle: "Completing the Square",
+      requiredForm: "completed_square",
       prompt: `Express $$${poly}$$ in completed square form:`,
       expectedAnswer: ans,
       keypad: defaultKeypad,
@@ -179,13 +197,14 @@ export function generateQuestion(tier = 1) {
 
     const ansK = negK > 0 ? `+${negK}` : `${negK}`;
     const ansQ = q > 0 ? `+${q}` : (q < 0 ? `${q}` : "");
-    const ans = `-(x${ansK})^2${ansQ}`;
+    const ans = `-\\left(x${ansK}\\right)^2${ansQ}`;
 
     return {
       strand: "Algebra & Functions",
       tier: 3,
       tierName: "Advanced",
       skillTitle: "Completing the Square",
+      requiredForm: "completed_square",
       prompt: `Express $$${poly}$$ in completed square form:`,
       expectedAnswer: ans,
       keypad: defaultKeypad,
@@ -217,15 +236,16 @@ export function generateQuestion(tier = 1) {
     const qSign = qFrac.num > 0 ? "+ " : "- ";
     const step4 = `- \\left(x ${pSign}${formatFracAbsLatex(pFrac)}\\right)^2 ${qSign}${formatFracAbsLatex(qFrac)}`;
 
-    const ansP = pFrac.num > 0 ? `+${pFrac.str}` : `${pFrac.str}`;
-    const ansQ = qFrac.num > 0 ? `+${qFrac.str}` : (qFrac.num < 0 ? `${qFrac.str}` : "");
-    const ans = `-(x${ansP})^2${ansQ}`;
+    const ansP = formatSignedFracTermLatex(pFrac);
+    const ansQ = formatSignedFracTermLatex(qFrac);
+    const ans = `-\\left(x${ansP}\\right)^2${ansQ}`;
 
     return {
       strand: "Algebra & Functions",
       tier: 3,
       tierName: "Advanced",
       skillTitle: "Completing the Square",
+      requiredForm: "completed_square",
       prompt: `Express $$${poly}$$ in completed square form:`,
       expectedAnswer: ans,
       keypad: defaultKeypad,
