@@ -1,7 +1,7 @@
 import { state } from "../state.js";
 import { getStudentClass, getAutoDefaultTag } from "./teacher/helperUtils.js";
 import { renderOverviewTabHTML } from "./teacher/overviewTab.js";
-import { renderTaggingTabHTML } from "./teacher/taggingTab.js";
+import { renderTaggingTabHTML, initTaggingTabEvents } from "./teacher/taggingTab.js";
 import { renderLiveTabHTML, initLiveTabEvents } from "./teacher/liveTab.js";
 import { renderStudentDrawerHTML, openStudentDrawer } from "./teacher/studentDrawer.js";
 import { renderQuestionPreviewModalHTML, initQuestionPreviewModal } from "./teacher/questionPreviewModal.js";
@@ -63,7 +63,7 @@ export function renderTeacherDashboard(container, onLogout) {
   let liveAttempts = [];
   let livePollTimer = null;
   let targetTimePromptShown = false;
-  let isLoadingSummary = false; // Loading screen trigger for post-session summary
+  let isLoadingSummary = false;
   let postSessionSummaryData = null;
 
   const revealedPins = new Set();
@@ -134,7 +134,6 @@ export function renderTeacherDashboard(container, onLogout) {
     }
   }
 
-  // Live Polling & Reliable Target Time Check
   async function fetchLiveSessionData() {
     if (selectedClass === "All") return;
     try {
@@ -152,7 +151,6 @@ export function renderTeacherDashboard(container, onLogout) {
         activeLiveSession = resData.activeSession || null;
         liveAttempts = resData.attempts || [];
 
-        // RELIABLE TARGET TIME LIMIT ALERT CHECK
         if (activeLiveSession && activeLiveSession.targetType === "TIME" && activeLiveSession.targetTime && activeLiveSession.startTime && !targetTimePromptShown) {
           const startTimeMs = new Date(activeLiveSession.startTime).getTime();
           const targetMins = Number(activeLiveSession.targetTime);
@@ -197,21 +195,17 @@ export function renderTeacherDashboard(container, onLogout) {
     }
   }
 
-  // End Session with Immediate Summary Loading Screen
   async function endLiveSessionAndSummarize() {
     if (!activeLiveSession) return;
     const sessionToSummarize = { ...activeLiveSession };
 
-    // 1. Immediately switch to Loading Screen
     isLoadingSummary = true;
     renderTabContentOnly();
 
     try {
-      // 2. Fetch absolute freshest data right before stopping
       await fetchLiveSessionData();
       const attemptsToSummarize = [...liveAttempts];
 
-      // 3. Send termination signal to Google Apps Script
       await fetch(getApiUrl(), {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -225,7 +219,6 @@ export function renderTeacherDashboard(container, onLogout) {
         })
       });
 
-      // 4. Bulletproof Roster Matching
       const sessionClassClean = cleanClassStr(sessionToSummarize.className);
       const attemptedEmails = new Set(attemptsToSummarize.map(a => (a.studentEmail || "").toLowerCase()));
       const classSts = students.filter(s => {
@@ -287,7 +280,6 @@ export function renderTeacherDashboard(container, onLogout) {
       liveAttempts = [];
       stopLivePolling();
 
-      // 5. Hide loading screen and display final summary
       isLoadingSummary = false;
       render();
 
@@ -338,7 +330,42 @@ export function renderTeacherDashboard(container, onLogout) {
         tagFilterStrand,
         currentClassTagsBuffer
       });
-      bindTaggingEvents();
+
+      // WIRED DIRECTLY TO initTaggingTabEvents TO GUARANTEE CLICK/TAP RESPONSIVENESS
+      initTaggingTabEvents(tabContainer, {
+        currentClassTagsBuffer,
+        taggingSkills,
+        onFilterChange: (type, val) => {
+          if (type === "level") tagFilterLevel = val;
+          if (type === "stream") tagFilterStream = val;
+          if (type === "strand") tagFilterStrand = val;
+          renderTabContentOnly();
+        },
+        onSaveClassTags: async (saveBtn) => {
+          saveBtn.disabled = true;
+          saveBtn.innerText = "⏳ Saving...";
+          try {
+            await fetch(getApiUrl(), {
+              method: "POST",
+              headers: { "Content-Type": "text/plain;charset=utf-8" },
+              body: JSON.stringify({
+                action: "saveClassSkillTags",
+                token: state.userToken || state.token || "TEACHER_SESSION",
+                className: selectedClass,
+                tags: currentClassTagsBuffer
+              })
+            });
+            if (!state.teacherData.classSkillTags) state.teacherData.classSkillTags = {};
+            state.teacherData.classSkillTags[selectedClass] = { ...currentClassTagsBuffer };
+            saveBtn.innerText = "✅ Saved Successfully!";
+            setTimeout(() => { saveBtn.disabled = false; saveBtn.innerText = "💾 Save Skill Tags to Google Sheet"; }, 2000);
+          } catch (err) {
+            alert("Error saving skill tags: " + err.message);
+            saveBtn.disabled = false;
+            saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
+          }
+        }
+      });
     } else if (activeTab === "live") {
       tabContainer.innerHTML = renderLiveTabHTML({
         selectedClass,
@@ -458,38 +485,6 @@ export function renderTeacherDashboard(container, onLogout) {
         const skillObj = curriculum.find(c => c.generatorPath === generatorPath);
         if (skillObj) initQuestionPreviewModal(container, skillObj);
       });
-    });
-  }
-
-  function bindTaggingEvents() {
-    container.querySelector("#tag-filter-level")?.addEventListener("change", (e) => { tagFilterLevel = e.target.value; renderTabContentOnly(); });
-    container.querySelector("#tag-filter-stream")?.addEventListener("change", (e) => { tagFilterStream = e.target.value; renderTabContentOnly(); });
-    container.querySelector("#tag-filter-strand")?.addEventListener("change", (e) => { tagFilterStrand = e.target.value; renderTabContentOnly(); });
-
-    container.querySelector("#btn-save-class-tags")?.addEventListener("click", async (e) => {
-      const saveBtn = e.target;
-      saveBtn.disabled = true;
-      saveBtn.innerText = "⏳ Saving...";
-      try {
-        await fetch(getApiUrl(), {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({
-            action: "saveClassSkillTags",
-            token: state.userToken || state.token || "TEACHER_SESSION",
-            className: selectedClass,
-            tags: currentClassTagsBuffer
-          })
-        });
-        if (!state.teacherData.classSkillTags) state.teacherData.classSkillTags = {};
-        state.teacherData.classSkillTags[selectedClass] = { ...currentClassTagsBuffer };
-        saveBtn.innerText = "✅ Saved Successfully!";
-        setTimeout(() => { saveBtn.disabled = false; saveBtn.innerText = "💾 Save Skill Tags to Google Sheet"; }, 2000);
-      } catch (err) {
-        alert("Network error while saving skill tags: " + err.message);
-        saveBtn.disabled = false;
-        saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
-      }
     });
   }
 
