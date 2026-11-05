@@ -87,46 +87,10 @@ export async function renderStudentDashboard(container) {
             <style>@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }</style>
           ` : ''}
 
-          <!-- 4-CARD BENTO GRID DASHBOARD -->
-          <main style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; width: 100%;">
+          <!-- 3-CARD BENTO GRID DASHBOARD -->
+          <main style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; width: 100%;">
             
-            <!-- CARD 1: TEACHER LIVE PRACTICE -->
-            <section style="background: #ffffff; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; min-height: 380px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid ${isLiveActive ? '#86efac' : '#cbd5e1'};">
-              <div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                  <span style="background: ${isLiveActive ? '#dcfce7' : '#f1f5f9'}; color: ${isLiveActive ? '#15803d' : '#64748b'}; padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 800;">
-                    ${isLiveActive ? '🔴 Active Session' : 'Teacher Mode'}
-                  </span>
-                </div>
-
-                <h3 style="font-size: 1.6rem; font-weight: 800; color: #0f172a; margin: 0 0 16px 0; display: flex; align-items: center; gap: 10px;">
-                  📡 Live Practice
-                </h3>
-
-                <p style="color: #475569; line-height: 1.5; font-size: 0.95rem;">
-                  ${isLiveActive 
-                    ? 'Your teacher has assigned skills for live class practice right now!' 
-                    : 'Join real-time practice sessions assigned directly by your teacher.'}
-                </p>
-              </div>
-
-              <button id="btn-card-live-practice" type="button" style="
-                width: 100%;
-                padding: 14px;
-                font-size: 1rem;
-                font-weight: 800;
-                border-radius: 12px;
-                cursor: pointer;
-                transition: all 0.2s ease;
-                ${isLiveActive 
-                  ? 'background: #16a34a; color: #ffffff; border: none; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);' 
-                  : 'background: #f8fafc; color: #475569; border: 1.5px solid #cbd5e1;'}
-              ">
-                ${isLiveActive ? 'Join Live Practice ➔' : 'Check for Live Session ➔'}
-              </button>
-            </section>
-
-            <!-- CARD 2: DAILY PRACTICE / DAILY QUEST -->
+            <!-- CARD 1: DAILY PRACTICE / DAILY QUEST -->
             <section style="background: #ffffff; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; min-height: 380px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid #cbd5e1;">
               <div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
@@ -159,7 +123,7 @@ export async function renderStudentDashboard(container) {
               </button>
             </section>
 
-            <!-- CARD 3: ADAPTIVE MEMORY / SMART REVIEW -->
+            <!-- CARD 2: ADAPTIVE MEMORY / SMART REVIEW -->
             <section style="background: #ffffff; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; min-height: 380px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid #cbd5e1;">
               <div>
                 <div style="font-size: 0.88rem; font-weight: 700; color: #b45309; margin-bottom: 24px;">
@@ -191,7 +155,7 @@ export async function renderStudentDashboard(container) {
               </button>
             </section>
 
-            <!-- CARD 4: SELF-PACED / SKILL TREE -->
+            <!-- CARD 3: SELF-PACED / SKILL TREE -->
             <section style="background: #ffffff; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; min-height: 380px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid #cbd5e1;">
               <div>
                 <div style="font-size: 0.88rem; font-weight: 700; color: #0369a1; margin-bottom: 24px;">
@@ -228,7 +192,7 @@ export async function renderStudentDashboard(container) {
       </div>
     `;
 
-    bindEvents(isLiveActive);
+    bindEvents();
   }
 
   function stopPolling() {
@@ -249,16 +213,8 @@ export async function renderStudentDashboard(container) {
     });
   }
 
-  function bindEvents(isLiveActive) {
+  function bindEvents() {
     container.querySelector("#btn-banner-join-live")?.addEventListener("click", startLiveSessionPractice);
-
-    container.querySelector("#btn-card-live-practice")?.addEventListener("click", () => {
-      if (isLiveActive) {
-        startLiveSessionPractice();
-      } else {
-        alert("No live practice session is currently assigned for your class. Ask your teacher to launch one!");
-      }
-    });
 
     container.querySelector("#btn-start-daily-quest")?.addEventListener("click", () => {
       stopPolling();
