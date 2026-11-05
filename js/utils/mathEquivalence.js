@@ -100,7 +100,7 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
       /\([^\)]+\)\s*\^/.test(expStr);
 
     if (isExpectedCompletedSquare) {
-      const hasSquaredTerm = /\([^\)]+\)\s*(\^2|\^\{2\}|\*\*\s*2|\*\*\s*\(2\))/.test(userClean);
+      const hasSquaredTerm = /\([^\)]+\)\s*(\^2|\^\{2\}|\*\*\s*2|\*\*\s*\(2\))/ .test(userClean);
       if (!hasSquaredTerm) return false;
     }
 
@@ -134,18 +134,23 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
   // STEP 2: MULTI-POINT NUMERICAL EQUIVALENCE EVALUATION
   // ------------------------------------------------------------------
   const toJS = (expr) => {
-    let e = expr
-      .replace(/\^\{([^{}]+)\}/g, '**($1)')
-      .replace(/\^([0-9a-zA-Z])/g, '**($1)')
-      .replace(/\{/g, '(')
-      .replace(/\}/g, ')')
-      .replace(/\[/g, '(')
-      .replace(/\]/g, ')');
+    let e = expr;
 
-    // Insert implicit multiplications
-    e = e.replace(/([0-9.]+)\s*([a-zA-Z])/g, '$1*$2');
-    e = e.replace(/([0-9a-zA-Z\)])\s*\(/g, '$1*(');
-    e = e.replace(/\)\s*([0-9a-zA-Z])/g, ')*$1');
+    // Robustly convert ^ exponents into Math.pow(...) to prevent JS unary minus syntax errors
+    let prev;
+    do {
+      prev = e;
+      e = e.replace(/(\([^\(\)]+\)|[a-zA-Z0-9\.]+)\s*\^\s*\{([^{}]+)\}/g, 'Math.pow($1, $2)');
+      e = e.replace(/(\([^\(\)]+\)|[a-zA-Z0-9\.]+)\s*\^\s*([0-9a-zA-Z]+)/g, 'Math.pow($1, $2)');
+    } while (e !== prev);
+
+    e = e.replace(/\{/g, '(').replace(/\}/g, ')').replace(/\[/g, '(').replace(/\]/g, ')');
+
+    // Insert implicit multiplications safely (excluding function names like Math.pow or Math.sqrt)
+    e = e.replace(/([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z\(])/g, '$1*$2');
+    e = e.replace(/(\))\s*\(/g, ')*(');
+    e = e.replace(/(\))\s*([0-9a-zA-Z])/g, ')*$2');
+    e = e.replace(/\b(?!(?:Math|pow|sqrt|sin|cos|tan|log|ln|abs|min|max)\b)([a-zA-Z])\s*\(/g, '$1*(');
 
     return e;
   };
