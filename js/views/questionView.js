@@ -117,7 +117,6 @@ export function renderQuestionView(container, options = {}) {
             cleanupListeners();
             renderStudentLiveSummary();
           } else {
-            // Dynamically sync Target Score from active teacher session
             if (activeSession.targetType === "SCORE" && activeSession.targetVal) {
               options.targetScore = Number(activeSession.targetVal);
             }
@@ -270,7 +269,7 @@ export function renderQuestionView(container, options = {}) {
     container.innerHTML = `
       <main style="display: flex; height: calc(100dvh - 76px); width: 100vw; overflow: hidden; padding: 8px 14px; gap: 12px; box-sizing: border-box; background: #f1f5f9;">
         
-        <!-- LEFT COLUMN -->
+        <!-- LEFT COLUMN: WORKSPACE -->
         <section id="left-column-workspace" style="flex: 0 0 55%; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden;">
           
           <div class="scratchpad-toolbar" style="padding: 8px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
@@ -314,18 +313,24 @@ export function renderQuestionView(container, options = {}) {
 
         </section>
 
-        <!-- RIGHT COLUMN (With iPad Touch Scroll Fix & Dynamic Scroll height) -->
+        <!-- RIGHT COLUMN: FIXED HINT BOX + AUTO-EXPANDING INPUT + FIXED KEYPAD -->
         <section style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; padding: 10px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
           
-          <div id="hints-scroll-area" style="max-height: 260px; min-height: 80px; flex-shrink: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 4px; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
+          <!-- FIXED SIZE HINT & SOLUTION AREA WITH TOUCH SCROLLING -->
+          <div id="hints-scroll-area" style="height: 210px; flex-shrink: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 4px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; touch-action: pan-y;">
             <div id="hints-container" class="hints-list"></div>
             <div id="daily-feedback" class="feedback-area" style="margin-top: 4px; font-weight: 700; border-radius: 8px;"></div>
-            <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 4px; padding: 8px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; max-height: 180px; overflow-y: auto; -webkit-overflow-scrolling: touch;"></div>
+            <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 4px; padding: 8px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;"></div>
           </div>
 
-          <div id="keypad-dock-section" style="flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 4px;">
-            <div id="keypad-display" style="width: 100%;"></div>
-            <div class="keypad-grid" style="flex: 1; min-height: 0;"></div>
+          <!-- KEYPAD & AUTO-EXPANDING INPUT SECTION -->
+          <div id="keypad-dock-section" style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; overflow: hidden;">
+            
+            <!-- AUTO-EXPANDING INPUT CONTAINER (Adapts height to tall fractions/exponents so nothing is blocked) -->
+            <div id="keypad-display" style="width: 100%; min-height: 56px; max-height: 110px; overflow-y: auto; -webkit-overflow-scrolling: touch; flex-shrink: 0; display: flex; flex-direction: column; justify-content: center;"></div>
+            
+            <!-- FIXED HEIGHT KEYPAD GRID -->
+            <div class="keypad-grid" style="height: 260px; flex-shrink: 0;"></div>
           </div>
 
         </section>
@@ -491,7 +496,7 @@ export function renderQuestionView(container, options = {}) {
       renderKaTeX(solutionBox);
     }
 
-    // Auto-scroll the hints/solution container down on submission
+    // Auto-scroll the fixed hints/solution container down on submission
     if (hintsScrollArea) {
       setTimeout(() => {
         hintsScrollArea.scrollTop = hintsScrollArea.scrollHeight;
