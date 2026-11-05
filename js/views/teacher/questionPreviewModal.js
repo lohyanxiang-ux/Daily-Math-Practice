@@ -2,10 +2,23 @@ import { state } from "../../state.js";
 import { loadQuestionGenerator } from "../../questions/loader.js";
 import { renderKaTeX } from "../../utils/katexHelper.js";
 import { findGeneratorFunction } from "./helperUtils.js";
+import { initScratchpad } from "../../components/scratchpad.js";
 
 export function renderQuestionPreviewModalHTML() {
   return `
     <div id="skill-preview-modal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); z-index: 110; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(4px);">
+      <style>
+        .btn-annotation-tool.active {
+          background: #eff6ff !important;
+          color: #1d4ed8 !important;
+          border-color: #2563eb !important;
+        }
+        .color-swatch.active {
+          outline: 2px solid #2563eb !important;
+          outline-offset: 2px !important;
+        }
+      </style>
+
       <div id="modal-card-container" style="background: #ffffff; width: 94vw; max-width: 1100px; height: 88vh; border-radius: 18px; padding: 20px 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 12px; position: relative; transition: all 0.2s ease; box-sizing: border-box;">
         
         <!-- HEADER TOOLBAR -->
@@ -23,7 +36,7 @@ export function renderQuestionPreviewModalHTML() {
           </div>
         </div>
 
-        <!-- CONTROLS & ANNOTATION TOOLBAR -->
+        <!-- CONTROLS & HIGH-PERFORMANCE SCRATCHPAD ANNOTATION TOOLBAR -->
         <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; background: #f8fafc; padding: 8px 14px; border-radius: 12px; border: 1px solid #e2e8f0; gap: 10px;">
           
           <!-- Difficulty Tier Selectors -->
@@ -34,38 +47,50 @@ export function renderQuestionPreviewModalHTML() {
             <button class="btn-tier-select" data-tier="3" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.8rem; font-weight: 700; cursor: pointer; background: #ffffff;">Tier 3 (Adv.)</button>
           </div>
 
-          <!-- Annotation Toolset -->
-          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+          <!-- Scratchpad Annotation Toolset -->
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <span style="font-weight: 800; font-size: 0.84rem; color: #334155;">Tools:</span>
             
-            <button id="btn-tool-move" class="btn-annotation-tool active" style="padding: 5px 12px; border-radius: 8px; border: 1.5px solid #2563eb; background: #eff6ff; color: #1d4ed8; font-size: 0.82rem; font-weight: 700; cursor: pointer;" title="Scroll and interact with working">
-              ✋ Move / Scroll
-            </button>
-            
-            <button id="btn-tool-pen" class="btn-annotation-tool" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; color: #334155; font-size: 0.82rem; font-weight: 700; cursor: pointer;" title="Draw on screen">
-              ✏️ Pen
-            </button>
-            
-            <button id="btn-tool-eraser" class="btn-annotation-tool" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; color: #334155; font-size: 0.82rem; font-weight: 700; cursor: pointer;" title="Erase annotations">
-              🧹 Eraser
-            </button>
+            <div style="display: flex; gap: 4px; align-items: center;">
+              <button class="btn-annotation-tool active" data-tool="pointer" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; color: #334155; font-size: 0.82rem; font-weight: 700; cursor: pointer;" title="Scroll and interact with working">
+                ✋ Move / Scroll
+              </button>
+              
+              <button class="btn-annotation-tool" data-tool="pen" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; color: #334155; font-size: 0.82rem; font-weight: 700; cursor: pointer;" title="Draw on screen">
+                ✏️ Pen
+              </button>
+              
+              <button class="btn-annotation-tool" data-tool="eraser" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; color: #334155; font-size: 0.82rem; font-weight: 700; cursor: pointer;" title="Erase annotations">
+                🧹 Eraser
+              </button>
+            </div>
 
-            <input id="draw-color" type="color" value="#dc2626" style="width: 30px; height: 30px; border: none; cursor: pointer; border-radius: 6px; background: none;" title="Pen Color" />
+            <!-- Color Swatches -->
+            <div style="display: flex; gap: 6px; align-items: center; padding: 0 4px;">
+              <div class="color-swatch" data-color="#dc2626" style="width: 22px; height: 22px; border-radius: 50%; background: #dc2626; cursor: pointer; border: 2px solid #ffffff; box-shadow: 0 0 0 1px #cbd5e1;" title="Red Pen"></div>
+              <div class="color-swatch active" data-color="#1e293b" style="width: 22px; height: 22px; border-radius: 50%; background: #1e293b; cursor: pointer; border: 2px solid #ffffff; box-shadow: 0 0 0 1px #cbd5e1;" title="Dark Pen"></div>
+              <div class="color-swatch" data-color="#2563eb" style="width: 22px; height: 22px; border-radius: 50%; background: #2563eb; cursor: pointer; border: 2px solid #ffffff; box-shadow: 0 0 0 1px #cbd5e1;" title="Blue Pen"></div>
+              <div class="color-swatch" data-color="#16a34a" style="width: 22px; height: 22px; border-radius: 50%; background: #16a34a; cursor: pointer; border: 2px solid #ffffff; box-shadow: 0 0 0 1px #cbd5e1;" title="Green Pen"></div>
+            </div>
 
-            <button id="btn-tool-clear" style="padding: 5px 10px; border-radius: 8px; border: 1px solid #fca5a5; background: #fef2f2; color: #991b1b; font-size: 0.8rem; font-weight: 700; cursor: pointer;">
+            <button id="btn-clear-canvas" style="padding: 5px 10px; border-radius: 8px; border: 1px solid #fca5a5; background: #fef2f2; color: #991b1b; font-size: 0.8rem; font-weight: 700; cursor: pointer;">
               🗑️ Clear
             </button>
           </div>
         </div>
 
-        <!-- MAXIMIZED WORKSPACE VIEWPORT WITH SCROLLABLE CONTENT & CANVAS OVERLAY -->
-        <div style="flex: 1; min-height: 0; position: relative; border: 1.5px solid #cbd5e1; border-radius: 14px; background: #ffffff; overflow: hidden;">
+        <!-- MAXIMIZED WORKSPACE VIEWPORT WITH RESPONSIVE CANVAS OVERLAY -->
+        <div id="modal-workspace-scroll" style="flex: 1; min-height: 0; position: relative; border: 1.5px solid #cbd5e1; border-radius: 14px; background: #ffffff; overflow-y: auto; overflow-x: hidden;">
           
-          <div id="modal-workspace-scroll" style="height: 100%; overflow-y: auto; overflow-x: hidden; position: relative; padding: 20px; box-sizing: border-box;">
+          <div style="position: relative; min-height: 100%; width: 100%; padding: 20px; box-sizing: border-box;">
             
-            <canvas id="annotation-canvas" style="position: absolute; top: 0; left: 0; z-index: 5; pointer-events: none; touch-action: none;"></canvas>
-            
+            <!-- Underlay Question Prompt & Solution Content -->
             <div id="modal-question-container" style="position: relative; z-index: 1; display: flex; flex-direction: column; gap: 16px;"></div>
+
+            <!-- Apple Pencil Scratchpad Canvas Overlay Layer -->
+            <div class="canvas-wrapper" style="position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; background: transparent; pointer-events: auto;">
+              <canvas id="scratchpad-canvas" style="width: 100%; height: 100%; display: block; touch-action: pan-y;"></canvas>
+            </div>
 
           </div>
 
@@ -97,151 +122,14 @@ export function initQuestionPreviewModal(container, activeSkill) {
   let isAnswerVisible = false;
   let isStepsVisible = false;
   let isFullscreen = false;
-  
-  // Canvas Annotation State: 'move' | 'pen' | 'eraser'
-  let currentTool = "move";
-  let isDrawing = false;
 
   const modalEl = container.querySelector("#skill-preview-modal");
   const cardEl = container.querySelector("#modal-card-container");
-  const scrollEl = container.querySelector("#modal-workspace-scroll");
-  const canvas = container.querySelector("#annotation-canvas");
-  const ctx = canvas ? canvas.getContext("2d") : null;
 
-  // Offscreen canvas buffer to preserve drawings when canvas sizes dynamically
-  const offscreenCanvas = document.createElement("canvas");
-  const offscreenCtx = offscreenCanvas.getContext("2d");
-
-  function syncCanvasSize() {
-    if (!canvas || !scrollEl || !ctx) return;
-
-    const newWidth = scrollEl.clientWidth;
-    const newHeight = Math.max(scrollEl.scrollHeight, scrollEl.clientHeight);
-
-    if (canvas.width === newWidth && canvas.height === newHeight) return;
-
-    // Store existing artwork in offscreen buffer
-    if (canvas.width > 0 && canvas.height > 0) {
-      offscreenCanvas.width = canvas.width;
-      offscreenCanvas.height = canvas.height;
-      offscreenCtx.drawImage(canvas, 0, 0);
-    }
-
-    // Resize main canvas
-    canvas.width = newWidth;
-    canvas.height = newHeight;
-
-    // Restore artwork
-    if (offscreenCanvas.width > 0 && offscreenCanvas.height > 0) {
-      ctx.drawImage(offscreenCanvas, 0, 0);
-    }
+  // Initialize high-performance Apple Pencil scratchpad engine on the modal card
+  if (cardEl) {
+    initScratchpad(cardEl);
   }
-
-  function updateToolState() {
-    const moveBtn = container.querySelector("#btn-tool-move");
-    const penBtn = container.querySelector("#btn-tool-pen");
-    const eraserBtn = container.querySelector("#btn-tool-eraser");
-
-    [moveBtn, penBtn, eraserBtn].forEach(btn => {
-      if (!btn) return;
-      btn.style.background = "#ffffff";
-      btn.style.color = "#334155";
-      btn.style.borderColor = "#cbd5e1";
-    });
-
-    if (!canvas) return;
-
-    if (currentTool === "move") {
-      canvas.style.pointerEvents = "none";
-      if (moveBtn) {
-        moveBtn.style.background = "#eff6ff";
-        moveBtn.style.color = "#1d4ed8";
-        moveBtn.style.borderColor = "#2563eb";
-      }
-    } else if (currentTool === "pen") {
-      canvas.style.pointerEvents = "auto";
-      canvas.style.cursor = "crosshair";
-      if (penBtn) {
-        penBtn.style.background = "#eff6ff";
-        penBtn.style.color = "#1d4ed8";
-        penBtn.style.borderColor = "#2563eb";
-      }
-    } else if (currentTool === "eraser") {
-      canvas.style.pointerEvents = "auto";
-      canvas.style.cursor = "cell";
-      if (eraserBtn) {
-        eraserBtn.style.background = "#fef2f2";
-        eraserBtn.style.color = "#991b1b";
-        eraserBtn.style.borderColor = "#fca5a5";
-      }
-    }
-  }
-
-  function initCanvasListeners() {
-    if (!canvas || !ctx) return;
-
-    const getPos = (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      return { x: clientX - rect.left, y: clientY - rect.top };
-    };
-
-    const startDraw = (e) => {
-      if (currentTool === "move") return;
-      isDrawing = true;
-      const pos = getPos(e);
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
-    };
-
-    const draw = (e) => {
-      if (!isDrawing || currentTool === "move") return;
-      const pos = getPos(e);
-
-      if (currentTool === "pen") {
-        ctx.globalCompositeOperation = "source-over";
-        ctx.strokeStyle = container.querySelector("#draw-color")?.value || "#dc2626";
-        ctx.lineWidth = 3;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-      } else if (currentTool === "eraser") {
-        ctx.globalCompositeOperation = "destination-out";
-        ctx.lineWidth = 20;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-      }
-
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
-    };
-
-    const stopDraw = () => { isDrawing = false; };
-
-    canvas.addEventListener("mousedown", startDraw);
-    canvas.addEventListener("mousemove", draw);
-    canvas.addEventListener("mouseup", stopDraw);
-    canvas.addEventListener("mouseleave", stopDraw);
-
-    canvas.addEventListener("touchstart", startDraw, { passive: true });
-    canvas.addEventListener("touchmove", draw, { passive: true });
-    canvas.addEventListener("touchend", stopDraw);
-  }
-
-  initCanvasListeners();
-
-  // Toolbar Tool Handlers
-  container.querySelector("#btn-tool-move")?.addEventListener("click", () => { currentTool = "move"; updateToolState(); });
-  container.querySelector("#btn-tool-pen")?.addEventListener("click", () => { currentTool = "pen"; syncCanvasSize(); updateToolState(); });
-  container.querySelector("#btn-tool-eraser")?.addEventListener("click", () => { currentTool = "eraser"; syncCanvasSize(); updateToolState(); });
-
-  container.querySelector("#btn-tool-clear")?.addEventListener("click", () => {
-    if (canvas && ctx) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      offscreenCanvas.width = 0;
-      offscreenCanvas.height = 0;
-    }
-  });
 
   // Fullscreen Handler
   container.querySelector("#btn-toggle-fullscreen")?.addEventListener("click", () => {
@@ -263,8 +151,6 @@ export function initQuestionPreviewModal(container, activeSkill) {
       cardEl.style.padding = "20px 24px";
       if (fsBtn) fsBtn.innerText = "⛶ Fullscreen";
     }
-
-    setTimeout(syncCanvasSize, 100);
   });
 
   container.querySelector("#btn-close-skill-modal")?.addEventListener("click", () => {
@@ -287,7 +173,6 @@ export function initQuestionPreviewModal(container, activeSkill) {
       ansContainer.style.display = isAnswerVisible ? "block" : "none";
       if (isAnswerVisible) renderKaTeX(ansContainer);
     }
-    setTimeout(syncCanvasSize, 50);
   });
 
   container.querySelector("#btn-toggle-steps")?.addEventListener("click", () => {
@@ -298,7 +183,6 @@ export function initQuestionPreviewModal(container, activeSkill) {
       stepsContainer.style.display = isStepsVisible ? "block" : "none";
       if (isStepsVisible) renderKaTeX(stepsContainer);
     }
-    setTimeout(syncCanvasSize, 50);
   });
 
   container.querySelector("#btn-regen-question")?.addEventListener("click", () => {
@@ -428,8 +312,6 @@ export function initQuestionPreviewModal(container, activeSkill) {
         </div>
       `;
     }
-
-    setTimeout(syncCanvasSize, 100);
   }
 
   container.querySelector("#modal-skill-title").innerText = activeSkill.title;
@@ -437,9 +319,7 @@ export function initQuestionPreviewModal(container, activeSkill) {
   
   updateTierButtons();
   updateRevealButtons();
-  updateToolState();
   renderSampleQuestion();
   
   if (modalEl) modalEl.style.display = "flex";
-  setTimeout(syncCanvasSize, 120);
 }
