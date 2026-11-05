@@ -9,13 +9,20 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns) {
 
   if (!expectedAns) return false;
 
-  // Standardize strings
+  // Support pipe-separated alternative options (e.g. "(x+5/2)^2-29/4 | (x+2.5)^2-7.25")
+  if (typeof expectedAns === "string" && expectedAns.includes("|")) {
+    return expectedAns.split("|").some(exp => isAlgebraicallyEquivalent(userAns, exp.trim()));
+  }
+
+  // Standardize LaTeX strings to canonical mathematical expressions
   const clean = (str) => {
     return String(str)
       .trim()
       .replace(/\s+/g, '')
-      .replace(/\\times/g, '*')
-      .replace(/\\cdot/g, '*');
+      .replace(/\\left|\\right/g, '') // Remove LaTeX parens sizing
+      .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1)/($2)') // Convert \frac{a}{b} -> (a)/(b)
+      .replace(/\\times|\\cdot/g, '*')
+      .replace(/\\div/g, '/');
   };
 
   const str1 = clean(userAns);
