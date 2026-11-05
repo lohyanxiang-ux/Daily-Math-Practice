@@ -88,7 +88,7 @@ export function renderQuestionView(container, options = {}) {
     }
   }
 
-  // Live Session Status Monitoring Timer
+  // Live Session Status Monitoring Timer & Target Goal Resolver
   if (isLiveSession) {
     const studentClass = state.profile?.class || state.profile?.className || state.user?.class || "";
     const studentEmail = state.profile?.email || state.profile?.studentEmail || state.user?.email || "";
@@ -116,6 +116,11 @@ export function renderQuestionView(container, options = {}) {
           if (isEnded) {
             cleanupListeners();
             renderStudentLiveSummary();
+          } else {
+            // Dynamically sync Target Score from active teacher session
+            if (activeSession.targetType === "SCORE" && activeSession.targetVal) {
+              options.targetScore = Number(activeSession.targetVal);
+            }
           }
         }
       } catch (err) {
@@ -414,11 +419,12 @@ export function renderQuestionView(container, options = {}) {
 
     // TARGET SCORE MILESTONE NOTIFICATION
     let targetAchievedBanner = "";
-    if (options.targetScore && newScore >= options.targetScore && !targetScoreAchievedAlertShown) {
+    const activeTargetScore = options.targetScore || options.targetVal;
+    if (activeTargetScore && newScore >= Number(activeTargetScore) && !targetScoreAchievedAlertShown) {
       targetScoreAchievedAlertShown = true;
       targetAchievedBanner = `
         <div style="margin-top: 6px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 6px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 800;">
-          🎯 Target Mastery Score of ${options.targetScore} Achieved! 🎉 Keep practicing to push higher!
+          🎯 Target Mastery Score of ${activeTargetScore} Achieved! 🎉 Keep practicing to push higher!
         </div>
       `;
     }
