@@ -29,7 +29,7 @@ export function renderTaggingTabHTML(props) {
             📌 Class Skill Tagging for ${selectedClass === 'All' ? 'All Classes' : `Class ${selectedClass}`}
           </h3>
           <p style="margin: 4px 0 0 0; font-size: 0.86rem; color: #64748b;">
-            Tag skills as <strong>Current</strong> (Daily quest priority), <strong>Past</strong> (Spaced review), or <strong>Future</strong> (Excluded from Daily Quest & greyed out in Skill Tree).
+            Tag skills as <strong>Current Skill</strong> (Daily quest priority), <strong>Past Skill</strong> (Spaced review), or <strong>Future Skill</strong> (Excluded from Daily Quest & greyed out in Skill Tree).
           </p>
         </div>
 
@@ -51,18 +51,19 @@ export function renderTaggingTabHTML(props) {
           <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
             <span style="font-weight: 800; font-size: 0.86rem; color: #0f172a;">Filter Skills:</span>
 
+            <!-- CLEAN LEVEL DROPDOWN: Shows "Sec 1" directly instead of "Level Sec 1" -->
             <select id="tag-filter-level" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.84rem; font-weight: 700; background: #ffffff; color: #1e293b; cursor: pointer;">
-              <option value="All">Level: All</option>
-              ${levels.map(l => `<option value="${l}" ${String(l) === String(tagFilterLevel) ? 'selected' : ''}>Level ${l}</option>`).join('')}
+              <option value="All">All Levels</option>
+              ${levels.map(l => `<option value="${l}" ${String(l) === String(tagFilterLevel) ? 'selected' : ''}>${l}</option>`).join('')}
             </select>
 
             <select id="tag-filter-stream" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.84rem; font-weight: 700; background: #ffffff; color: #1e293b; cursor: pointer;">
-              <option value="All">Stream: All</option>
+              <option value="All">All Streams</option>
               ${streams.map(s => `<option value="${s}" ${s === tagFilterStream ? 'selected' : ''}>${s}</option>`).join('')}
             </select>
 
             <select id="tag-filter-strand" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.84rem; font-weight: 700; background: #ffffff; color: #1e293b; cursor: pointer;">
-              <option value="All">Strand: All</option>
+              <option value="All">All Strands</option>
               ${strands.map(s => `<option value="${s}" ${s === tagFilterStrand ? 'selected' : ''}>${s}</option>`).join('')}
             </select>
           </div>
@@ -106,13 +107,13 @@ export function renderTaggingTabHTML(props) {
 
                       <div style="display: flex; gap: 6px; flex-shrink: 0;" class="tag-toggle-group" data-path="${sk.generatorPath}">
                         <button type="button" class="btn-tag-toggle ${currentTag === 'Past' ? 'active' : ''}" data-tag="Past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Past' ? 'background:#0284c7; color:#fff; border-color:#0284c7;' : 'background:#fff; color:#475569;'}">
-                          🔵 Past Topic
+                          🔵 Past Skill
                         </button>
                         <button type="button" class="btn-tag-toggle ${currentTag === 'Current' ? 'active' : ''}" data-tag="Current" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Current' ? 'background:#16a34a; color:#fff; border-color:#16a34a;' : 'background:#fff; color:#475569;'}">
-                          🟢 Current Unit
+                          🟢 Current Skill
                         </button>
                         <button type="button" class="btn-tag-toggle ${currentTag === 'Future' ? 'active' : ''}" data-tag="Future" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; ${currentTag === 'Future' ? 'background:#64748b; color:#fff; border-color:#64748b;' : 'background:#fff; color:#475569;'}">
-                          ⚪ Future Unit
+                          ⚪ Future Skill
                         </button>
                       </div>
 
