@@ -203,7 +203,7 @@ export function renderQuestionView(container, options = {}) {
     const stepsList = currentQuestion.steps || currentQuestion.hints || [];
     const diagramSvgContent = currentQuestion.diagramSvg || currentQuestion.svg || "";
     const diagramHtml = (diagramSvgContent || currentQuestion.imageUrl) ? `
-      <div id="diagram-viewport" style="margin-top: 10px; width: 100%; max-height: 240px; display: flex; justify-content: center; align-items: center; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; box-sizing: border-box; overflow: hidden;">
+      <div id="diagram-viewport" style="margin-top: 14px; width: 100%; max-height: 240px; display: flex; justify-content: center; align-items: center; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; box-sizing: border-box; overflow: hidden;">
         ${diagramSvgContent || `<img src="${currentQuestion.imageUrl}" style="max-width: 100%; max-height: 220px; object-fit: contain;">`}
       </div>
     ` : "";
@@ -245,12 +245,7 @@ export function renderQuestionView(container, options = {}) {
               <!-- UNDERLAY: QUESTION PROMPT & DIAGRAM -->
               <div id="question-underlay" style="position: relative; z-index: 1; pointer-events: none; max-width: 100%;">
                 
-                <!-- SKILL TITLE -->
-                <div style="font-size: 1.15rem; font-weight: 800; color: #0f172a; margin-bottom: 8px;">
-                  ${currentSkillTitle}
-                </div>
-
-                <div id="question-prompt" class="math-display" style="font-size: 1.08rem; line-height: 1.5; color: #1e293b; background: #f8fafc; border-left: 4px solid #2563eb; padding: 14px; border-radius: 10px;">
+                <div id="question-prompt" class="math-display" style="font-size: 1.1rem; line-height: 1.9; color: #1e293b; background: #f8fafc; border-left: 4px solid #2563eb; padding: 20px 18px; border-radius: 10px; overflow-x: auto; overflow-y: visible; margin-bottom: 12px; box-sizing: border-box;">
                   ${currentQuestion.prompt}
                 </div>
 
@@ -407,14 +402,14 @@ export function renderQuestionView(container, options = {}) {
         feedbackEl.style.padding = "8px 12px";
         feedbackEl.style.background = "#d1fae5";
         feedbackEl.style.color = "#065f46";
-        feedbackEl.innerHTML = `Correct! 🎉 +10 XP  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span>`;
+        feedbackEl.innerHTML = `Correct! 🎉 +10 XP  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span>`;
       }
     } else {
       if (feedbackEl) {
         feedbackEl.style.padding = "8px 12px";
         feedbackEl.style.background = "#fee2e2";
         feedbackEl.style.color = "#991b1b";
-        feedbackEl.innerHTML = `Incorrect. Expected: <strong>${currentQuestion.expectedAnswer}</strong>  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span>`;
+        feedbackEl.innerHTML = `Incorrect. Expected: <strong>${currentQuestion.expectedAnswer}</strong>  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span>`;
       }
     }
 
