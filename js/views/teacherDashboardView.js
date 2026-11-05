@@ -455,6 +455,7 @@ export function renderTeacherDashboard(container, onLogout) {
                 skillPaths: skillPaths,
                 status: "ACTIVE",
                 targetType: targetType,
+                targetVal: targetVal,
                 targetScore: targetType === "SCORE" ? targetVal : null,
                 targetTime: targetType === "TIME" ? targetVal : null
               })
@@ -483,8 +484,10 @@ export function renderTeacherDashboard(container, onLogout) {
         },
         onExtendTime: async (additionalMins) => {
           if (!activeLiveSession) return;
-          const newTargetTime = Number(activeLiveSession.targetTime || 0) + additionalMins;
+          const currentTarget = Number(activeLiveSession.targetVal ?? activeLiveSession.targetTime ?? activeLiveSession.targetScore ?? 0);
+          const newTargetTime = currentTarget + additionalMins;
           activeLiveSession.targetTime = newTargetTime;
+          activeLiveSession.targetVal = newTargetTime;
 
           try {
             await fetch(getApiUrl(), {
@@ -497,7 +500,9 @@ export function renderTeacherDashboard(container, onLogout) {
                 skillPaths: activeLiveSession.skillPaths,
                 status: "ACTIVE",
                 targetType: "TIME",
-                targetTime: newTargetTime
+                targetVal: newTargetTime,
+                targetTime: newTargetTime,
+                targetScore: null
               })
             });
           } catch (err) {
