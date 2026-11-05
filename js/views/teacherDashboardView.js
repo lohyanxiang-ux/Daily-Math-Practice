@@ -27,9 +27,7 @@ export function renderTeacherDashboard(container, onLogout) {
   if (!container) return;
 
   const globalShellNav = document.querySelector(".top-nav");
-  if (globalShellNav) {
-    globalShellNav.style.display = "none";
-  }
+  if (globalShellNav) globalShellNav.style.display = "none";
 
   const teacherData = state.teacherData || {};
   const students = teacherData.students || [];
@@ -40,7 +38,7 @@ export function renderTeacherDashboard(container, onLogout) {
 
   const teacherName = currentUser.displayName || currentUser.name || state.user?.name || "Teacher Account";
 
-  let activeTab = "overview"; // "overview" | "tagging" | "live"
+  let activeTab = "overview"; 
   let selectedClass = "All";
   
   let selectedLevel = "All";
@@ -56,10 +54,12 @@ export function renderTeacherDashboard(container, onLogout) {
   let currentClassTagsBuffer = {};
   let lastLoadedClassForBuffer = null;
 
-  // Live Session State
+  // Live Session & Summary State
   let activeLiveSession = null;
   let liveAttempts = [];
   let livePollTimer = null;
+  let targetTimePromptShown = false;
+  let postSessionSummaryData = null;
 
   const revealedPins = new Set();
 
@@ -70,22 +70,16 @@ export function renderTeacherDashboard(container, onLogout) {
   const topics = Array.from(new Set(curriculum.map(c => c.topic).filter(Boolean))).sort();
 
   function syncClassFilters(className) {
-    if (!className || className === "All") {
-      selectedLevel = "All";
-      selectedStream = "All";
-      tagFilterLevel = "All";
-      tagFilterStream = "All";
-      return;
-    }
-    const representativeStudent = students.find(s => getStudentClass(s) === className);
-    if (representativeStudent) {
-      if (representativeStudent.year || representativeStudent.level || representativeStudent.grade) {
-        const parsedLevel = String(representativeStudent.year || representativeStudent.level || representativeStudent.grade).trim();
+    if (!className || className === "All") return;
+    const repStudent = students.find(s => getStudentClass(s) === className);
+    if (repStudent) {
+      if (repStudent.year || repStudent.level || repStudent.grade) {
+        const parsedLevel = String(repStudent.year || repStudent.level || repStudent.grade).trim();
         tagFilterLevel = parsedLevel;
         selectedLevel = parsedLevel;
       }
-      if (representativeStudent.stream) {
-        const parsedStream = String(representativeStudent.stream).trim();
+      if (repStudent.stream) {
+        const parsedStream = String(repStudent.stream).trim();
         tagFilterStream = parsedStream;
         selectedStream = parsedStream;
       }
@@ -102,10 +96,8 @@ export function renderTeacherDashboard(container, onLogout) {
       const matchStream = selectedStream === "All" || String(c.stream) === String(selectedStream);
       const matchStrand = selectedStrand === "All" || String(c.strand) === String(selectedStrand);
       const matchTopic = selectedTopic === "All" || String(c.topic) === String(selectedTopic);
-      
       const skillTagVal = currentClassTagsBuffer[c.generatorPath] || getAutoDefaultTag(c, selectedClass);
       const matchTag = selectedMatrixTag === "All" || String(skillTagVal).toUpperCase() === String(selectedMatrixTag).toUpperCase();
-
       return matchLevel && matchStream && matchStrand && matchTopic && matchTag;
     });
   }
@@ -137,9 +129,7 @@ export function renderTeacherDashboard(container, onLogout) {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // LIVE POLLING MANAGEMENT
-  // ---------------------------------------------------------------------------
+  // Live Polling & Target Time Check
   async function fetchLiveSessionData() {
     if (selectedClass === "All") return;
     try {
@@ -156,6 +146,20 @@ export function renderTeacherDashboard(container, onLogout) {
       if (resData.status === "success") {
         activeLiveSession = resData.activeSession || null;
         liveAttempts = resData.attempts || [];
+
+        // Check if target time reached
+        if (activeLiveSession && activeLiveSession.targetType === "TIME" && activeLiveSession.targetTime && activeLiveSession.startTime && !targetTimePromptShown) {
+          const startTimeMs = new Date(activeLiveSession.startTime).getTime();
+          const targetDurationMs = activeLiveSession.targetTime * 60 * 1000;
+          if (Date.now() - startTimeMs >= targetDurationMs) {
+            targetTimePromptShown = true;
+            setTimeout(() => {
+              if (confirm(`⏱️ Target time of ${activeLiveSession.targetTime} minutes reached! Would you like to end the live practice session now?`)) {
+                endLiveSessionAndSummarize();
+              }
+            }, 300);
+          }
+        }
       }
     } catch (err) {
       console.error("Error fetching live session data:", err);
@@ -166,7 +170,7 @@ export function renderTeacherDashboard(container, onLogout) {
     stopLivePolling();
     fetchLiveSessionData().then(() => renderTabContentOnly());
     livePollTimer = setInterval(async () => {
-      if (activeTab === "live" && selectedClass !== "All") {
+      if (activeTab === "live" && selectedClass !== "All" && !postSessionSummaryData) {
         await fetchLiveSessionData();
         renderTabContentOnly();
       }
@@ -177,6 +181,85 @@ export function renderTeacherDashboard(container, onLogout) {
     if (livePollTimer) {
       clearInterval(livePollTimer);
       livePollTimer = null;
+    }
+  }
+
+  async function endLiveSessionAndSummarize() {
+    if (!activeLiveSession) return;
+    const sessionToSummarize = { ...activeLiveSession };
+    const attemptsToSummarize = [...liveAttempts];
+
+    try {
+      await fetch(getApiUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "setLiveSession",
+          token: state.userToken || state.token || "TEACHER_SESSION",
+          className: sessionToSummarize.className,
+          skillPaths: sessionToSummarize.skillPaths,
+          status: "ENDED",
+          autoTagCurrent: true
+        })
+      });
+
+      // Calculate Summary Metrics
+      const classSts = students.filter(s => getStudentClass(s) === sessionToSummarize.className);
+      const durationMins = sessionToSummarize.startTime 
+        ? Math.max(1, Math.round((Date.now() - new Date(sessionToSummarize.startTime).getTime()) / (60 * 1000))) 
+        : 15;
+
+      let totalAttemptsCount = attemptsToSummarize.length;
+      let totalCorrectCount = attemptsToSummarize.filter(a => a.isCorrect).length;
+      let overallAccuracy = totalAttemptsCount > 0 ? Math.round((totalCorrectCount / totalAttemptsCount) * 100) : 0;
+
+      const studentStats = classSts.map(st => {
+        const eKey = (st.email || "").toLowerCase();
+        const stAtt = attemptsToSummarize.filter(a => (a.studentEmail || "").toLowerCase() === eKey);
+        const tAtt = stAtt.length;
+        const tCorr = stAtt.filter(a => a.isCorrect).length;
+        const acc = tAtt > 0 ? Math.round((tCorr / tAtt) * 100) : 0;
+        const startScore = stAtt.length > 0 ? stAtt[0].oldScore : 0;
+        const endScore = stAtt.length > 0 ? stAtt[stAtt.length - 1].newScore : startScore;
+
+        let status = "SOLID";
+        if (acc >= 85 && (endScore - startScore) >= 15) status = "TOP_PERFORMER";
+        else if (acc < 50 || stAtt.filter(a => a.hintsUsed >= 3).length >= 2) status = "NEEDS_SUPPORT";
+
+        return {
+          name: st.displayName || st.name || "Student",
+          email: eKey,
+          totalAttempted: tAtt,
+          totalCorrect: tCorr,
+          accuracy: acc,
+          startScore,
+          endScore,
+          status
+        };
+      });
+
+      const startScores = studentStats.map(s => s.startScore);
+      const endScores = studentStats.map(s => s.endScore);
+      const avgScoreStart = startScores.length > 0 ? Math.round(startScores.reduce((a, b) => a + b, 0) / startScores.length) : 0;
+      const avgScoreEnd = endScores.length > 0 ? Math.round(endScores.reduce((a, b) => a + b, 0) / endScores.length) : 0;
+
+      postSessionSummaryData = {
+        className: sessionToSummarize.className,
+        durationMins,
+        skillPaths: sessionToSummarize.skillPaths,
+        studentStats,
+        overallAccuracy,
+        avgScoreStart,
+        avgScoreEnd
+      };
+
+      activeLiveSession = null;
+      liveAttempts = [];
+      stopLivePolling();
+      render();
+
+    } catch (e) {
+      alert("Error ending live session: " + e.message);
     }
   }
 
@@ -228,18 +311,19 @@ export function renderTeacherDashboard(container, onLogout) {
         curriculum,
         students,
         activeSession: activeLiveSession,
-        liveAttempts
+        liveAttempts,
+        summaryData: postSessionSummaryData
       });
 
       initLiveTabEvents(tabContainer, {
         onFilterChange: () => renderTabContentOnly(),
-        onStartSession: async (targetClass, skillPaths) => {
+        onStartSession: async (targetClass, skillPaths, targetType, targetVal) => {
           try {
             const submitBtn = tabContainer.querySelector("#btn-launch-live");
-            if (submitBtn) {
-              submitBtn.disabled = true;
-              submitBtn.innerText = "⏳ Launching Session...";
-            }
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "⏳ Launching Session..."; }
+
+            postSessionSummaryData = null;
+            targetTimePromptShown = false;
 
             const response = await fetch(getApiUrl(), {
               method: "POST",
@@ -249,7 +333,10 @@ export function renderTeacherDashboard(container, onLogout) {
                 token: state.userToken || state.token || "TEACHER_SESSION",
                 className: targetClass,
                 skillPaths: skillPaths,
-                status: "ACTIVE"
+                status: "ACTIVE",
+                targetType: targetType,
+                targetScore: targetType === "SCORE" ? targetVal : null,
+                targetTime: targetType === "TIME" ? targetVal : null
               })
             });
 
@@ -260,45 +347,42 @@ export function renderTeacherDashboard(container, onLogout) {
               render();
             } else {
               alert("Failed to start live session: " + (resData.message || "Unknown error"));
-              if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.innerText = "🚀 Start Live Class Practice";
-              }
+              if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = "🚀 Start Live Class Practice"; }
             }
           } catch (e) {
-            console.error("Start live session error:", e);
             alert("Error starting live session: " + e.message);
-            const submitBtn = tabContainer.querySelector("#btn-launch-live");
-            if (submitBtn) {
-              submitBtn.disabled = false;
-              submitBtn.innerText = "🚀 Start Live Class Practice";
-            }
           }
         },
-        onEndSession: async () => {
-          if (!activeLiveSession) return;
+        onEndSession: () => endLiveSessionAndSummarize(),
+        onToggleProjector: () => renderTabContentOnly(),
+        onDoneSummary: () => {
+          postSessionSummaryData = null;
+          activeTab = "overview";
+          render();
+        },
+        onSaveAutoTags: async () => {
+          if (!postSessionSummaryData || !postSessionSummaryData.skillPaths) return;
+          const tagsToSave = { ...(classSkillTags[selectedClass] || {}) };
+          postSessionSummaryData.skillPaths.forEach(p => { tagsToSave[p] = "Current"; });
+          
           try {
             await fetch(getApiUrl(), {
               method: "POST",
               headers: { "Content-Type": "text/plain;charset=utf-8" },
               body: JSON.stringify({
-                action: "setLiveSession",
+                action: "saveClassSkillTags",
                 token: state.userToken || state.token || "TEACHER_SESSION",
-                className: activeLiveSession.className,
-                skillPaths: activeLiveSession.skillPaths,
-                status: "ENDED",
-                autoTagCurrent: true // Smart Session Autosave
+                className: selectedClass,
+                tags: tagsToSave
               })
             });
-            activeLiveSession = null;
-            liveAttempts = [];
-            stopLivePolling();
-            render();
-          } catch (e) {
-            alert("Error ending live session: " + e.message);
+            if (!state.teacherData.classSkillTags) state.teacherData.classSkillTags = {};
+            state.teacherData.classSkillTags[selectedClass] = tagsToSave;
+            alert("✅ Assigned skills successfully saved as 'Current' in Class Skill Tags!");
+          } catch (err) {
+            alert("Error saving skill tags: " + err.message);
           }
-        },
-        onToggleProjector: () => renderTabContentOnly()
+        }
       });
     }
   }
@@ -328,8 +412,8 @@ export function renderTeacherDashboard(container, onLogout) {
       });
     });
 
-    const drawerEl = container.querySelector("#student-detail-drawer");
     container.querySelector("#btn-close-drawer")?.addEventListener("click", () => {
+      const drawerEl = container.querySelector("#student-detail-drawer");
       if (drawerEl) drawerEl.style.display = "none";
     });
 
@@ -337,9 +421,7 @@ export function renderTeacherDashboard(container, onLogout) {
       cell.addEventListener("click", () => {
         const generatorPath = cell.getAttribute("data-path");
         const skillObj = curriculum.find(c => c.generatorPath === generatorPath);
-        if (skillObj) {
-          initQuestionPreviewModal(container, skillObj);
-        }
+        if (skillObj) initQuestionPreviewModal(container, skillObj);
       });
     });
   }
@@ -349,88 +431,26 @@ export function renderTeacherDashboard(container, onLogout) {
     container.querySelector("#tag-filter-stream")?.addEventListener("change", (e) => { tagFilterStream = e.target.value; renderTabContentOnly(); });
     container.querySelector("#tag-filter-strand")?.addEventListener("change", (e) => { tagFilterStrand = e.target.value; renderTabContentOnly(); });
 
-    function applyMassTag(targetTag) {
-      const skillsToTag = getTaggingFilteredSkills();
-      if (skillsToTag.length === 0) {
-        alert("No skills match the current filters.");
-        return;
-      }
-      skillsToTag.forEach(sk => { currentClassTagsBuffer[sk.generatorPath] = targetTag; });
-      renderTabContentOnly();
-    }
-
-    container.querySelector("#btn-mass-past")?.addEventListener("click", () => applyMassTag("Past"));
-    container.querySelector("#btn-mass-current")?.addEventListener("click", () => applyMassTag("Current"));
-    container.querySelector("#btn-mass-future")?.addEventListener("click", () => applyMassTag("Future"));
-
-    container.querySelectorAll(".tag-toggle-group").forEach(group => {
-      const path = group.getAttribute("data-path");
-      const buttons = group.querySelectorAll(".btn-tag-toggle");
-
-      buttons.forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const selectedTag = btn.getAttribute("data-tag");
-
-          if (path && selectedTag) {
-            currentClassTagsBuffer[path] = selectedTag;
-
-            buttons.forEach(b => {
-              const t = b.getAttribute("data-tag");
-              if (t === selectedTag) {
-                b.classList.add("active");
-                if (t === "Past") { b.style.background = "#0284c7"; b.style.color = "#fff"; b.style.borderColor = "#0284c7"; }
-                else if (t === "Current") { b.style.background = "#16a34a"; b.style.color = "#fff"; b.style.borderColor = "#16a34a"; }
-                else if (t === "Future") { b.style.background = "#64748b"; b.style.color = "#fff"; b.style.borderColor = "#64748b"; }
-              } else {
-                b.classList.remove("active");
-                b.style.background = "#ffffff";
-                b.style.color = "#475569";
-                b.style.borderColor = "#cbd5e1";
-              }
-            });
-          }
-        });
-      });
-    });
-
     container.querySelector("#btn-save-class-tags")?.addEventListener("click", async (e) => {
       const saveBtn = e.target;
-      const apiUrl = getApiUrl();
-
       saveBtn.disabled = true;
       saveBtn.innerText = "⏳ Saving...";
-
       try {
-        const response = await fetch(apiUrl, {
+        await fetch(getApiUrl(), {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "saveClassSkillTags",
-            token: state.userToken || state.token || (state.profile?.email ? ("PIN_AUTH_" + state.profile.email) : "TEACHER_SESSION"),
+            token: state.userToken || state.token || "TEACHER_SESSION",
             className: selectedClass,
             tags: currentClassTagsBuffer
           })
         });
-
-        const resData = await response.json();
-
-        if (resData.status === "success") {
-          if (!state.teacherData.classSkillTags) state.teacherData.classSkillTags = {};
-          state.teacherData.classSkillTags[selectedClass] = { ...currentClassTagsBuffer };
-          saveBtn.innerText = "✅ Saved Successfully!";
-          setTimeout(() => {
-            saveBtn.disabled = false;
-            saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
-          }, 2000);
-        } else {
-          alert("Failed to save tags: " + (resData.message || "Unknown error"));
-          saveBtn.disabled = false;
-          saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
-        }
+        if (!state.teacherData.classSkillTags) state.teacherData.classSkillTags = {};
+        state.teacherData.classSkillTags[selectedClass] = { ...currentClassTagsBuffer };
+        saveBtn.innerText = "✅ Saved Successfully!";
+        setTimeout(() => { saveBtn.disabled = false; saveBtn.innerText = "💾 Save Skill Tags to Google Sheet"; }, 2000);
       } catch (err) {
-        console.error("Save class tags error:", err);
         alert("Network error while saving skill tags: " + err.message);
         saveBtn.disabled = false;
         saveBtn.innerText = "💾 Save Skill Tags to Google Sheet";
@@ -477,7 +497,7 @@ export function renderTeacherDashboard(container, onLogout) {
               </select>
             </div>
 
-            <button id="btn-dashboard-logout" style="background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 8px 16px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: background 0.15s;">
+            <button id="btn-dashboard-logout" style="background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 8px 16px; border-radius: 10px; font-weight: 700; cursor: pointer;">
               🚪 Logout
             </button>
           </div>
@@ -491,7 +511,6 @@ export function renderTeacherDashboard(container, onLogout) {
           <button id="tab-btn-tagging" style="padding: 10px 20px; border-radius: 12px 12px 0 0; border: none; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 8px; ${activeTab === 'tagging' ? 'background: #2563eb; color: #ffffff;' : 'background: #ffffff; color: #64748b; border: 1px solid #e2e8f0; border-bottom: none;'}">
             📌 Class Skill Tagging ${selectedClass !== 'All' ? `(${selectedClass})` : ''}
           </button>
-          <!-- TAB NAME RENAMED TO LIVE PRACTICE -->
           <button id="tab-btn-live" style="padding: 10px 20px; border-radius: 12px 12px 0 0; border: none; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 8px; ${activeTab === 'live' ? 'background: #2563eb; color: #ffffff;' : 'background: #ffffff; color: #64748b; border: 1px solid #e2e8f0; border-bottom: none;'}">
             📡 Live Practice ${isLiveActive ? '🔴' : ''}
           </button>
