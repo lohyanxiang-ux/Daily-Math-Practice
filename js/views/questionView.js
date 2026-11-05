@@ -456,7 +456,11 @@ export function renderQuestionView(container, options = {}) {
       }
     } else {
       if (feedbackEl) {
-        const formattedExpected = textToLatex(currentQuestion.expectedAnswer);
+        const targetDisplay = currentQuestion.displayAnswer || 
+                              (Array.isArray(currentQuestion.expectedAnswer) 
+                                ? currentQuestion.expectedAnswer.map(a => `x = ${a}`).join(" \\text{ or } ") 
+                                : currentQuestion.expectedAnswer);
+        const formattedExpected = textToLatex(targetDisplay);
         feedbackEl.style.padding = "8px 12px";
         feedbackEl.style.background = "#fee2e2";
         feedbackEl.style.color = "#991b1b";
