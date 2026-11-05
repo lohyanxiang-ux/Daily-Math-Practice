@@ -4,19 +4,90 @@ import { syncBatchMastery } from "../services/backend.js";
 import { getMasteryMetadata } from "../utils/masteryScoreEngine.js";
 import { renderQuestionView } from "./questionView.js";
 
+/**
+ * Extracts numeric level from academic grade strings or class codes.
+ * e.g., "Sec 3" -> 3, "P6" -> 6, "301" -> 3, "3A" -> 3, 2 -> 2
+ */
+function parseYearNumber(val) {
+  if (typeof val === "number") return val;
+  if (!val) return null;
+  const str = String(val).trim();
+  
+  const secMatch = str.match(/(?:Sec|P|Grade|Year)\s*(\d+)/i);
+  if (secMatch) return parseInt(secMatch[1], 10);
+  
+  const digitMatch = str.match(/\d+/);
+  if (digitMatch) {
+    const num = parseInt(digitMatch[0], 10);
+    if (num >= 100 && num <= 999) {
+      return Math.floor(num / 100);
+    }
+    return num;
+  }
+  return null;
+}
+
+/**
+ * Smart Auto-Default Tag Rule:
+ * - Previous years (skillYear < studentYear) -> "Past"
+ * - Current or future years (skillYear >= studentYear) -> "Future"
+ */
+function getAutoDefaultTag(skill, studentYearOrClass) {
+  const studentYearNum = parseYearNumber(studentYearOrClass || state.profile?.year || "Sec 1");
+  const skillYearNum = parseYearNumber(skill.year || skill.level);
+
+  if (studentYearNum !== null && skillYearNum !== null) {
+    if (skillYearNum < studentYearNum) {
+      return "Past";
+    } else {
+      return "Future";
+    }
+  }
+  return "Future";
+}
+
+/**
+ * Flexible Path Tag Resolver:
+ * 1. Checks for explicit teacher tag mapping in state.skillTags.
+ * 2. Falls back to automatic year comparison (Past vs Future).
+ */
+function resolveSkillTag(skill, studentYearOrClass) {
+  const rawPath = (skill.generatorPath || "").trim().replace(/\\/g, '/');
+  
+  if (state.skillTags && Object.keys(state.skillTags).length > 0 && rawPath) {
+    const rawFilename = rawPath.split('/').pop().replace(/\.js$/, '');
+
+    if (state.skillTags[rawPath]) return state.skillTags[rawPath];
+
+    for (const [key, tag] of Object.entries(state.skillTags)) {
+      const cleanKey = key.trim().replace(/\\/g, '/');
+      const keyFilename = cleanKey.split('/').pop().replace(/\.js$/, '');
+
+      if (
+        cleanKey === rawPath ||
+        cleanKey.endsWith(rawPath) ||
+        rawPath.endsWith(cleanKey) ||
+        (keyFilename && keyFilename === rawFilename)
+      ) {
+        return tag;
+      }
+    }
+  }
+
+  return getAutoDefaultTag(skill, studentYearOrClass);
+}
+
 export function renderSkillTree(container) {
   const curriculum = state.curriculum || [];
   const studentYear = state.profile?.year ? String(state.profile.year).trim() : "Sec 1";
   const studentStream = state.profile?.stream ? String(state.profile.stream).trim() : "G3";
   const studentClass = state.profile?.class ? String(state.profile.class).trim() : "";
 
-  // Filter & Search States
   let selectedYear = studentYear;
   let selectedStream = studentStream;
   let selectedStrand = "All";
   let searchQuery = "";
 
-  // Active Tag Filters State (ON by default)
   const activeTagFilters = {
     CURRENT: true,
     PAST: true,
@@ -32,60 +103,6 @@ export function renderSkillTree(container) {
     }
   }
 
-  // Smart Auto-Default Tag Rule
-  function getAutoDefaultTag(skill, className) {
-    if (!className || className === "All") return "Future";
-    
-    const classNumMatch = String(className).match(/\d+/);
-    const skillYearMatch = String(skill.year || skill.level || "").match(/\d+/);
-
-    if (classNumMatch && skillYearMatch) {
-      const classLevel = parseInt(classNumMatch[0], 10);
-      const skillLevel = parseInt(skillYearMatch[0], 10);
-
-      if (skillLevel < classLevel) {
-        return "Past";
-      } else {
-        return "Future";
-      }
-    }
-    return "Future";
-  }
-
-  // Flexible Path Tag Resolver (Matches truncated paths, missing .js, or folder prefixes)
-  function resolveSkillTag(skill, className) {
-    if (!state.skillTags || Object.keys(state.skillTags).length === 0) {
-      return getAutoDefaultTag(skill, className);
-    }
-
-    const rawPath = (skill.generatorPath || "").trim().replace(/\\/g, '/');
-    if (!rawPath) return getAutoDefaultTag(skill, className);
-
-    const rawFilename = rawPath.split('/').pop().replace(/\.js$/, '');
-
-    // 1. Exact Key Match
-    if (state.skillTags[rawPath]) return state.skillTags[rawPath];
-
-    // 2. Fuzzy / Path Variant Match
-    for (const [key, tag] of Object.entries(state.skillTags)) {
-      const cleanKey = key.trim().replace(/\\/g, '/');
-      const keyFilename = cleanKey.split('/').pop().replace(/\.js$/, '');
-
-      if (
-        cleanKey === rawPath ||
-        cleanKey.endsWith(rawPath) ||
-        rawPath.endsWith(cleanKey) ||
-        (keyFilename && keyFilename === rawFilename)
-      ) {
-        return tag;
-      }
-    }
-
-    // 3. Fallback to Auto-Default Rule
-    return getAutoDefaultTag(skill, className);
-  }
-
-  // Determine tag key for filter evaluation
   function getSkillTagKey(skill) {
     const skillYearStr = String(skill.year || skill.level || "").trim();
     const skillStreamStr = String(skill.stream || "").trim();
@@ -93,13 +110,12 @@ export function renderSkillTree(container) {
 
     if (isOutOfGrade) return "OUT_OF_GRADE";
 
-    const resolvedTag = String(resolveSkillTag(skill, studentClass)).toUpperCase();
+    const resolvedTag = String(resolveSkillTag(skill, studentClass || studentYear)).toUpperCase();
     if (resolvedTag === "CURRENT") return "CURRENT";
     if (resolvedTag === "PAST") return "PAST";
     return "FUTURE";
   }
 
-  // Extract unique options for dropdown filters
   const availableYears = Array.from(new Set(curriculum.map(c => String(c.year || c.level || "").trim()).filter(Boolean))).sort();
   const availableStreams = Array.from(new Set(curriculum.map(c => String(c.stream || "").trim()).filter(Boolean))).sort();
   const availableStrands = Array.from(new Set(curriculum.map(c => String(c.strand || "").trim()).filter(Boolean))).sort();
@@ -118,7 +134,6 @@ export function renderSkillTree(container) {
       const matchStrand = selectedStrand === "All" || skillStrand === selectedStrand;
       const matchSearch = !query || skillTitle.includes(query) || skillTopic.includes(query);
 
-      // Evaluate active legend tag filters
       const tagKey = getSkillTagKey(s);
       const matchTag = !!activeTagFilters[tagKey];
 
@@ -126,7 +141,6 @@ export function renderSkillTree(container) {
     });
   }
 
-  // Card styling resolver
   function getSkillCardStyle(skill, isOutOfGrade) {
     if (isOutOfGrade) {
       return {
@@ -138,7 +152,7 @@ export function renderSkillTree(container) {
       };
     }
 
-    const resolvedTag = resolveSkillTag(skill, studentClass);
+    const resolvedTag = resolveSkillTag(skill, studentClass || studentYear);
     const t = String(resolvedTag).toUpperCase();
 
     if (t === "CURRENT") {
@@ -193,10 +207,8 @@ export function renderSkillTree(container) {
           </div>
 
           <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-            <!-- Skill Search Bar -->
             <input id="input-search-skill" type="text" value="${searchQuery}" placeholder="🔍 Search skill or topic..." style="padding: 7px 12px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.88rem; font-weight: 600; min-width: 180px; outline: none;" />
 
-            <!-- Level Selector -->
             <div style="display: flex; align-items: center; gap: 4px;">
               <label style="font-size: 0.82rem; font-weight: 700; color: #475569;">Level:</label>
               <select id="select-tree-year" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-weight: 700; background: #ffffff; color: #0f172a; cursor: pointer;">
@@ -205,7 +217,6 @@ export function renderSkillTree(container) {
               </select>
             </div>
 
-            <!-- Stream Selector -->
             <div style="display: flex; align-items: center; gap: 4px;">
               <label style="font-size: 0.82rem; font-weight: 700; color: #475569;">Stream:</label>
               <select id="select-tree-stream" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-weight: 700; background: #ffffff; color: #0f172a; cursor: pointer;">
@@ -214,7 +225,6 @@ export function renderSkillTree(container) {
               </select>
             </div>
 
-            <!-- Strand Selector -->
             <div style="display: flex; align-items: center; gap: 4px;">
               <label style="font-size: 0.82rem; font-weight: 700; color: #475569;">Strand:</label>
               <select id="select-tree-strand" style="padding: 6px 10px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-weight: 700; background: #ffffff; color: #0f172a; cursor: pointer;">
@@ -231,7 +241,6 @@ export function renderSkillTree(container) {
         <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: #ffffff; padding: 12px 20px; border-radius: 14px; border: 1px solid #e2e8f0; font-size: 0.85rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
           <span style="font-weight: 800; color: #0f172a; margin-right: 4px;">Filter by Tag:</span>
           
-          <!-- CURRENT UNIT TOGGLE -->
           <button class="btn-legend-toggle ${activeTagFilters.CURRENT ? 'active' : ''}" data-tag-key="CURRENT" style="
             display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 10px; cursor: pointer; user-select: none; transition: all 0.15s ease;
             ${activeTagFilters.CURRENT 
@@ -242,7 +251,6 @@ export function renderSkillTree(container) {
             Current Unit
           </button>
 
-          <!-- PAST TOPIC TOGGLE -->
           <button class="btn-legend-toggle ${activeTagFilters.PAST ? 'active' : ''}" data-tag-key="PAST" style="
             display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 10px; cursor: pointer; user-select: none; transition: all 0.15s ease;
             ${activeTagFilters.PAST 
@@ -253,7 +261,6 @@ export function renderSkillTree(container) {
             Past Topic
           </button>
 
-          <!-- FUTURE UNIT TOGGLE -->
           <button class="btn-legend-toggle ${activeTagFilters.FUTURE ? 'active' : ''}" data-tag-key="FUTURE" style="
             display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 10px; cursor: pointer; user-select: none; transition: all 0.15s ease;
             ${activeTagFilters.FUTURE 
@@ -264,7 +271,6 @@ export function renderSkillTree(container) {
             Future Unit
           </button>
 
-          <!-- OTHER YEAR / STREAM TOGGLE -->
           <button class="btn-legend-toggle ${activeTagFilters.OUT_OF_GRADE ? 'active' : ''}" data-tag-key="OUT_OF_GRADE" style="
             display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 10px; cursor: pointer; user-select: none; transition: all 0.15s ease;
             ${activeTagFilters.OUT_OF_GRADE 
@@ -307,7 +313,6 @@ export function renderSkillTree(container) {
                   return `
                     <div style="${cardCfg.cardStyle} border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.15s ease;">
                       <div>
-                        <!-- CARD HEADER WITH TAG & MASTERY BADGE -->
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: wrap;">
                           <span style="${cardCfg.badgeStyle} padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; font-weight: 800;">
                             ${cardCfg.badgeText}
@@ -317,7 +322,6 @@ export function renderSkillTree(container) {
                           </span>
                         </div>
 
-                        <!-- TITLE & EXPLICIT YEAR/STREAM/STRAND BADGE -->
                         <h4 style="font-size: 1.02rem; color: #0f172a; margin: 0 0 6px 0; font-weight: 800; line-height: 1.35;">${skill.title}</h4>
                         
                         <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
@@ -350,8 +354,6 @@ export function renderSkillTree(container) {
       </div>
     `;
 
-    // --- BIND EVENT LISTENERS ---
-
     const searchInput = container.querySelector("#input-search-skill");
     if (searchInput) {
       searchInput.addEventListener("input", (e) => {
@@ -381,7 +383,6 @@ export function renderSkillTree(container) {
       renderTree();
     });
 
-    // Tag Legend Filter Toggle Listeners
     container.querySelectorAll(".btn-legend-toggle").forEach(btn => {
       btn.addEventListener("click", () => {
         const key = btn.getAttribute("data-tag-key");
