@@ -27,6 +27,16 @@ function cleanClassStr(c) {
   return String(c || "").trim().toLowerCase().replace(/^class\s*/i, "");
 }
 
+function parseTimestamp(ts) {
+  if (!ts) return Date.now();
+  if (typeof ts === 'number') return ts;
+  let parsed = new Date(ts).getTime();
+  if (!isNaN(parsed)) return parsed;
+  const safeStr = String(ts).replace(/-/g, "/");
+  parsed = new Date(safeStr).getTime();
+  return isNaN(parsed) ? Date.now() : parsed;
+}
+
 export function renderTeacherDashboard(container, onLogout) {
   if (!container) return;
 
@@ -134,6 +144,26 @@ export function renderTeacherDashboard(container, onLogout) {
     }
   }
 
+  function checkTargetTimeExpiryAlert(session) {
+    if (!session || targetTimePromptShown) return;
+    const sessTargetType = String(session.targetType || "").toUpperCase();
+    const sessTargetTime = Number(session.targetTime || 0);
+
+    if (sessTargetType === "TIME" && sessTargetTime > 0 && session.startTime) {
+      const startTimeMs = parseTimestamp(session.startTime);
+      const targetDurationMs = sessTargetTime * 60 * 1000;
+
+      if (Date.now() - startTimeMs >= targetDurationMs) {
+        targetTimePromptShown = true;
+        setTimeout(() => {
+          if (confirm(`⏱️ Target time limit of ${sessTargetTime} minutes has expired! End the live practice session now?`)) {
+            endLiveSessionAndSummarize();
+          }
+        }, 150);
+      }
+    }
+  }
+
   async function fetchLiveSessionData() {
     if (selectedClass === "All") return;
     try {
@@ -151,19 +181,8 @@ export function renderTeacherDashboard(container, onLogout) {
         activeLiveSession = resData.activeSession || null;
         liveAttempts = resData.attempts || [];
 
-        if (activeLiveSession && activeLiveSession.targetType === "TIME" && activeLiveSession.targetTime && activeLiveSession.startTime && !targetTimePromptShown) {
-          const startTimeMs = new Date(activeLiveSession.startTime).getTime();
-          const targetMins = Number(activeLiveSession.targetTime);
-          const targetDurationMs = targetMins * 60 * 1000;
-
-          if (Date.now() - startTimeMs >= targetDurationMs) {
-            targetTimePromptShown = true;
-            setTimeout(() => {
-              if (confirm(`⏱️ Target time of ${targetMins} minutes reached! End the live practice session now?`)) {
-                endLiveSessionAndSummarize();
-              }
-            }, 200);
-          }
+        if (activeLiveSession) {
+          checkTargetTimeExpiryAlert(activeLiveSession);
         }
       }
     } catch (err) {
@@ -228,7 +247,7 @@ export function renderTeacherDashboard(container, onLogout) {
       });
 
       const durationMins = sessionToSummarize.startTime 
-        ? Math.max(1, Math.round((Date.now() - new Date(sessionToSummarize.startTime).getTime()) / (60 * 1000))) 
+        ? Math.max(1, Math.round((Date.now() - parseTimestamp(sessionToSummarize.startTime)) / (60 * 1000))) 
         : 15;
 
       const totalAttemptsCount = attemptsToSummarize.length;
@@ -331,7 +350,6 @@ export function renderTeacherDashboard(container, onLogout) {
         currentClassTagsBuffer
       });
 
-      // WIRED DIRECTLY TO initTaggingTabEvents TO GUARANTEE CLICK/TAP RESPONSIVENESS
       initTaggingTabEvents(tabContainer, {
         currentClassTagsBuffer,
         taggingSkills,
@@ -422,6 +440,16 @@ export function renderTeacherDashboard(container, onLogout) {
           postSessionSummaryData = null;
           activeTab = "overview";
           render();
+        },
+        onTargetTimeExpired: (targetMins) => {
+          if (!targetTimePromptShown) {
+            targetTimePromptShown = true;
+            setTimeout(() => {
+              if (confirm(`⏱️ Target time limit of ${targetMins} minutes has expired! End the live practice session now?`)) {
+                endLiveSessionAndSummarize();
+              }
+            }, 100);
+          }
         },
         onSaveAutoTags: async () => {
           if (!postSessionSummaryData || !postSessionSummaryData.skillPaths) return;
@@ -558,7 +586,6 @@ export function renderTeacherDashboard(container, onLogout) {
       ${renderQuestionPreviewModalHTML()}
     `;
 
-    // Global Event Bindings
     container.querySelector("#tab-btn-overview")?.addEventListener("click", () => {
       activeTab = "overview";
       stopLivePolling();
