@@ -147,14 +147,14 @@ export function renderTeacherDashboard(container, onLogout) {
         activeLiveSession = resData.activeSession || null;
         liveAttempts = resData.attempts || [];
 
-        // Check if target time reached
+        // Check target time limit
         if (activeLiveSession && activeLiveSession.targetType === "TIME" && activeLiveSession.targetTime && activeLiveSession.startTime && !targetTimePromptShown) {
           const startTimeMs = new Date(activeLiveSession.startTime).getTime();
           const targetDurationMs = activeLiveSession.targetTime * 60 * 1000;
           if (Date.now() - startTimeMs >= targetDurationMs) {
             targetTimePromptShown = true;
             setTimeout(() => {
-              if (confirm(`⏱️ Target time of ${activeLiveSession.targetTime} minutes reached! Would you like to end the live practice session now?`)) {
+              if (confirm(`⏱️ Target time of ${activeLiveSession.targetTime} minutes reached! End the live practice session now?`)) {
                 endLiveSessionAndSummarize();
               }
             }, 300);
@@ -166,13 +166,21 @@ export function renderTeacherDashboard(container, onLogout) {
     }
   }
 
+  // SMART POLLING: Does NOT wipe out the setup form DOM if no session is active
   function startLivePolling() {
     stopLivePolling();
     fetchLiveSessionData().then(() => renderTabContentOnly());
+    
     livePollTimer = setInterval(async () => {
       if (activeTab === "live" && selectedClass !== "All" && !postSessionSummaryData) {
+        const prevStatus = activeLiveSession?.status;
         await fetchLiveSessionData();
-        renderTabContentOnly();
+        const currentStatus = activeLiveSession?.status;
+
+        // Only re-render DOM if a live session is currently running OR session status changed
+        if (currentStatus === "ACTIVE" || prevStatus !== currentStatus) {
+          renderTabContentOnly();
+        }
       }
     }, 3000);
   }
@@ -203,7 +211,6 @@ export function renderTeacherDashboard(container, onLogout) {
         })
       });
 
-      // Calculate Summary Metrics
       const classSts = students.filter(s => getStudentClass(s) === sessionToSummarize.className);
       const durationMins = sessionToSummarize.startTime 
         ? Math.max(1, Math.round((Date.now() - new Date(sessionToSummarize.startTime).getTime()) / (60 * 1000))) 
