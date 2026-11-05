@@ -23,8 +23,8 @@ export function renderKaTeX(element) {
     }
   });
 
-  // 2. Render Inline Math ($ ... $)
-  html = html.replace(/\$(.*?)\$/g, (match, math) => {
+  // 2. Render Inline Math ($ ... $) - added 's' flag for multiline compatibility
+  html = html.replace(/\$(.*?)\$/gs, (match, math) => {
     try {
       return kObj.renderToString(math.trim(), { displayMode: false, throwOnError: false });
     } catch (e) {
