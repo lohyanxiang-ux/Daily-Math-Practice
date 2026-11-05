@@ -331,9 +331,10 @@ export function renderQuestionView(container, options = {}) {
     renderKaTeX(container.querySelector("#question-prompt"));
     initScratchpad(container);
 
+    // Pass currentQuestion payload to allow multi-input (inputCount & inputLabels) detection
     initKeypad(
       container,
-      currentQuestion.keypad || null,
+      currentQuestion,
       (val) => { activeAnswer = val; },
       (val) => { handleSubmission(val); }
     );
