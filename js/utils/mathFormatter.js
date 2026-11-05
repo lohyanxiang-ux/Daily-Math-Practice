@@ -40,32 +40,45 @@ export function formatSigFig(num, sf = 3) {
 }
 
 /**
- * Clean Algebraic Expressions according to standard math conventions:
- * - Omit 1x -> x, -1x -> -x
- * - Clean x + (-2) -> x - 2
- * - Omit + 0, - 0, / 1
- * - Exponents converted to clean LaTeX x^{2} or <sup>2</sup>
+ * Converts linear math syntax into KaTeX-compatible LaTeX formatting for UI display.
+ * e.g., "(x+5/2)^2-29/4" -> "\left(x + \frac{5}{2}\right)^2 - \frac{29}{4}"
+ */
+export function textToLatex(expr) {
+  if (!expr) return "";
+  let str = String(expr).trim();
+
+  // Return as-is if already formatted with LaTeX \frac
+  if (str.includes("\\frac")) return str;
+
+  // Convert standalone fractions: 5/2 -> \frac{5}{2}
+  str = str.replace(/(^|[^\d\w])(\d+)\/(\d+)($|[^\d\w])/g, "$1\\frac{$2}{$3}$4");
+
+  // Wrap parentheses with \left( and \right) for vertical scaling
+  str = str.replace(/\(([^()]+)\)/g, "\\left($1\\right)");
+
+  // Clean operator spacing
+  str = str.replace(/\+/g, " + ").replace(/\-/g, " - ").replace(/\s+/g, " ").trim();
+
+  return str;
+}
+
+/**
+ * Clean Algebraic Expressions according to standard math conventions
  */
 export function formatAlgebra(expr, useHtmlSup = false) {
   if (!expr) return "";
 
   let cleaned = String(expr)
-    // Replace addition of negative numbers: x + (-2) -> x - 2
     .replace(/\+\s*\(-\s*([0-9a-zA-Z.]+)\)/g, "- $1")
     .replace(/\+\s*-\s*/g, "- ")
-    // Omit addition/subtraction of zero: x + 0 -> x, x - 0 -> x
     .replace(/[\+\-]\s*0(?![0-9.])/g, "")
-    // Omit division by 1: / 1 -> ""
     .replace(/\/ 1(?![0-9.])/g, "")
-    // Fix coefficients: 1x -> x, -1x -> -x (works for variables like x, y, a, b)
     .replace(/(^|[\+\-\(\s=])1([a-zA-Z])/g, "$1$2")
     .replace(/(^|[\+\-\(\s=])-1([a-zA-Z])/g, "$1-$2");
 
   if (useHtmlSup) {
-    // Format x^2 as x<sup>2</sup>
     cleaned = cleaned.replace(/\^([0-9a-zA-Z]+)/g, "<sup>$1</sup>");
   } else {
-    // Format x^2 as LaTeX x^{2}
     cleaned = cleaned.replace(/\^([0-9a-zA-Z]+)/g, "^{$1}");
   }
 
