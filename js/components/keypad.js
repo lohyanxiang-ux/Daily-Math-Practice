@@ -366,8 +366,17 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
 
     currentMathField.focus();
 
-    // Generic command router (Handles multi-word text keys like "no solution")
-    if (key === "no solution" || /[a-zA-Z]{2,}/.test(key)) {
+    // Specific control and action keys handled before generic text evaluation
+    if (key === "Clear") {
+      currentMathField.setValue("");
+      currentMathField.dispatchEvent(new Event("input", { bubbles: true }));
+    } else if (key === "⌫") {
+      currentMathField.executeCommand("deleteBackward");
+    } else if (key === "←") {
+      currentMathField.executeCommand("moveToPreviousChar");
+    } else if (key === "→") {
+      currentMathField.executeCommand("moveToNextChar");
+    } else if (key === "no solution" || /[a-zA-Z]{2,}/.test(key)) {
       currentMathField.executeCommand(["insert", `\\text{${key}}`]);
     } else if (key === "/" || key === "a/b") {
       currentMathField.executeCommand(["insert", "\\frac{#0}{#?}"]);
@@ -377,15 +386,6 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
       currentMathField.executeCommand(["insert", "^{2}"]);
     } else if (key === "√") {
       currentMathField.executeCommand(["insert", "\\sqrt{#?}"]);
-    } else if (key === "←") {
-      currentMathField.executeCommand("moveToPreviousChar");
-    } else if (key === "→") {
-      currentMathField.executeCommand("moveToNextChar");
-    } else if (key === "⌫") {
-      currentMathField.executeCommand("deleteBackward");
-    } else if (key === "Clear") {
-      currentMathField.setValue("");
-      currentMathField.dispatchEvent(new Event("input", { bubbles: true }));
     } else if (key === "-") {
       currentMathField.executeCommand(["insert", "-"]);
     } else if (key === "(") {
