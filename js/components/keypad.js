@@ -16,25 +16,64 @@ export const STANDARD_KEYPADS = {
     "x²", "xⁿ", "√", "π",
     "<", ">", "≤", "≥",
     "a", "b", "c", "θ",
-    "no solution", "", "", "",
+    "", "", "", "",
     "", "", "", "",
     "←", "→", "⌫", "Clear"
   ]
 };
 
-export function initKeypad(container, customKeys = null, onInputChange, onSubmit) {
+export function initKeypad(container, config = null, onInputChange, onSubmit) {
   const displayContainer = container.querySelector("#keypad-display");
   const gridEl = container.querySelector(".keypad-grid");
   if (!displayContainer || !gridEl) return;
 
+  // Extract Multi-Input Configuration
+  const isConfigObj = config && typeof config === "object" && !Array.isArray(config);
+  const inputCount = isConfigObj && config.inputCount ? config.inputCount : 1;
+  const inputLabels = isConfigObj && config.inputLabels ? config.inputLabels : ["x =", "or x ="];
+  const customKeys = Array.isArray(config) ? config : (isConfigObj ? config.customKeys || config.keys || null : null);
+
   let activeTab = "basic"; // 'basic' or 'math'
   let isSubmitted = false;
+  let activeFieldIndex = 0;
 
-  // 1. MOUNT INPUT FIELD & TOGGLE BUTTON HTML (ONCE)
-  displayContainer.innerHTML = `
-    <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
-      <!-- INPUT FIELD (Min-height 52px prevents UI shifts when fractions expand) -->
-      <div id="math-field-wrapper" style="
+  // 1. RENDER DYNAMIC INPUT FIELD HTML (SINGLE vs MULTI-INPUT)
+  let inputsHTML = "";
+  if (inputCount > 1) {
+    inputsHTML = `
+      <div style="display: flex; gap: 8px; width: 100%; align-items: center;">
+        ${Array.from({ length: inputCount }).map((_, idx) => `
+          <div class="math-field-wrapper" data-index="${idx}" style="
+            flex: 1;
+            min-height: 52px;
+            max-height: 72px;
+            padding: 4px 10px;
+            background: #ffffff;
+            border: 2px solid ${idx === 0 ? '#2563eb' : '#cbd5e1'};
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-sizing: border-box;
+            transition: all 0.15s ease-in-out;
+            overflow-y: auto;
+            cursor: pointer;
+          ">
+            <span style="font-size: 0.85rem; font-weight: 800; color: #475569; white-space: nowrap;">${inputLabels[idx] || `x<sub>${idx + 1}</sub> =`}</span>
+            <math-field class="math-input" data-index="${idx}" style="
+              width: 100%;
+              font-size: 1.15rem;
+              border: none;
+              outline: none;
+              background: transparent;
+            "></math-field>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  } else {
+    inputsHTML = `
+      <div class="math-field-wrapper active" data-index="0" style="
         flex: 1;
         min-height: 52px;
         max-height: 72px;
@@ -48,7 +87,7 @@ export function initKeypad(container, customKeys = null, onInputChange, onSubmit
         transition: all 0.15s ease-in-out;
         overflow-y: auto;
       ">
-        <math-field id="math-input" style="
+        <math-field class="math-input" data-index="0" style="
           width: 100%;
           font-size: 1.2rem;
           border: none;
@@ -56,6 +95,12 @@ export function initKeypad(container, customKeys = null, onInputChange, onSubmit
           background: transparent;
         "></math-field>
       </div>
+    `;
+  }
+
+  displayContainer.innerHTML = `
+    <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+      ${inputsHTML}
 
       <!-- MODE TOGGLE BUTTON (BESIDE INPUT) -->
       <button type="button" id="btn-toggle-keypad-mode" style="
@@ -80,30 +125,64 @@ export function initKeypad(container, customKeys = null, onInputChange, onSubmit
     </div>
   `;
 
-  const mathField = displayContainer.querySelector("#math-input");
-  const fieldWrapper = displayContainer.querySelector("#math-field-wrapper");
+  const mathFields = Array.from(displayContainer.querySelectorAll(".math-input"));
+  const wrappers = Array.from(displayContainer.querySelectorAll(".math-field-wrapper"));
   const toggleBtn = displayContainer.querySelector("#btn-toggle-keypad-mode");
 
-  // 2. MATHLIVE INPUT LISTENER (ATTACHED ONCE)
-  if (mathField) {
-    mathField.mathVirtualKeyboardPolicy = "manual";
+  // Helper to collect current field values
+  function getCurrentValues() {
+    if (inputCount > 1) {
+      return mathFields.map(f => f.value || "");
+    }
+    return mathFields[0] ? (mathFields[0].value || "") : "";
+  }
 
-    mathField.addEventListener("input", () => {
-      const val = mathField.value || "";
-      
-      if (val.includes("\\frac") || val.includes("^{")) {
-        fieldWrapper.style.minHeight = "66px";
+  // Focus & Active Field Switcher
+  function setActiveField(index) {
+    activeFieldIndex = index;
+    wrappers.forEach((wrap, idx) => {
+      if (idx === activeFieldIndex) {
+        wrap.style.borderColor = "#2563eb";
+        wrap.style.boxShadow = "0 0 0 2px rgba(37, 99, 235, 0.15)";
       } else {
-        fieldWrapper.style.minHeight = "52px";
-      }
-
-      if (typeof onInputChange === "function") {
-        onInputChange(val);
+        wrap.style.borderColor = "#cbd5e1";
+        wrap.style.boxShadow = "none";
       }
     });
   }
 
-  // 3. MODE TOGGLE LISTENER (ATTACHED ONCE)
+  // 2. ATTACH LISTENERS TO MATHLIVE FIELDS
+  mathFields.forEach((mf, idx) => {
+    mf.mathVirtualKeyboardPolicy = "manual";
+
+    mf.addEventListener("focus", () => setActiveField(idx));
+    mf.parentElement?.addEventListener("click", () => {
+      setActiveField(idx);
+      mf.focus();
+    });
+
+    mf.addEventListener("input", () => {
+      const val = mf.value || "";
+      const wrapper = wrappers[idx];
+      
+      if (wrapper) {
+        if (val.includes("\\frac") || val.includes("^{")) {
+          wrapper.style.minHeight = "66px";
+        } else {
+          wrapper.style.minHeight = "52px";
+        }
+      }
+
+      if (typeof onInputChange === "function") {
+        onInputChange(getCurrentValues());
+      }
+    });
+  });
+
+  // Set default focus border on initial load
+  setActiveField(0);
+
+  // 3. MODE TOGGLE LISTENER
   toggleBtn?.addEventListener("click", (e) => {
     e.preventDefault();
     activeTab = activeTab === "basic" ? "math" : "basic";
@@ -137,7 +216,7 @@ export function initKeypad(container, customKeys = null, onInputChange, onSubmit
     return baseMath;
   }
 
-  // 4. GRID RENDERER (ONLY UPDATES HTML - NO EVENT BINDING HERE)
+  // 4. GRID RENDERER
   function renderGrid() {
     const keysToRender = getKeysForTab(activeTab);
 
@@ -150,12 +229,11 @@ export function initKeypad(container, customKeys = null, onInputChange, onSubmit
       const isBack = key === "⌫";
       const isAction = isBack || isClear;
       const isNav = key === "←" || key === "→";
-      const isSpecial = key === "no solution";
 
       return `
         <button type="button" class="keypad-btn ${isAction ? 'action' : ''} ${isNav ? 'nav-btn' : ''}" data-key="${key}" style="
-          padding: ${isSpecial ? '4px 2px' : '7px 2px'};
-          font-size: ${isSpecial ? '0.75rem' : '1.05rem'};
+          padding: 7px 2px;
+          font-size: 1.05rem;
           font-weight: 700;
           border: 1px solid #cbd5e1;
           border-radius: 8px;
@@ -194,7 +272,7 @@ export function initKeypad(container, customKeys = null, onInputChange, onSubmit
     gridEl.innerHTML = buttonsHTML + submitHTML;
   }
 
-  // 5. EVENT DELEGATION FOR KEYPAD GRID (ATTACHED ONCE TO gridEl)
+  // 5. EVENT DELEGATION FOR KEYPAD GRID
   gridEl.addEventListener("pointerdown", (e) => {
     if (e.target.closest(".keypad-btn")) {
       e.preventDefault();
@@ -211,10 +289,14 @@ export function initKeypad(container, customKeys = null, onInputChange, onSubmit
     // Handle Submit / Next Action
     if (btn.id === "btn-keypad-submit") {
       if (!isSubmitted) {
-        const val = mathField ? (mathField.value || "") : "";
-        if (!val.trim()) return;
+        const currentVals = getCurrentValues();
+        const isEmpty = Array.isArray(currentVals) 
+          ? currentVals.every(v => !v.trim()) 
+          : !currentVals.trim();
+
+        if (isEmpty) return;
         isSubmitted = true;
-        if (typeof onSubmit === "function") onSubmit(val);
+        if (typeof onSubmit === "function") onSubmit(currentVals);
         btn.innerText = "Next Question ➔";
         btn.style.background = "#10b981";
       } else {
@@ -223,43 +305,46 @@ export function initKeypad(container, customKeys = null, onInputChange, onSubmit
       return;
     }
 
-    if (isSubmitted || !mathField) return;
+    if (isSubmitted) return;
 
-    mathField.focus();
+    const currentMathField = mathFields[activeFieldIndex] || mathFields[0];
+    if (!currentMathField) return;
+
+    currentMathField.focus();
 
     // MathLive Command Execution
     if (key === "/" || key === "a/b") {
-      mathField.executeCommand(["insert", "\\frac{#0}{#?}"]);
+      currentMathField.executeCommand(["insert", "\\frac{#0}{#?}"]);
     } else if (key === "^" || key === "xⁿ") {
-      mathField.executeCommand(["insert", "^{#?}"]);
+      currentMathField.executeCommand(["insert", "^{#?}"]);
     } else if (key === "x²") {
-      mathField.executeCommand(["insert", "^{2}"]);
+      currentMathField.executeCommand(["insert", "^{2}"]);
     } else if (key === "√") {
-      mathField.executeCommand(["insert", "\\sqrt{#?}"]);
+      currentMathField.executeCommand(["insert", "\\sqrt{#?}"]);
     } else if (key === "←") {
-      mathField.executeCommand("moveToPreviousChar");
+      currentMathField.executeCommand("moveToPreviousChar");
     } else if (key === "→") {
-      mathField.executeCommand("moveToNextChar");
+      currentMathField.executeCommand("moveToNextChar");
     } else if (key === "⌫") {
-      mathField.executeCommand("deleteBackward");
+      currentMathField.executeCommand("deleteBackward");
     } else if (key === "Clear") {
-      mathField.setValue("");
+      currentMathField.setValue("");
     } else if (key === "×") {
-      mathField.executeCommand(["insert", "\\times"]);
+      currentMathField.executeCommand(["insert", "\\times"]);
     } else if (key === "≤") {
-      mathField.executeCommand(["insert", "\\le"]);
+      currentMathField.executeCommand(["insert", "\\le"]);
     } else if (key === "≥") {
-      mathField.executeCommand(["insert", "\\ge"]);
+      currentMathField.executeCommand(["insert", "\\ge"]);
     } else if (key === "π") {
-      mathField.executeCommand(["insert", "\\pi"]);
+      currentMathField.executeCommand(["insert", "\\pi"]);
     } else if (key === "θ") {
-      mathField.executeCommand(["insert", "\\theta"]);
+      currentMathField.executeCommand(["insert", "\\theta"]);
     } else {
-      mathField.executeCommand(["insert", key]);
+      currentMathField.executeCommand(["insert", key]);
     }
 
     if (typeof onInputChange === "function") {
-      onInputChange(mathField.value || "");
+      onInputChange(getCurrentValues());
     }
   });
 
