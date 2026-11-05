@@ -16,6 +16,14 @@ export function renderSkillTree(container) {
   let selectedStrand = "All";
   let searchQuery = "";
 
+  // Active Tag Filters State (ON by default)
+  const activeTagFilters = {
+    CURRENT: true,
+    PAST: true,
+    FUTURE: true,
+    OUT_OF_GRADE: true
+  };
+
   function flushSync() {
     if (state.pendingMasteryUpdates && state.pendingMasteryUpdates.size > 0 && state.userToken) {
       const updates = Array.from(state.pendingMasteryUpdates).map(path => state.mastery[path]);
@@ -77,6 +85,20 @@ export function renderSkillTree(container) {
     return getAutoDefaultTag(skill, className);
   }
 
+  // Determine tag key for filter evaluation
+  function getSkillTagKey(skill) {
+    const skillYearStr = String(skill.year || skill.level || "").trim();
+    const skillStreamStr = String(skill.stream || "").trim();
+    const isOutOfGrade = skillYearStr !== studentYear || skillStreamStr !== studentStream;
+
+    if (isOutOfGrade) return "OUT_OF_GRADE";
+
+    const resolvedTag = String(resolveSkillTag(skill, studentClass)).toUpperCase();
+    if (resolvedTag === "CURRENT") return "CURRENT";
+    if (resolvedTag === "PAST") return "PAST";
+    return "FUTURE";
+  }
+
   // Extract unique options for dropdown filters
   const availableYears = Array.from(new Set(curriculum.map(c => String(c.year || c.level || "").trim()).filter(Boolean))).sort();
   const availableStreams = Array.from(new Set(curriculum.map(c => String(c.stream || "").trim()).filter(Boolean))).sort();
@@ -96,11 +118,15 @@ export function renderSkillTree(container) {
       const matchStrand = selectedStrand === "All" || skillStrand === selectedStrand;
       const matchSearch = !query || skillTitle.includes(query) || skillTopic.includes(query);
 
-      return matchYear && matchStream && matchStrand && matchSearch;
+      // Evaluate active legend tag filters
+      const tagKey = getSkillTagKey(s);
+      const matchTag = !!activeTagFilters[tagKey];
+
+      return matchYear && matchStream && matchStrand && matchSearch && matchTag;
     });
   }
 
-  // Card styling resolver: Out-of-grade vs Standard Resolved Tags
+  // Card styling resolver
   function getSkillCardStyle(skill, isOutOfGrade) {
     if (isOutOfGrade) {
       return {
@@ -201,36 +227,60 @@ export function renderSkillTree(container) {
           </div>
         </div>
 
-        <!-- CARD LEGEND -->
-        <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; background: #ffffff; padding: 12px 20px; border-radius: 14px; border: 1px solid #e2e8f0; font-size: 0.85rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
-          <span style="font-weight: 800; color: #0f172a;">Card Legend:</span>
+        <!-- INTERACTIVE CARD LEGEND FILTER BAR -->
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: #ffffff; padding: 12px 20px; border-radius: 14px; border: 1px solid #e2e8f0; font-size: 0.85rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+          <span style="font-weight: 800; color: #0f172a; margin-right: 4px;">Filter by Tag:</span>
           
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="display: inline-block; width: 14px; height: 14px; border-radius: 4px; background: #f0fdf4; border: 2px solid #22c55e;"></span>
-            <span style="font-weight: 700; color: #15803d;">Current Unit</span>
-          </div>
+          <!-- CURRENT UNIT TOGGLE -->
+          <button class="btn-legend-toggle ${activeTagFilters.CURRENT ? 'active' : ''}" data-tag-key="CURRENT" style="
+            display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 10px; cursor: pointer; user-select: none; transition: all 0.15s ease;
+            ${activeTagFilters.CURRENT 
+              ? 'background: #dcfce7; color: #15803d; border: 1.5px solid #22c55e; font-weight: 800;' 
+              : 'background: #f1f5f9; color: #94a3b8; border: 1.5px solid #cbd5e1; font-weight: 600; opacity: 0.55; text-decoration: line-through;'}
+          ">
+            <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${activeTagFilters.CURRENT ? '#22c55e' : '#cbd5e1'};"></span>
+            Current Unit
+          </button>
 
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="display: inline-block; width: 14px; height: 14px; border-radius: 4px; background: #eff6ff; border: 1.5px solid #3b82f6;"></span>
-            <span style="font-weight: 700; color: #1e40af;">Past Topic</span>
-          </div>
+          <!-- PAST TOPIC TOGGLE -->
+          <button class="btn-legend-toggle ${activeTagFilters.PAST ? 'active' : ''}" data-tag-key="PAST" style="
+            display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 10px; cursor: pointer; user-select: none; transition: all 0.15s ease;
+            ${activeTagFilters.PAST 
+              ? 'background: #dbeafe; color: #1e40af; border: 1.5px solid #3b82f6; font-weight: 800;' 
+              : 'background: #f1f5f9; color: #94a3b8; border: 1.5px solid #cbd5e1; font-weight: 600; opacity: 0.55; text-decoration: line-through;'}
+          ">
+            <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${activeTagFilters.PAST ? '#3b82f6' : '#cbd5e1'};"></span>
+            Past Topic
+          </button>
 
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="display: inline-block; width: 14px; height: 14px; border-radius: 4px; background: #f8fafc; border: 1.5px dashed #cbd5e1;"></span>
-            <span style="font-weight: 700; color: #64748b;">Future Unit</span>
-          </div>
+          <!-- FUTURE UNIT TOGGLE -->
+          <button class="btn-legend-toggle ${activeTagFilters.FUTURE ? 'active' : ''}" data-tag-key="FUTURE" style="
+            display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 10px; cursor: pointer; user-select: none; transition: all 0.15s ease;
+            ${activeTagFilters.FUTURE 
+              ? 'background: #f1f5f9; color: #475569; border: 1.5px dashed #64748b; font-weight: 800;' 
+              : 'background: #f1f5f9; color: #94a3b8; border: 1.5px solid #cbd5e1; font-weight: 600; opacity: 0.55; text-decoration: line-through;'}
+          ">
+            <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${activeTagFilters.FUTURE ? '#64748b' : '#cbd5e1'};"></span>
+            Future Unit
+          </button>
 
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="display: inline-block; width: 14px; height: 14px; border-radius: 4px; background: #f5f3ff; border: 2px solid #8b5cf6;"></span>
-            <span style="font-weight: 700; color: #6d28d9;">Other Year / Stream</span>
-          </div>
+          <!-- OTHER YEAR / STREAM TOGGLE -->
+          <button class="btn-legend-toggle ${activeTagFilters.OUT_OF_GRADE ? 'active' : ''}" data-tag-key="OUT_OF_GRADE" style="
+            display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 10px; cursor: pointer; user-select: none; transition: all 0.15s ease;
+            ${activeTagFilters.OUT_OF_GRADE 
+              ? 'background: #ede9fe; color: #6d28d9; border: 1.5px solid #8b5cf6; font-weight: 800;' 
+              : 'background: #f1f5f9; color: #94a3b8; border: 1.5px solid #cbd5e1; font-weight: 600; opacity: 0.55; text-decoration: line-through;'}
+          ">
+            <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${activeTagFilters.OUT_OF_GRADE ? '#8b5cf6' : '#cbd5e1'};"></span>
+            Other Year / Stream
+          </button>
         </div>
 
         <!-- TOPIC GROUPS -->
         <div style="display: flex; flex-direction: column; gap: 20px;">
           ${Object.keys(groupedByTopic).length === 0 ? `
             <div style="background: #fff; padding: 40px; text-align: center; border-radius: 16px; color: #64748b; border: 1px solid #e2e8f0;">
-              No active skills match your current search and filter criteria.
+              No active skills match your current search and tag filter criteria.
             </div>
           ` : Object.entries(groupedByTopic).map(([topicName, skills]) => `
             <div style="background: #ffffff; padding: 20px; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
@@ -329,6 +379,17 @@ export function renderSkillTree(container) {
     container.querySelector("#select-tree-strand")?.addEventListener("change", (e) => {
       selectedStrand = e.target.value;
       renderTree();
+    });
+
+    // Tag Legend Filter Toggle Listeners
+    container.querySelectorAll(".btn-legend-toggle").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const key = btn.getAttribute("data-tag-key");
+        if (key && activeTagFilters.hasOwnProperty(key)) {
+          activeTagFilters[key] = !activeTagFilters[key];
+          renderTree();
+        }
+      });
     });
 
     container.querySelector("#btn-tree-dashboard")?.addEventListener("click", () => {
