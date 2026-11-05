@@ -16,8 +16,8 @@ export const STANDARD_KEYPADS = {
     "x²", "xⁿ", "√", "π",
     "<", ">", "≤", "≥",
     "a", "b", "c", "θ",
-    "", "", "", "",
-    "", "", "", "",
+    "", "", "", "",       // Spare Slots 1–4
+    "", "", "", "",       // Spare Slots 5–8
     "←", "→", "⌫", "Clear"
   ]
 };
@@ -26,31 +26,27 @@ export const STANDARD_KEYPADS = {
  * Returns color-coding styles based on key type
  */
 function getKeyStyle(key) {
-  // 1. Delete & Clear
   if (key === "Clear" || key === "⌫") {
     return { bg: "#fee2e2", color: "#991b1b", border: "#fca5a5", shadow: "#f87171" };
   }
-  // 2. Navigation
   if (key === "←" || key === "→") {
     return { bg: "#f1f5f9", color: "#334155", border: "#cbd5e1", shadow: "#94a3b8" };
   }
-  // 3. Basic Arithmetic Operators
+  if (key === "no solution" || key.length > 5) {
+    return { bg: "#fef3c7", color: "#92400e", border: "#fcd34d", shadow: "#f59e0b" };
+  }
   if (["+", "-", "×", "/", "="].includes(key)) {
     return { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe", shadow: "#93c5fd" };
   }
-  // 4. Algebraic Variables & Constants
   if (["x", "y", "a", "b", "c", "π", "θ"].includes(key)) {
     return { bg: "#f5f3ff", color: "#6d28d9", border: "#ddd6fe", shadow: "#c4b5fd" };
   }
-  // 5. Parentheses, Powers & Roots
   if (["(", ")", "x²", "xⁿ", "√"].includes(key)) {
     return { bg: "#ecfeff", color: "#0891b2", border: "#a5f3fc", shadow: "#67e8f9" };
   }
-  // 6. Inequality Relations
   if (["<", ">", "≤", "≥"].includes(key)) {
     return { bg: "#fffbeb", color: "#b45309", border: "#fde68a", shadow: "#fcd34d" };
   }
-  // 7. Numerals & Decimal (Default)
   return { bg: "#ffffff", color: "#0f172a", border: "#cbd5e1", shadow: "#cbd5e1" };
 }
 
@@ -59,13 +55,17 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
   const gridEl = container.querySelector(".keypad-grid");
   if (!displayContainer || !gridEl) return;
 
-  // Extract Multi-Input Configuration
+  // Extract Multi-Input Configuration & Extra Keys
   const isConfigObj = config && typeof config === "object" && !Array.isArray(config);
   const inputCount = isConfigObj && config.inputCount ? config.inputCount : 1;
   const inputLabels = isConfigObj && config.inputLabels ? config.inputLabels : ["x =", "or x ="];
-  const customKeys = Array.isArray(config) ? config : (isConfigObj ? config.customKeys || config.keys || null : null);
+  
+  // Extract generator extraKeys or customKeys
+  const extraKeys = isConfigObj 
+    ? (config.extraKeys || config.customKeys || config.keys || []) 
+    : (Array.isArray(config) ? config : []);
 
-  let activeTab = "basic"; // 'basic' or 'math'
+  let activeTab = "basic"; 
   let isSubmitted = false;
   let activeFieldIndex = 0;
 
@@ -143,29 +143,32 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     `;
   }
 
+  const hasExtraBadge = extraKeys.length > 0;
+
   displayContainer.innerHTML = `
     <div style="display: flex; gap: 6px; align-items: center; width: 100%; box-sizing: border-box;">
       ${inputsHTML}
 
-      <!-- MODE TOGGLE BUTTON -->
+      <!-- MODE TOGGLE BUTTON WITH EXTRA KEYS BADGE -->
       <button type="button" id="btn-toggle-keypad-mode" style="
         height: 46px;
         padding: 0 10px;
         font-size: 0.8rem;
         font-weight: 800;
         border-radius: 10px;
-        border: 1.5px solid #cbd5e1;
-        background: #f8fafc;
-        color: #1e293b;
+        border: 1.5px solid ${hasExtraBadge ? '#3b82f6' : '#cbd5e1'};
+        background: ${hasExtraBadge ? '#eff6ff' : '#f8fafc'};
+        color: ${hasExtraBadge ? '#1d4ed8' : '#1e293b'};
         cursor: pointer;
         white-space: nowrap;
         flex-shrink: 0;
         display: flex;
         align-items: center;
-        gap: 2px;
+        gap: 4px;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        position: relative;
       ">
-        ∛ Math
+        ∛ Math ${hasExtraBadge ? '<span style="width: 7px; height: 7px; background: #2563eb; border-radius: 50%; display: inline-block;"></span>' : ''}
       </button>
     </div>
   `;
@@ -244,17 +247,19 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     renderGrid();
   });
 
+  // POPULATE SPARE SLOTS WITH EXTRA KEYS
   function getKeysForTab(tab) {
     if (tab === "basic") return STANDARD_KEYPADS.basic;
 
     const baseMath = [...STANDARD_KEYPADS.math];
-    if (Array.isArray(customKeys) && customKeys.length > 0) {
-      const flatCustom = customKeys.flat();
-      flatCustom.forEach(k => {
-        if (!baseMath.includes(k) && !STANDARD_KEYPADS.basic.includes(k) && k !== "Submit" && k !== "Skip") {
-          const emptyIdx = baseMath.indexOf("");
+    if (Array.isArray(extraKeys) && extraKeys.length > 0) {
+      let searchIdx = 0;
+      extraKeys.forEach(k => {
+        if (!baseMath.includes(k) && !STANDARD_KEYPADS.basic.includes(k)) {
+          const emptyIdx = baseMath.indexOf("", searchIdx);
           if (emptyIdx !== -1) {
             baseMath[emptyIdx] = k;
+            searchIdx = emptyIdx + 1;
           }
         }
       });
@@ -262,21 +267,22 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
     return baseMath;
   }
 
-  // 4. GRID RENDERER WITH COLOR CODING
+  // 4. GRID RENDERER
   function renderGrid() {
     const keysToRender = getKeysForTab(activeTab);
 
     const buttonsHTML = keysToRender.map(key => {
       if (key === "") {
-        return `<div style="background: #f8fafc; border-radius: 6px; border: 1px dashed #e2e8f0; opacity: 0.4;"></div>`;
+        return `<div style="background: #f8fafc; border-radius: 6px; border: 1px dashed #cbd5e1; opacity: 0.3;"></div>`;
       }
 
       const style = getKeyStyle(key);
+      const isLongText = key.length > 4;
 
       return `
         <button type="button" class="keypad-btn" data-key="${key}" style="
           padding: 5px 2px;
-          font-size: 0.95rem;
+          font-size: ${isLongText ? '0.72rem' : '0.95rem'};
           font-weight: 700;
           border: 1px solid ${style.border};
           border-radius: 8px;
@@ -287,6 +293,9 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
           touch-action: manipulation;
           box-sizing: border-box;
           transition: transform 0.05s ease;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         ">
           ${key}
         </button>
@@ -357,7 +366,10 @@ export function initKeypad(container, config = null, onInputChange, onSubmit) {
 
     currentMathField.focus();
 
-    if (key === "/" || key === "a/b") {
+    // Generic command router (Handles multi-word text keys like "no solution")
+    if (key === "no solution" || /[a-zA-Z]{2,}/.test(key)) {
+      currentMathField.executeCommand(["insert", `\\text{${key}}`]);
+    } else if (key === "/" || key === "a/b") {
       currentMathField.executeCommand(["insert", "\\frac{#0}{#?}"]);
     } else if (key === "^" || key === "xⁿ") {
       currentMathField.executeCommand(["insert", "^{#?}"]);
