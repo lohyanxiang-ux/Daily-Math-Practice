@@ -87,7 +87,7 @@ export function renderQuestionView(container, options = {}) {
     }
   }
 
-  // Live Session Status Monitoring Timer (Auto-End on Teacher Termination)
+  // Live Session Status Monitoring Timer
   if (isLiveSession) {
     const studentClass = state.profile?.class || state.profile?.className || state.user?.class || "";
     const studentEmail = state.profile?.email || state.profile?.studentEmail || state.user?.email || "";
@@ -123,16 +123,28 @@ export function renderQuestionView(container, options = {}) {
     }, 4000);
   }
 
+  // Fetch Next Question with RANDOM Selection for Live Practice
   async function fetchNextQuestion() {
     let queueItem = null;
+
     if (queue.length > 0) {
-      queueItem = (isSkillTree || isLiveSession) ? queue[questionIndex % queue.length] : queue[questionIndex];
+      if (isLiveSession) {
+        // RANDOM SELECTION: Pick a random skill from assigned queue
+        const randomIndex = Math.floor(Math.random() * queue.length);
+        queueItem = queue[randomIndex];
+      } else if (isSkillTree) {
+        queueItem = queue[questionIndex % queue.length];
+      } else {
+        queueItem = queue[questionIndex];
+      }
     }
+
     if (queueItem) {
       activeGeneratorPath = typeof queueItem === "object" ? queueItem.generatorPath : String(queueItem);
     } else if (!activeGeneratorPath && state.curriculum && state.curriculum.length > 0) {
       activeGeneratorPath = state.curriculum[0].generatorPath;
     }
+
     if (!activeGeneratorPath) activeGeneratorPath = "algebra/linearEquations.js";
 
     const selectedSkill = (state.curriculum || []).find(s => s.generatorPath === activeGeneratorPath) || {
@@ -473,7 +485,6 @@ export function renderQuestionView(container, options = {}) {
     cleanupListeners();
 
     const currentStreak = state.profile?.streakCount || 1;
-    const totalXP = state.profile?.xp || 0;
     const accuracyPct = totalAttemptedCount > 0 ? Math.round((sessionScore / totalAttemptedCount) * 100) : 0;
 
     const summaryRowsHtml = Object.keys(sessionInitialScores).map(path => {
@@ -528,7 +539,6 @@ export function renderQuestionView(container, options = {}) {
     });
   }
 
-  // Session Completion
   function finishSession(isMastered = false) {
     cleanupListeners();
     
