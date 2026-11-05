@@ -6,6 +6,7 @@ import { initScratchpad } from "../components/scratchpad.js";
 import { initKeypad } from "../components/keypad.js";
 import { renderKaTeX } from "../utils/katexHelper.js";
 import { isAlgebraicallyEquivalent } from "../utils/mathEquivalence.js";
+import { textToLatex } from "../utils/mathFormatter.js";
 
 const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbwEsVnKapmwUFuv0vyG1wFvyAXoFKQMrpsNxibUqYh891PHXzFgmBThnT62lGoEPo_xiQ/exec";
 
@@ -129,7 +130,6 @@ export function renderQuestionView(container, options = {}) {
 
     if (queue.length > 0) {
       if (isLiveSession) {
-        // RANDOM SELECTION: Pick a random skill from assigned queue
         const randomIndex = Math.floor(Math.random() * queue.length);
         queueItem = queue[randomIndex];
       } else if (isSkillTree) {
@@ -456,10 +456,12 @@ export function renderQuestionView(container, options = {}) {
       }
     } else {
       if (feedbackEl) {
+        const formattedExpected = textToLatex(currentQuestion.expectedAnswer);
         feedbackEl.style.padding = "8px 12px";
         feedbackEl.style.background = "#fee2e2";
         feedbackEl.style.color = "#991b1b";
-        feedbackEl.innerHTML = `Incorrect. Expected: <strong>${currentQuestion.expectedAnswer}</strong>  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span> ${targetAchievedBanner}`;
+        feedbackEl.innerHTML = `Incorrect. Expected: <strong>$${formattedExpected}$</strong>  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span> ${targetAchievedBanner}`;
+        renderKaTeX(feedbackEl);
       }
     }
 
