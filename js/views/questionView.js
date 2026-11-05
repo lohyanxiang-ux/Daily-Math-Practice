@@ -88,7 +88,6 @@ export function renderQuestionView(container, options = {}) {
     }
   }
 
-  // Live Session Status Monitoring Timer
   if (isLiveSession) {
     const studentClass = state.profile?.class || state.profile?.className || state.user?.class || "";
     const studentEmail = state.profile?.email || state.profile?.studentEmail || state.user?.email || "";
@@ -262,38 +261,38 @@ export function renderQuestionView(container, options = {}) {
     ` : "";
 
     container.innerHTML = `
-      <main style="display: flex; height: calc(100dvh - 76px); width: 100vw; overflow: hidden; padding: 8px 14px; gap: 12px; box-sizing: border-box; background: #f1f5f9;">
+      <main style="display: flex; height: calc(100dvh - 70px); max-height: calc(100dvh - 70px); width: 100%; overflow: hidden; padding: 6px 10px; gap: 10px; box-sizing: border-box; background: #f1f5f9;">
         
         <!-- LEFT COLUMN WORKSPACE -->
-        <section id="left-column-workspace" style="flex: 0 0 55%; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden;">
+        <section id="left-column-workspace" style="flex: 1 1 52%; min-width: 0; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden;">
           
-          <div class="scratchpad-toolbar" style="padding: 8px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
-            <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">✏️ Scratchpad Workspace</div>
-            <div style="display: flex; gap: 8px; align-items: center;">
+          <div class="scratchpad-toolbar" style="padding: 6px 12px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+            <div style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">✏️ Scratchpad Workspace</div>
+            <div style="display: flex; gap: 6px; align-items: center;">
               <div class="tool-group" style="padding: 2px;">
-                <button class="tool-icon-btn active" data-tool="pen" title="Pen" style="width: 30px; height: 30px; font-size: 0.85rem;">✏️</button>
-                <button class="tool-icon-btn" data-tool="eraser" title="Eraser" style="width: 30px; height: 30px; font-size: 0.85rem;">🧹</button>
-                <button class="tool-icon-btn" data-tool="pointer" title="Pointer" style="width: 30px; height: 30px; font-size: 0.85rem;">🖐️</button>
+                <button class="tool-icon-btn active" data-tool="pen" title="Pen" style="width: 28px; height: 28px; font-size: 0.8rem;">✏️</button>
+                <button class="tool-icon-btn" data-tool="eraser" title="Eraser" style="width: 28px; height: 28px; font-size: 0.8rem;">🧹</button>
+                <button class="tool-icon-btn" data-tool="pointer" title="Pointer" style="width: 28px; height: 28px; font-size: 0.8rem;">🖐️</button>
               </div>
 
               <div class="tool-group" style="padding: 2px;">
-                <div class="color-swatch active" data-color="#1e293b" style="background: #1e293b; width: 18px; height: 18px;"></div>
-                <div class="color-swatch" data-color="#2563eb" style="background: #2563eb; width: 18px; height: 18px;"></div>
-                <div class="color-swatch" data-color="#dc2626" style="background: #dc2626; width: 18px; height: 18px;"></div>
-                <div class="color-swatch" data-color="#16a34a" style="background: #16a34a; width: 18px; height: 18px;"></div>
+                <div class="color-swatch active" data-color="#1e293b" style="background: #1e293b; width: 16px; height: 16px;"></div>
+                <div class="color-swatch" data-color="#2563eb" style="background: #2563eb; width: 16px; height: 16px;"></div>
+                <div class="color-swatch" data-color="#dc2626" style="background: #dc2626; width: 16px; height: 16px;"></div>
+                <div class="color-swatch" data-color="#16a34a" style="background: #16a34a; width: 16px; height: 16px;"></div>
               </div>
 
               <div class="tool-group" style="padding: 2px;">
-                <button id="btn-clear-canvas" class="tool-icon-btn" title="Clear Canvas" style="width: 30px; height: 30px; font-size: 0.85rem;">🗑️</button>
+                <button id="btn-clear-canvas" class="tool-icon-btn" title="Clear Canvas" style="width: 28px; height: 28px; font-size: 0.8rem;">🗑️</button>
               </div>
             </div>
           </div>
 
           <div style="flex: 1; overflow-y: auto; position: relative;">
-            <div id="scratchpad-scroll-wrapper" style="position: relative; min-height: 1200px; width: 100%; padding: 18px; box-sizing: border-box;">
+            <div id="scratchpad-scroll-wrapper" style="position: relative; min-height: 1200px; width: 100%; padding: 14px; box-sizing: border-box;">
               
               <div id="question-underlay" style="position: relative; z-index: 1; pointer-events: none; max-width: 100%;">
-                <div id="question-prompt" class="math-display" style="font-size: 1.1rem; line-height: 1.9; color: #1e293b; background: #f8fafc; border-left: 4px solid #2563eb; padding: 20px 18px; border-radius: 10px; overflow-x: auto; overflow-y: visible; margin-bottom: 12px; box-sizing: border-box;">
+                <div id="question-prompt" class="math-display" style="font-size: 1.05rem; line-height: 1.8; color: #1e293b; background: #f8fafc; border-left: 4px solid #2563eb; padding: 16px 14px; border-radius: 10px; overflow-x: auto; overflow-y: visible; margin-bottom: 10px; box-sizing: border-box;">
                   ${currentQuestion.prompt}
                 </div>
                 ${diagramHtml}
@@ -308,22 +307,46 @@ export function renderQuestionView(container, options = {}) {
 
         </section>
 
-        <!-- RIGHT COLUMN: FIXED HINT BOX + KEYPAD -->
-        <section style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; padding: 10px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
+        <!-- RIGHT COLUMN: DYNAMIC HEIGHT BOUNDED HINTS & KEYPAD -->
+        <section style="flex: 1 1 48%; min-width: 310px; max-width: 50%; display: flex; flex-direction: column; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; padding: 10px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
           
-          <div id="hints-scroll-area" style="height: 220px; flex-shrink: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 4px; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
+          <!-- HINTS & SOLUTION SCROLL AREA: DYNAMIC DOCKING ABOVE KEYPAD -->
+          <div id="hints-scroll-area" style="
+            flex: 1 1 0%;
+            min-height: 80px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+            padding-right: 4px;
+            margin-bottom: 8px;
+            border-bottom: 1.5px solid #e2e8f0;
+            position: relative;
+            z-index: 5;
+            box-sizing: border-box;
+            word-break: break-word;
+          ">
             <div id="hints-container" class="hints-list"></div>
             <div id="daily-feedback" class="feedback-area" style="margin-top: 4px; font-weight: 700; border-radius: 8px;"></div>
             
-            <!-- TROUBLESHOOTING DEBUG CONTAINER (DISPLAY RAW LATEX INPUT VS EXPECTED) -->
-            <div id="troubleshoot-debug-box" style="display: none; margin-top: 8px; padding: 10px 12px; background: #0f172a; color: #f8fafc; border-radius: 10px; font-family: monospace; font-size: 0.8rem; line-height: 1.6; overflow-x: auto; border: 1px solid #334155;"></div>
+            <!-- RAW LATEX TROUBLESHOOTING DEBUG BOX -->
+            <div id="troubleshoot-debug-box" style="display: none; margin-top: 8px; padding: 8px 10px; background: #0f172a; color: #f8fafc; border-radius: 10px; font-family: monospace; font-size: 0.78rem; line-height: 1.5; overflow-x: auto; border: 1px solid #334155;"></div>
 
-            <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 4px; padding: 8px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; max-height: 180px; overflow-y: auto; -webkit-overflow-scrolling: touch;"></div>
+            <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 6px; padding: 10px; background: #f8fafc; border-radius: 10px; border: 1px solid #cbd5e1; box-sizing: border-box; overflow: visible;"></div>
           </div>
 
-          <div id="keypad-dock-section" style="flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 4px;">
-            <div id="keypad-display" style="width: 100%;"></div>
-            <div class="keypad-grid" style="flex: 1; min-height: 0;"></div>
+          <!-- KEYPAD DOCK SECTION (ANCHORED AT BOTTOM) -->
+          <div id="keypad-dock-section" style="
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 10;
+            position: relative;
+            background: #ffffff;
+            box-sizing: border-box;
+          ">
+            <div id="keypad-display" style="width: 100%; box-sizing: border-box;"></div>
+            <div class="keypad-grid" style="width: 100%; box-sizing: border-box;"></div>
           </div>
 
         </section>
@@ -417,7 +440,6 @@ export function renderQuestionView(container, options = {}) {
     const topMasteryEl = document.querySelector("#top-nav-mastery-val");
     if (topMasteryEl) topMasteryEl.innerText = newScore;
 
-    // TARGET SCORE MILESTONE NOTIFICATION
     let targetAchievedBanner = "";
     if (options.targetScore && newScore >= options.targetScore && !targetScoreAchievedAlertShown) {
       targetScoreAchievedAlertShown = true;
@@ -428,7 +450,6 @@ export function renderQuestionView(container, options = {}) {
       `;
     }
 
-    // Live Sync
     if ((isLiveSession || options.sessionId) && options.sessionId) {
       fetch(getApiUrl(), {
         method: "POST",
@@ -447,13 +468,11 @@ export function renderQuestionView(container, options = {}) {
       }).catch(err => console.error("Live attempt sync error:", err));
     }
 
-    // Format raw strings for troubleshooting debug display
     const rawUserInputStr = Array.isArray(userAns) ? JSON.stringify(userAns) : String(userAns || "");
     const rawExpectedStr = Array.isArray(currentQuestion.expectedAnswer)
       ? JSON.stringify(currentQuestion.expectedAnswer)
       : String(currentQuestion.expectedAnswer || "");
 
-    // DISPLAY TROUBLESHOOTING DEBUG BOX
     if (debugBox) {
       debugBox.style.display = "block";
       debugBox.innerHTML = `
@@ -510,11 +529,11 @@ export function renderQuestionView(container, options = {}) {
       renderKaTeX(solutionBox);
     }
 
-    // Auto-scroll the hints/solution container down on submission
+    // AUTOMATIC IPAD / MOBILE SCROLL RE-ANCHOR ON SUBMIT
     if (hintsScrollArea) {
       setTimeout(() => {
-        hintsScrollArea.scrollTop = hintsScrollArea.scrollHeight;
-      }, 100);
+        hintsScrollArea.scrollTop = feedbackEl ? feedbackEl.offsetTop : 0;
+      }, 80);
     }
 
     const currentScore = state.mastery[activeGeneratorPath]?.score || 0;
@@ -523,7 +542,6 @@ export function renderQuestionView(container, options = {}) {
     }
   }
 
-  // Render Student Post-Session Summary View
   function renderStudentLiveSummary() {
     cleanupListeners();
 
