@@ -27,8 +27,16 @@ export function renderLiveTabHTML(props) {
     curriculum,
     students,
     activeSession,
-    liveAttempts
+    liveAttempts,
+    summaryData // Present when viewing post-session summary
   } = props;
+
+  // ---------------------------------------------------------
+  // MODE A: POST-SESSION SUMMARY VIEW
+  // ---------------------------------------------------------
+  if (summaryData) {
+    return renderTeacherSummaryHTML(summaryData, curriculum);
+  }
 
   const isActive = activeSession && activeSession.status === "ACTIVE";
 
@@ -56,22 +64,16 @@ export function renderLiveTabHTML(props) {
     activeFilterStrand = "All";
   }
 
-  // Filter students for selected class
-  const classStudents = students.filter(s => {
-    const c = getStudentClass(s);
-    return selectedClass === "All" || c === selectedClass;
-  });
+  const classStudents = students.filter(s => getStudentClass(s) === selectedClass);
 
   // ---------------------------------------------------------
-  // MODE A: SETUP FORM (No Active Live Session)
+  // MODE B: SETUP FORM (No Active Live Session)
   // ---------------------------------------------------------
   if (!isActive) {
-    // Collect unique filter options
     const levels = Array.from(new Set(curriculum.map(c => c.level || c.year).filter(Boolean))).sort();
     const streams = Array.from(new Set(curriculum.map(c => c.stream).filter(Boolean))).sort();
     const strands = Array.from(new Set(curriculum.map(c => c.strand).filter(Boolean))).sort();
 
-    // Apply filters to curriculum skills
     const filteredSkills = curriculum.filter(sk => {
       const matchLevel = activeFilterLevel === "All" || String(sk.level || sk.year) === String(activeFilterLevel);
       const matchStream = activeFilterStream === "All" || String(sk.stream) === String(activeFilterStream);
@@ -79,7 +81,6 @@ export function renderLiveTabHTML(props) {
       return matchLevel && matchStream && matchStrand;
     });
 
-    // Group filtered skills by Topic
     const skillsByTopic = {};
     filteredSkills.forEach(sk => {
       const topic = sk.topic || "General Topics";
@@ -94,18 +95,35 @@ export function renderLiveTabHTML(props) {
           <span style="font-size: 2rem;">📡</span>
           <div>
             <h3 style="font-size: 1.3rem; color: #0f172a; margin: 0; font-weight: 800;">Launch Live Practice</h3>
-            <p style="color: #64748b; font-size: 0.88rem; margin: 2px 0 0 0;">Select class and skills to assign for real-time classroom practice.</p>
+            <p style="color: #64748b; font-size: 0.88rem; margin: 2px 0 0 0;">Select class, target goals, and skills for real-time classroom practice.</p>
           </div>
         </div>
 
         <form id="form-start-live-session" style="display: flex; flex-direction: column; gap: 20px;">
           
-          <!-- CLASS SELECTION -->
-          <div>
-            <label style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">1. Target Class:</label>
-            <select id="live-select-class" style="width: 100%; max-width: 320px; padding: 10px 14px; border-radius: 10px; border: 1.5px solid #cbd5e1; font-weight: 700; font-size: 0.95rem; background: #fff; color: #0f172a;">
-              ${classes.map(c => `<option value="${c}" ${c === selectedClass ? 'selected' : ''}>Class ${c}</option>`).join('')}
-            </select>
+          <!-- CLASS SELECTION & TARGET GOAL OPTIONS -->
+          <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+            <div style="flex: 1; min-width: 220px;">
+              <label style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">1. Target Class:</label>
+              <select id="live-select-class" style="width: 100%; padding: 10px 14px; border-radius: 10px; border: 1.5px solid #cbd5e1; font-weight: 700; font-size: 0.95rem; background: #fff; color: #0f172a;">
+                ${classes.map(c => `<option value="${c}" ${c === selectedClass ? 'selected' : ''}>Class ${c}</option>`).join('')}
+              </select>
+            </div>
+
+            <div style="flex: 1; min-width: 220px;">
+              <label style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">2. Session Target Goal:</label>
+              <select id="live-target-type" style="width: 100%; padding: 10px 14px; border-radius: 10px; border: 1.5px solid #cbd5e1; font-weight: 700; font-size: 0.95rem; background: #fff; color: #0f172a;">
+                <option value="NONE">No Target Goal (Open Practice)</option>
+                <option value="SCORE">🎯 Target Mastery Score</option>
+                <option value="TIME">⏱️ Target Time Limit</option>
+              </select>
+            </div>
+
+            <!-- DYNAMIC TARGET INPUT -->
+            <div id="live-target-input-container" style="flex: 1; min-width: 180px; display: none;">
+              <label id="live-target-input-label" style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">Target Value:</label>
+              <input type="number" id="live-target-val-input" value="80" min="1" max="120" style="width: 100%; padding: 10px 14px; border-radius: 10px; border: 1.5px solid #cbd5e1; font-weight: 700; font-size: 0.95rem; box-sizing: border-box;" />
+            </div>
           </div>
 
           <!-- SKILL FILTERS BAR -->
@@ -116,7 +134,6 @@ export function renderLiveTabHTML(props) {
             </div>
             
             <div style="display: flex; flex-wrap: wrap; gap: 12px;">
-              <!-- Level Filter -->
               <div style="flex: 1; min-width: 140px;">
                 <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Level / Year</label>
                 <select id="live-filter-level" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: 700; font-size: 0.85rem; background: #fff; color: #0f172a;">
@@ -125,7 +142,6 @@ export function renderLiveTabHTML(props) {
                 </select>
               </div>
 
-              <!-- Stream Filter -->
               <div style="flex: 1; min-width: 140px;">
                 <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Stream</label>
                 <select id="live-filter-stream" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: 700; font-size: 0.85rem; background: #fff; color: #0f172a;">
@@ -134,7 +150,6 @@ export function renderLiveTabHTML(props) {
                 </select>
               </div>
 
-              <!-- Strand Filter -->
               <div style="flex: 1; min-width: 140px;">
                 <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Strand</label>
                 <select id="live-filter-strand" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: 700; font-size: 0.85rem; background: #fff; color: #0f172a;">
@@ -145,16 +160,16 @@ export function renderLiveTabHTML(props) {
             </div>
           </div>
 
-          <!-- MULTI-SKILL SELECTION (Grouped by Topic) -->
+          <!-- MULTI-SKILL SELECTION -->
           <div>
             <label style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">
-              2. Select Skill(s) to Practice (Choose 1 to 3):
+              3. Select Skill(s) to Practice (Choose 1 to 3):
             </label>
 
             <div style="max-height: 320px; overflow-y: auto; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 16px; background: #ffffff; display: flex; flex-direction: column; gap: 16px;">
               ${Object.keys(skillsByTopic).length === 0 ? `
                 <div style="text-align: center; color: #64748b; padding: 24px; font-weight: 600;">
-                  No skills match the selected Level/Stream filter. Adjust your filter above.
+                  No skills match the selected filters.
                 </div>
               ` : Object.entries(skillsByTopic).map(([topicName, skills]) => `
                 <div>
@@ -174,9 +189,8 @@ export function renderLiveTabHTML(props) {
             </div>
           </div>
 
-          <!-- LAUNCH BUTTON -->
           <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
-            <button type="submit" id="btn-launch-live" style="background: #16a34a; color: #ffffff; border: none; padding: 14px 28px; border-radius: 12px; font-weight: 800; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25); transition: transform 0.15s;">
+            <button type="submit" id="btn-launch-live" style="background: #16a34a; color: #ffffff; border: none; padding: 14px 28px; border-radius: 12px; font-weight: 800; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);">
               🚀 Start Live Class Practice
             </button>
           </div>
@@ -188,10 +202,8 @@ export function renderLiveTabHTML(props) {
   }
 
   // ---------------------------------------------------------
-  // MODE B: LIVE MONITORING DASHBOARD (Active Session)
+  // MODE C: LIVE MONITORING DASHBOARD (Active Session)
   // ---------------------------------------------------------
-
-  // Process live student attempt metrics
   const studentMetrics = classStudents.map((st, idx) => {
     const emailKey = (st.email || st.id || "").toLowerCase();
     const stAttempts = liveAttempts.filter(a => (a.studentEmail || "").toLowerCase() === emailKey);
@@ -252,6 +264,13 @@ export function renderLiveTabHTML(props) {
     return sk ? sk.title : p;
   }).join(", ");
 
+  let targetBadgeHtml = "";
+  if (activeSession.targetType === "SCORE" && activeSession.targetScore) {
+    targetBadgeHtml = `<span style="background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.8rem;">🎯 Target Score: ${activeSession.targetScore} pts</span>`;
+  } else if (activeSession.targetType === "TIME" && activeSession.targetTime) {
+    targetBadgeHtml = `<span id="live-timer-badge" style="background: #fef3c7; color: #92400e; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 0.8rem;">⏱️ Time Limit: ${activeSession.targetTime}m</span>`;
+  }
+
   return `
     <div style="display: flex; flex-direction: column; gap: 16px;">
       
@@ -261,6 +280,7 @@ export function renderLiveTabHTML(props) {
           <div style="display: flex; align-items: center; gap: 10px;">
             <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #22c55e; animation: pulse 1.5s infinite;"></span>
             <h3 style="font-size: 1.25rem; margin: 0; font-weight: 800; color: #ffffff;">LIVE PRACTICE: Class ${activeSession.className}</h3>
+            ${targetBadgeHtml}
           </div>
           <p style="color: #94a3b8; font-size: 0.88rem; margin: 4px 0 0 0;">
             Assigned Skills: <strong style="color: #60a5fa;">${activeSkillsList}</strong>
@@ -268,8 +288,8 @@ export function renderLiveTabHTML(props) {
         </div>
 
         <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-          <button id="btn-toggle-projector" style="padding: 10px 18px; border-radius: 10px; border: 1.5px solid ${isProjectorMode ? '#8b5cf6' : '#475569'}; font-weight: 800; background: ${isProjectorMode ? '#7c3aed' : '#334155'}; color: #ffffff; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-            ${isProjectorMode ? '📽️ Projector Mode: ON (Names Anonymized)' : '👁️ Projector Mode: OFF'}
+          <button id="btn-toggle-projector" style="padding: 10px 18px; border-radius: 10px; border: 1.5px solid ${isProjectorMode ? '#8b5cf6' : '#475569'}; font-weight: 800; background: ${isProjectorMode ? '#7c3aed' : '#334155'}; color: #ffffff; cursor: pointer;">
+            ${isProjectorMode ? '📽️ Projector Mode: ON (Anonymized)' : '👁️ Projector Mode: OFF'}
           </button>
 
           <button id="btn-stop-live-session" style="background: #dc2626; color: #ffffff; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 10px rgba(220, 38, 38, 0.3);">
@@ -323,28 +343,158 @@ export function renderLiveTabHTML(props) {
   `;
 }
 
-export function initLiveTabEvents(container, props) {
-  const { onStartSession, onEndSession, onToggleProjector, onFilterChange } = props;
+/**
+ * Renders Teacher Post-Session Summary View
+ */
+function renderTeacherSummaryHTML(summary, curriculum) {
+  const { className, durationMins, skillPaths, studentStats, overallAccuracy, avgScoreStart, avgScoreEnd } = summary;
 
-  // Level Filter Change
+  const scoreDiff = avgScoreEnd - avgScoreStart;
+  const diffBadge = scoreDiff >= 0 ? `+${scoreDiff}` : `${scoreDiff}`;
+  const diffColor = scoreDiff >= 0 ? "#16a34a" : "#dc2626";
+
+  const totalQuestions = studentStats.reduce((acc, s) => acc + s.totalAttempted, 0);
+  const needsSupportCount = studentStats.filter(s => s.status === "NEEDS_SUPPORT").length;
+
+  return `
+    <div style="display: flex; flex-direction: column; gap: 20px; max-width: 1000px; margin: 0 auto;">
+      
+      <!-- HEADER BANNER -->
+      <div style="background: #ffffff; padding: 24px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <span style="background: #dcfce7; color: #15803d; font-weight: 800; padding: 4px 10px; border-radius: 8px; font-size: 0.8rem;">🎉 LIVE PRACTICE SUMMARY</span>
+          <h2 style="margin: 6px 0 0 0; font-size: 1.4rem; color: #0f172a; font-weight: 800;">Class ${className} Performance Report</h2>
+          <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.88rem;">Duration: <strong>${durationMins} mins</strong> | Assigned Skills: <strong>${skillPaths.length}</strong> | Participants: <strong>${studentStats.length}</strong></p>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <button id="btn-summary-save-tags" style="background: #16a34a; color: #ffffff; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 10px rgba(22, 163, 74, 0.25);">
+            📌 Save & Auto-Tag Skills as Current
+          </button>
+          <button id="btn-summary-done" style="background: #2563eb; color: #ffffff; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 800; cursor: pointer;">
+            Return to Dashboard ➔
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI HERO CARDS -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
+        <div style="background: #ffffff; padding: 18px; border-radius: 14px; border: 1px solid #e2e8f0; text-align: center;">
+          <div style="font-size: 0.8rem; font-weight: 700; color: #64748b;">CLASS AVG GROWTH</div>
+          <div style="font-size: 1.5rem; font-weight: 900; color: #0f172a; margin-top: 4px;">
+            ${avgScoreStart} ➔ <span style="color: #2563eb;">${avgScoreEnd}</span>
+          </div>
+          <div style="font-size: 0.82rem; font-weight: 800; color: ${diffColor}; margin-top: 2px;">(${diffBadge} pts)</div>
+        </div>
+
+        <div style="background: #ffffff; padding: 18px; border-radius: 14px; border: 1px solid #e2e8f0; text-align: center;">
+          <div style="font-size: 0.8rem; font-weight: 700; color: #64748b;">CLASS ACCURACY</div>
+          <div style="font-size: 1.5rem; font-weight: 900; color: #16a34a; margin-top: 4px;">${overallAccuracy}%</div>
+          <div style="font-size: 0.82rem; font-weight: 600; color: #64748b; margin-top: 2px;">Correct Answers</div>
+        </div>
+
+        <div style="background: #ffffff; padding: 18px; border-radius: 14px; border: 1px solid #e2e8f0; text-align: center;">
+          <div style="font-size: 0.8rem; font-weight: 700; color: #64748b;">TOTAL QUESTIONS</div>
+          <div style="font-size: 1.5rem; font-weight: 900; color: #0f172a; margin-top: 4px;">${totalQuestions}</div>
+          <div style="font-size: 0.82rem; font-weight: 600; color: #64748b; margin-top: 2px;">Answered</div>
+        </div>
+
+        <div style="background: #ffffff; padding: 18px; border-radius: 14px; border: 1px solid #e2e8f0; text-align: center;">
+          <div style="font-size: 0.8rem; font-weight: 700; color: #64748b;">NEEDS SUPPORT</div>
+          <div style="font-size: 1.5rem; font-weight: 900; color: ${needsSupportCount > 0 ? '#dc2626' : '#16a34a'}; margin-top: 4px;">${needsSupportCount}</div>
+          <div style="font-size: 0.82rem; font-weight: 600; color: #64748b; margin-top: 2px;">Students Flagged</div>
+        </div>
+      </div>
+
+      <!-- STUDENT PERFORMANCE ROSTER -->
+      <div style="background: #ffffff; border-radius: 16px; padding: 20px; border: 1px solid #e2e8f0;">
+        <h4 style="margin: 0 0 14px 0; color: #0f172a; font-size: 1.05rem; font-weight: 800;">Student Performance Roster</h4>
+        
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left;">
+            <thead>
+              <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #475569; font-weight: 700;">
+                <th style="padding: 10px 14px;">Student Name</th>
+                <th style="padding: 10px 14px;">Questions</th>
+                <th style="padding: 10px 14px;">Accuracy</th>
+                <th style="padding: 10px 14px;">Score Progress</th>
+                <th style="padding: 10px 14px;">Status / Flag</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${studentStats.map(st => {
+                let badgeHtml = `<span style="background: #f1f5f9; color: #475569; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.78rem;">✅ Solid Progress</span>`;
+                if (st.status === "TOP_PERFORMER") {
+                  badgeHtml = `<span style="background: #fef3c7; color: #92400e; padding: 3px 8px; border-radius: 6px; font-weight: 800; font-size: 0.78rem;">🌟 Top Performer</span>`;
+                } else if (st.status === "NEEDS_SUPPORT") {
+                  badgeHtml = `<span style="background: #ffe4e6; color: #9f1239; padding: 3px 8px; border-radius: 6px; font-weight: 800; font-size: 0.78rem;">🚨 Needs Support</span>`;
+                }
+
+                const sDiff = st.endScore - st.startScore;
+                const sBadge = sDiff >= 0 ? `+${sDiff}` : `${sDiff}`;
+                const sColor = sDiff >= 0 ? "#16a34a" : "#dc2626";
+
+                return `
+                  <tr style="border-bottom: 1px solid #f1f5f9;">
+                    <td style="padding: 10px 14px; font-weight: 700; color: #0f172a;">${st.name}</td>
+                    <td style="padding: 10px 14px; color: #334155;">${st.totalAttempted} Qs</td>
+                    <td style="padding: 10px 14px; font-weight: 700; color: #16a34a;">${st.accuracy}%</td>
+                    <td style="padding: 10px 14px; font-weight: 800; color: #0f172a;">
+                      ${st.startScore} ➔ <span style="color: #2563eb;">${st.endScore}</span> 
+                      <span style="font-size: 0.78rem; color: ${sColor}; margin-left: 4px;">(${sBadge} pts)</span>
+                    </td>
+                    <td style="padding: 10px 14px;">${badgeHtml}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  `;
+}
+
+export function initLiveTabEvents(container, props) {
+  const { onStartSession, onEndSession, onToggleProjector, onFilterChange, onDoneSummary, onSaveAutoTags } = props;
+
+  // Setup Form Target Type Change
+  container.querySelector("#live-target-type")?.addEventListener("change", (e) => {
+    const val = e.target.value;
+    const inputContainer = container.querySelector("#live-target-input-container");
+    const inputLabel = container.querySelector("#live-target-input-label");
+    const inputVal = container.querySelector("#live-target-val-input");
+
+    if (val === "SCORE") {
+      if (inputContainer) inputContainer.style.display = "block";
+      if (inputLabel) inputLabel.innerText = "Target Mastery Score (1-100):";
+      if (inputVal) { inputVal.value = "80"; inputVal.max = "100"; }
+    } else if (val === "TIME") {
+      if (inputContainer) inputContainer.style.display = "block";
+      if (inputLabel) inputLabel.innerText = "Target Time Limit (Minutes):";
+      if (inputVal) { inputVal.value = "15"; inputVal.max = "120"; }
+    } else {
+      if (inputContainer) inputContainer.style.display = "none";
+    }
+  });
+
+  // Filter Event Handlers
   container.querySelector("#live-filter-level")?.addEventListener("change", (e) => {
     activeFilterLevel = e.target.value;
     if (typeof onFilterChange === "function") onFilterChange();
   });
 
-  // Stream Filter Change
   container.querySelector("#live-filter-stream")?.addEventListener("change", (e) => {
     activeFilterStream = e.target.value;
     if (typeof onFilterChange === "function") onFilterChange();
   });
 
-  // Strand Filter Change
   container.querySelector("#live-filter-strand")?.addEventListener("change", (e) => {
     activeFilterStrand = e.target.value;
     if (typeof onFilterChange === "function") onFilterChange();
   });
 
-  // Class Filter Change inside setup card
   container.querySelector("#live-select-class")?.addEventListener("change", (e) => {
     const mainClassSelect = document.querySelector("#select-class-filter");
     if (mainClassSelect) {
@@ -353,13 +503,15 @@ export function initLiveTabEvents(container, props) {
     }
   });
 
-  // Form Submission -> Start Live Session
+  // Start Live Session Form
   const form = container.querySelector("#form-start-live-session");
   if (form) {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const selectedClass = container.querySelector("#live-select-class")?.value;
       const checkedBoxes = Array.from(container.querySelectorAll(".chk-live-skill:checked")).map(cb => cb.value);
+      const targetType = container.querySelector("#live-target-type")?.value || "NONE";
+      const targetVal = Number(container.querySelector("#live-target-val-input")?.value) || 0;
 
       if (!checkedBoxes || checkedBoxes.length === 0) {
         alert("Please select at least 1 skill to assign for live practice.");
@@ -371,17 +523,15 @@ export function initLiveTabEvents(container, props) {
       }
 
       if (typeof onStartSession === "function") {
-        onStartSession(selectedClass, checkedBoxes);
+        onStartSession(selectedClass, checkedBoxes, targetType, targetVal);
       }
     });
   }
 
   // End Session Button
   container.querySelector("#btn-stop-live-session")?.addEventListener("click", () => {
-    if (confirm("End live practice session? Assigned skills will automatically be saved as 'Current' in teacher tags.")) {
-      if (typeof onEndSession === "function") {
-        onEndSession();
-      }
+    if (confirm("End live practice session? Summary report will be generated and assigned skills auto-saved as 'Current'.")) {
+      if (typeof onEndSession === "function") onEndSession();
     }
   });
 
@@ -389,5 +539,14 @@ export function initLiveTabEvents(container, props) {
   container.querySelector("#btn-toggle-projector")?.addEventListener("click", () => {
     isProjectorMode = !isProjectorMode;
     if (typeof onToggleProjector === "function") onToggleProjector(isProjectorMode);
+  });
+
+  // Summary Actions
+  container.querySelector("#btn-summary-done")?.addEventListener("click", () => {
+    if (typeof onDoneSummary === "function") onDoneSummary();
+  });
+
+  container.querySelector("#btn-summary-save-tags")?.addEventListener("click", () => {
+    if (typeof onSaveAutoTags === "function") onSaveAutoTags();
   });
 }
