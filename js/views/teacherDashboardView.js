@@ -48,6 +48,33 @@ export function renderTeacherDashboard(container, onLogout) {
   const strands = Array.from(new Set(curriculum.map(c => c.strand).filter(Boolean))).sort();
   const topics = Array.from(new Set(curriculum.map(c => c.topic).filter(Boolean))).sort();
 
+  /**
+   * Automatically sets both Overview Matrix and Tagging filters 
+   * to match the level & stream of the selected class.
+   */
+  function syncClassFilters(className) {
+    if (!className || className === "All") {
+      selectedLevel = "All";
+      selectedStream = "All";
+      tagFilterLevel = "All";
+      tagFilterStream = "All";
+      return;
+    }
+    const representativeStudent = students.find(s => getStudentClass(s) === className);
+    if (representativeStudent) {
+      if (representativeStudent.year || representativeStudent.level || representativeStudent.grade) {
+        const parsedLevel = String(representativeStudent.year || representativeStudent.level || representativeStudent.grade).trim();
+        tagFilterLevel = parsedLevel;
+        selectedLevel = parsedLevel;
+      }
+      if (representativeStudent.stream) {
+        const parsedStream = String(representativeStudent.stream).trim();
+        tagFilterStream = parsedStream;
+        selectedStream = parsedStream;
+      }
+    }
+  }
+
   function getFilteredStudents() {
     return students.filter(s => selectedClass === "All" || getStudentClass(s) === selectedClass);
   }
@@ -85,6 +112,7 @@ export function renderTeacherDashboard(container, onLogout) {
             currentClassTagsBuffer[sk.generatorPath] = getAutoDefaultTag(sk, selectedClass);
           }
         });
+        syncClassFilters(selectedClass);
       } else {
         currentClassTagsBuffer = {};
       }
@@ -199,6 +227,7 @@ export function renderTeacherDashboard(container, onLogout) {
 
     container.querySelector("#select-class-filter")?.addEventListener("change", (e) => {
       selectedClass = e.target.value;
+      syncClassFilters(selectedClass);
       render();
     });
 
