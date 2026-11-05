@@ -47,16 +47,16 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
     let prevText;
     do {
       prevText = s;
-      s = s.replace(/\\(mathrm|mathit|mathbf|mathsf|mathtt|text|text|text|text|operatorname|d)\{([^{}]+)\}/g, '$2');
+      s = s.replace(/\\(mathrm|mathit|mathbf|mathsf|mathtt|text|operatorname|d)\{([^{}]+)\}/g, '$2');
     } while (s !== prevText);
 
     // Strip formatting commands & invisible spacers
     s = s.replace(/\\(displaystyle|style|limits|nolimits|left\.|right\.|quad|qquad|;|!|,|:)/g, '');
 
-    // Standardize delimiters & operators
-    s = s.replace(/\\left\(|\\left\[|\\left\{/g, '(');
-    s = s.replace(/\\right\)|\\right\]|\\right\}/g, ')');
-    s = s.replace(/\\left|\\right/g, '');
+    // Standardize delimiters & operators (handles both \left( and unescaped left() from template literals)
+    s = s.replace(/\\left\(|left\(|\\left\[|left\[|\\left\{|left\{/g, '(');
+    s = s.replace(/\\right\)|right\)|\\right\]|right\]|\\right\}|right\}/g, ')');
+    s = s.replace(/\\left|left|\\right|right/g, '');
     s = s.replace(/\\times|\\cdot|\\ast|\\star|\\cdotp|\\centerdot/g, '*');
     s = s.replace(/\\div/g, '/');
     s = s.replace(/\\pi/g, 'Math.PI');
@@ -91,7 +91,7 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
   // STEP 1: STRUCTURAL FORM CHECK (FACTORISED / COMPLETED SQUARE)
   // ------------------------------------------------------------------
   const checkForm = (userClean, expectedRaw, reqForm) => {
-    const expStr = String(expectedRaw).replace(/\s+/g, '');
+    const expStr = clean(expectedRaw);
 
     const isExpectedFactorised = reqForm === 'factorised' || 
       (/(\([^\)]+\)|\b[a-zA-Z0-9]+\b)\s*\(/.test(expStr) && !/\)\s*\^/.test(expStr));
@@ -114,7 +114,7 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
         else if (char === ')' || char === ']' || char === '}') depth--;
         else if (depth === 0 && (char === '+' || char === '-')) {
           if (i > 0 && !/[*\/^+\-(]/.test(userClean[i - 1])) {
-            hasTopLevelAddSub = true; // Fixed lowercase true
+            hasTopLevelAddSub = true;
             break;
           }
         }
