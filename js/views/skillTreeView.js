@@ -103,12 +103,12 @@ export function renderSkillTree(container) {
     }
   }
 
+  // Determine tag key: only skills in a different stream get OUT_OF_GRADE (purple)
   function getSkillTagKey(skill) {
-    const skillYearStr = String(skill.year || skill.level || "").trim();
     const skillStreamStr = String(skill.stream || "").trim();
-    const isOutOfGrade = skillYearStr !== studentYear || skillStreamStr !== studentStream;
+    const isOtherStream = studentStream && skillStreamStr && skillStreamStr !== studentStream;
 
-    if (isOutOfGrade) return "OUT_OF_GRADE";
+    if (isOtherStream) return "OUT_OF_GRADE";
 
     const resolvedTag = String(resolveSkillTag(skill, studentClass || studentYear)).toUpperCase();
     if (resolvedTag === "CURRENT") return "CURRENT";
@@ -141,11 +141,11 @@ export function renderSkillTree(container) {
     });
   }
 
-  function getSkillCardStyle(skill, isOutOfGrade) {
-    if (isOutOfGrade) {
+  function getSkillCardStyle(skill, isOtherStream) {
+    if (isOtherStream) {
       return {
         cardStyle: "background: #f5f3ff; border: 2px solid #8b5cf6; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.12);",
-        btnText: "Practice Out-of-Grade Skill ➔",
+        btnText: "Practice Other Stream Skill ➔",
         btnStyle: "background: #7c3aed; color: #ffffff;",
         badgeText: `🌐 ${skill.year || skill.level} (${skill.stream})`,
         badgeStyle: "background: #ede9fe; color: #6d28d9; border: 1px solid #ddd6fe;"
@@ -160,7 +160,7 @@ export function renderSkillTree(container) {
         cardStyle: "background: #f0fdf4; border: 2px solid #22c55e; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.12);",
         btnText: "Practice Current Skill ➔",
         btnStyle: "background: #16a34a; color: #ffffff;",
-        badgeText: "🟢 Current Unit",
+        badgeText: "🟢 Current Skill",
         badgeStyle: "background: #dcfce7; color: #15803d; border: 1px solid #86efac;"
       };
     } else if (t === "PAST") {
@@ -168,15 +168,15 @@ export function renderSkillTree(container) {
         cardStyle: "background: #eff6ff; border: 1.5px solid #3b82f6; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.05);",
         btnText: "Review Past Skill ➔",
         btnStyle: "background: #2563eb; color: #ffffff;",
-        badgeText: "🔵 Past Topic",
+        badgeText: "🔵 Past Skill",
         badgeStyle: "background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd;"
       };
     } else {
       return {
         cardStyle: "background: #f8fafc; border: 1.5px dashed #cbd5e1; opacity: 0.85;",
-        btnText: "🔒 Future Unit",
+        btnText: "🔒 Future Skill",
         btnStyle: "background: #94a3b8; color: #ffffff;",
-        badgeText: "⚪ Future Unit",
+        badgeText: "⚪ Future Skill",
         badgeStyle: "background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1;"
       };
     }
@@ -248,7 +248,7 @@ export function renderSkillTree(container) {
               : 'background: #f1f5f9; color: #94a3b8; border: 1.5px solid #cbd5e1; font-weight: 600; opacity: 0.55; text-decoration: line-through;'}
           ">
             <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${activeTagFilters.CURRENT ? '#22c55e' : '#cbd5e1'};"></span>
-            Current Unit
+            Current Skill
           </button>
 
           <button class="btn-legend-toggle ${activeTagFilters.PAST ? 'active' : ''}" data-tag-key="PAST" style="
@@ -258,7 +258,7 @@ export function renderSkillTree(container) {
               : 'background: #f1f5f9; color: #94a3b8; border: 1.5px solid #cbd5e1; font-weight: 600; opacity: 0.55; text-decoration: line-through;'}
           ">
             <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${activeTagFilters.PAST ? '#3b82f6' : '#cbd5e1'};"></span>
-            Past Topic
+            Past Skill
           </button>
 
           <button class="btn-legend-toggle ${activeTagFilters.FUTURE ? 'active' : ''}" data-tag-key="FUTURE" style="
@@ -268,7 +268,7 @@ export function renderSkillTree(container) {
               : 'background: #f1f5f9; color: #94a3b8; border: 1.5px solid #cbd5e1; font-weight: 600; opacity: 0.55; text-decoration: line-through;'}
           ">
             <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${activeTagFilters.FUTURE ? '#64748b' : '#cbd5e1'};"></span>
-            Future Unit
+            Future Skill
           </button>
 
           <button class="btn-legend-toggle ${activeTagFilters.OUT_OF_GRADE ? 'active' : ''}" data-tag-key="OUT_OF_GRADE" style="
@@ -278,7 +278,7 @@ export function renderSkillTree(container) {
               : 'background: #f1f5f9; color: #94a3b8; border: 1.5px solid #cbd5e1; font-weight: 600; opacity: 0.55; text-decoration: line-through;'}
           ">
             <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${activeTagFilters.OUT_OF_GRADE ? '#8b5cf6' : '#cbd5e1'};"></span>
-            Other Year / Stream
+            Other Stream
           </button>
         </div>
 
@@ -303,11 +303,10 @@ export function renderSkillTree(container) {
                     : 100;
                   const isPrereqLocked = skill.prerequisites ? prereqScore < 40 : false;
                   
-                  const skillYearStr = String(skill.year || skill.level || "").trim();
                   const skillStreamStr = String(skill.stream || "").trim();
-                  const isOutOfGrade = skillYearStr !== studentYear || skillStreamStr !== studentStream;
+                  const isOtherStream = studentStream && skillStreamStr && skillStreamStr !== studentStream;
 
-                  const cardCfg = getSkillCardStyle(skill, isOutOfGrade);
+                  const cardCfg = getSkillCardStyle(skill, isOtherStream);
                   const meta = getMasteryMetadata(m.score || 0);
 
                   return `
