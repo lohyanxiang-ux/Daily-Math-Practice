@@ -24,9 +24,6 @@ function getApiUrl() {
   return apiUrl;
 }
 
-/**
- * 2-Column Question Practice Runner with Real-Time Teacher Termination Monitoring
- */
 export function renderQuestionView(container, options = {}) {
   const mode = options.mode || "dailyQuest";
   const isDailyQuest = mode === "dailyQuest";
@@ -42,16 +39,16 @@ export function renderQuestionView(container, options = {}) {
 
   let questionIndex = 0;
   let sessionScore = 0;
+  let totalAttemptedCount = 0;
   let currentQuestion = null;
   let activeAnswer = "";
   let currentHintStep = 0;
   let currentSkillTitle = "Practice Skill";
   const sessionInitialScores = {};
 
-  // Live session status polling timer for students
+  let targetScoreAchievedAlertShown = false;
   let liveSessionCheckTimer = null;
 
-  // Background Mastery Batch Sync on page visibility change
   function flushMasterySync() {
     if (state.pendingMasteryUpdates && state.pendingMasteryUpdates.size > 0 && state.userToken) {
       const dirtyPaths = Array.from(state.pendingMasteryUpdates);
@@ -68,7 +65,6 @@ export function renderQuestionView(container, options = {}) {
   };
   document.addEventListener("visibilitychange", visibilityHandler);
 
-  // Single Next Question Event Handler
   const handleNextQuestionTrigger = () => {
     questionIndex++;
     loadQuestion();
@@ -80,14 +76,10 @@ export function renderQuestionView(container, options = {}) {
   function cleanupListeners() {
     document.removeEventListener("visibilitychange", visibilityHandler);
     container.removeEventListener("triggerNextQuestion", handleNextQuestionTrigger);
-    
-    // Clear live monitoring timer if active
     if (liveSessionCheckTimer) {
       clearInterval(liveSessionCheckTimer);
       liveSessionCheckTimer = null;
     }
-
-    // Restore original global top nav on session exit
     const topNav = document.querySelector(".top-nav");
     if (topNav && window._originalTopNavHtml) {
       topNav.innerHTML = window._originalTopNavHtml;
@@ -95,9 +87,7 @@ export function renderQuestionView(container, options = {}) {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // LIVE SESSION MONITORING TIMER (Auto-End when Teacher stops session)
-  // -------------------------------------------------------------------------
+  // Live Session Status Monitoring Timer (Auto-End on Teacher Termination)
   if (isLiveSession) {
     const studentClass = state.profile?.class || state.profile?.className || state.user?.class || "";
     const studentEmail = state.profile?.email || state.profile?.studentEmail || state.user?.email || "";
@@ -116,8 +106,6 @@ export function renderQuestionView(container, options = {}) {
         });
 
         const resData = await response.json();
-
-        // Check if teacher ended the session
         if (resData.status === "success") {
           const activeSession = resData.activeSession;
           const isEnded = !activeSession || 
@@ -126,8 +114,7 @@ export function renderQuestionView(container, options = {}) {
 
           if (isEnded) {
             cleanupListeners();
-            alert("📢 Your teacher has ended the Live Practice Session!");
-            finishSession(false);
+            renderStudentLiveSummary();
           }
         }
       } catch (err) {
@@ -136,20 +123,16 @@ export function renderQuestionView(container, options = {}) {
     }, 4000);
   }
 
-  // Fetch Next Question from Generator Module
   async function fetchNextQuestion() {
     let queueItem = null;
-
     if (queue.length > 0) {
       queueItem = (isSkillTree || isLiveSession) ? queue[questionIndex % queue.length] : queue[questionIndex];
     }
-
     if (queueItem) {
       activeGeneratorPath = typeof queueItem === "object" ? queueItem.generatorPath : String(queueItem);
     } else if (!activeGeneratorPath && state.curriculum && state.curriculum.length > 0) {
       activeGeneratorPath = state.curriculum[0].generatorPath;
     }
-
     if (!activeGeneratorPath) activeGeneratorPath = "algebra/linearEquations.js";
 
     const selectedSkill = (state.curriculum || []).find(s => s.generatorPath === activeGeneratorPath) || {
@@ -175,7 +158,6 @@ export function renderQuestionView(container, options = {}) {
     }
   }
 
-  // Updates Global Top Header Bar
   function updateGlobalTopNav() {
     const topNav = document.querySelector(".top-nav");
     if (!topNav) return;
@@ -222,15 +204,11 @@ export function renderQuestionView(container, options = {}) {
     topNav.querySelector("#btn-top-exit")?.addEventListener("click", () => {
       cleanupListeners();
       flushMasterySync();
-      if (typeof options.onExit === "function") {
-        options.onExit();
-      } else {
-        navigateTo("dashboard");
-      }
+      if (typeof options.onExit === "function") options.onExit();
+      else navigateTo("dashboard");
     });
   }
 
-  // Render 2-Column Workspace
   async function loadQuestion() {
     if (!isSkillTree && !isLiveSession && questionIndex >= totalQuestions) {
       finishSession();
@@ -399,6 +377,7 @@ export function renderQuestionView(container, options = {}) {
   function handleSubmission(userAns) {
     if (!currentQuestion) return;
 
+    totalAttemptedCount++;
     const feedbackEl = container.querySelector("#daily-feedback");
     const solutionBox = container.querySelector("#full-solution-container");
     const stepsList = currentQuestion.steps || currentQuestion.hints || [];
@@ -416,6 +395,18 @@ export function renderQuestionView(container, options = {}) {
     const topMasteryEl = document.querySelector("#top-nav-mastery-val");
     if (topMasteryEl) topMasteryEl.innerText = newScore;
 
+    // TARGET SCORE MILESTONE NOTIFICATION
+    let targetAchievedBanner = "";
+    if (options.targetScore && newScore >= options.targetScore && !targetScoreAchievedAlertShown) {
+      targetScoreAchievedAlertShown = true;
+      targetAchievedBanner = `
+        <div style="margin-top: 6px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 6px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 800;">
+          🎯 Target Mastery Score of ${options.targetScore} Achieved! 🎉 Keep practicing to push higher!
+        </div>
+      `;
+    }
+
+    // Live Sync
     if ((isLiveSession || options.sessionId) && options.sessionId) {
       fetch(getApiUrl(), {
         method: "POST",
@@ -449,14 +440,14 @@ export function renderQuestionView(container, options = {}) {
         feedbackEl.style.padding = "8px 12px";
         feedbackEl.style.background = "#d1fae5";
         feedbackEl.style.color = "#065f46";
-        feedbackEl.innerHTML = `Correct! 🎉 +10 XP  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span>`;
+        feedbackEl.innerHTML = `Correct! 🎉 +10 XP  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span> ${targetAchievedBanner}`;
       }
     } else {
       if (feedbackEl) {
         feedbackEl.style.padding = "8px 12px";
         feedbackEl.style.background = "#fee2e2";
         feedbackEl.style.color = "#991b1b";
-        feedbackEl.innerHTML = `Incorrect. Expected: <strong>${currentQuestion.expectedAnswer}</strong>  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span>`;
+        feedbackEl.innerHTML = `Incorrect. Expected: <strong>${currentQuestion.expectedAnswer}</strong>  |  Mastery: <strong>${newScore}</strong> <span style="color:${diffColor}; font-weight:800;">(${diffBadge})</span> ${targetAchievedBanner}`;
       }
     }
 
@@ -475,6 +466,66 @@ export function renderQuestionView(container, options = {}) {
     if (isSkillTree && currentScore >= targetMastery) {
       setTimeout(() => finishSession(true), 1200);
     }
+  }
+
+  // Render Student Post-Session Summary View
+  function renderStudentLiveSummary() {
+    cleanupListeners();
+
+    const currentStreak = state.profile?.streakCount || 1;
+    const totalXP = state.profile?.xp || 0;
+    const accuracyPct = totalAttemptedCount > 0 ? Math.round((sessionScore / totalAttemptedCount) * 100) : 0;
+
+    const summaryRowsHtml = Object.keys(sessionInitialScores).map(path => {
+      const skillObj = (state.curriculum || []).find(s => s.generatorPath === path) || { title: "Practice Skill" };
+      const startScore = sessionInitialScores[path] || 0;
+      const currentScore = state.mastery[path] ? state.mastery[path].score : startScore;
+      const diff = currentScore - startScore;
+      const diffText = diff >= 0 ? `+${diff}` : `${diff}`;
+      const diffColor = diff >= 0 ? "#16a34a" : "#dc2626";
+
+      return `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #f8fafc; border-radius: 10px; margin-bottom: 8px; border: 1px solid #e2e8f0;">
+          <div style="text-align: left; font-weight: 700; color: #1e293b; font-size: 0.92rem;">${skillObj.title}</div>
+          <div style="font-weight: 800; font-size: 0.95rem; color: #0f172a;">
+            ${startScore} ➔ <span style="color: #2563eb;">${currentScore}</span> 
+            <span style="font-size: 0.82rem; color: ${diffColor}; margin-left: 6px;">(${diffText} pts)</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    container.innerHTML = `
+      <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: calc(100dvh - 72px); padding: 20px; background: #f1f5f9;">
+        <div class="card" style="max-width: 500px; width: 100%; text-align: center; padding: 32px; background: #ffffff; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box;">
+          <h2 style="font-size: 1.6rem; color: #0f172a; margin: 0 0 6px 0; font-weight: 800;">🎉 Live Practice Completed!</h2>
+          <p style="font-size: 0.92rem; color: #64748b; margin: 0 0 20px 0;">Your teacher has ended today's live session. Great work!</p>
+
+          <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 20px;">
+            <div style="background: #fff7ed; border: 1px solid #ffedd5; padding: 10px 16px; border-radius: 12px; color: #c2410c; font-weight: 800; font-size: 0.9rem;">
+              🔥 ${currentStreak} Day Streak
+            </div>
+            <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 10px 16px; border-radius: 12px; color: #1e40af; font-weight: 800; font-size: 0.9rem;">
+              ⭐ ${sessionScore} / ${totalAttemptedCount} Correct (${accuracyPct}%)
+            </div>
+          </div>
+
+          <div style="width: 100%; margin-bottom: 24px; text-align: left;">
+            <div style="font-size: 0.85rem; font-weight: 700; color: #475569; margin-bottom: 8px;">Your Mastery Growth:</div>
+            ${summaryRowsHtml || '<div style="color: #64748b; font-size: 0.88rem;">Practice session finished.</div>'}
+          </div>
+
+          <button id="btn-live-summary-dash" style="background: #2563eb; color: #ffffff; border: none; padding: 14px 28px; border-radius: 12px; font-size: 1rem; font-weight: 800; cursor: pointer; width: 100%; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);">
+            Return to Dashboard ➔
+          </button>
+        </div>
+      </div>
+    `;
+
+    container.querySelector("#btn-live-summary-dash")?.addEventListener("click", () => {
+      if (typeof options.onExit === "function") options.onExit();
+      else navigateTo("dashboard");
+    });
   }
 
   // Session Completion
