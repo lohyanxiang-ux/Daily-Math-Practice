@@ -3,11 +3,16 @@ import { getStudentClass } from "./helperUtils.js";
 
 let isProjectorMode = false;
 
-// Filter state variables for Live Practice setup
+// Persistent Filter & Setup State Variables
 let activeFilterLevel = null;
 let activeFilterStream = null;
 let activeFilterStrand = "All";
 let lastSelectedClass = null;
+
+// Persistent Target & Skill Selection State
+let activeTargetType = "NONE"; // "NONE" | "SCORE" | "TIME"
+let activeTargetVal = 80;
+let selectedSkillPaths = new Set();
 
 const ANONYMOUS_ALIASES = [
   "Clever Panda 🐼", "Swift Falcon 🦅", "Math Wizard 🧙‍♂️", "Brave Tiger 🐯",
@@ -28,7 +33,7 @@ export function renderLiveTabHTML(props) {
     students,
     activeSession,
     liveAttempts,
-    summaryData // Present when viewing post-session summary
+    summaryData
   } = props;
 
   // ---------------------------------------------------------
@@ -40,9 +45,10 @@ export function renderLiveTabHTML(props) {
 
   const isActive = activeSession && activeSession.status === "ACTIVE";
 
-  // AUTO-DEFAULT FILTERS TO SELECTED CLASS LEVEL & STREAM
+  // AUTO-DEFAULT FILTERS WHEN CLASS CHANGES
   if (selectedClass !== lastSelectedClass) {
     lastSelectedClass = selectedClass;
+    selectedSkillPaths.clear(); // Reset skill selection for new class
     
     let defaultLevel = "All";
     let defaultStream = "All";
@@ -88,6 +94,10 @@ export function renderLiveTabHTML(props) {
       skillsByTopic[topic].push(sk);
     });
 
+    const isTargetActive = activeTargetType !== "NONE";
+    const targetLabelText = activeTargetType === "SCORE" ? "Target Mastery Score (1-100):" : "Target Time Limit (Minutes):";
+    const targetMaxVal = activeTargetType === "SCORE" ? "100" : "120";
+
     return `
       <div style="background: #ffffff; border-radius: 16px; padding: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); max-width: 900px; margin: 0 auto;">
         
@@ -110,19 +120,20 @@ export function renderLiveTabHTML(props) {
               </select>
             </div>
 
+            <!-- PRESERVED TARGET TYPE SELECTION -->
             <div style="flex: 1; min-width: 220px;">
               <label style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">2. Session Target Goal:</label>
               <select id="live-target-type" style="width: 100%; padding: 10px 14px; border-radius: 10px; border: 1.5px solid #cbd5e1; font-weight: 700; font-size: 0.95rem; background: #fff; color: #0f172a;">
-                <option value="NONE">No Target Goal (Open Practice)</option>
-                <option value="SCORE">🎯 Target Mastery Score</option>
-                <option value="TIME">⏱️ Target Time Limit</option>
+                <option value="NONE" ${activeTargetType === "NONE" ? 'selected' : ''}>No Target Goal (Open Practice)</option>
+                <option value="SCORE" ${activeTargetType === "SCORE" ? 'selected' : ''}>🎯 Target Mastery Score</option>
+                <option value="TIME" ${activeTargetType === "TIME" ? 'selected' : ''}>⏱️ Target Time Limit</option>
               </select>
             </div>
 
-            <!-- DYNAMIC TARGET INPUT -->
-            <div id="live-target-input-container" style="flex: 1; min-width: 180px; display: none;">
-              <label id="live-target-input-label" style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">Target Value:</label>
-              <input type="number" id="live-target-val-input" value="80" min="1" max="120" style="width: 100%; padding: 10px 14px; border-radius: 10px; border: 1.5px solid #cbd5e1; font-weight: 700; font-size: 0.95rem; box-sizing: border-box;" />
+            <!-- PRESERVED TARGET VALUE INPUT -->
+            <div id="live-target-input-container" style="flex: 1; min-width: 180px; display: ${isTargetActive ? 'block' : 'none'};">
+              <label id="live-target-input-label" style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">${targetLabelText}</label>
+              <input type="number" id="live-target-val-input" value="${activeTargetVal}" min="1" max="${targetMaxVal}" style="width: 100%; padding: 10px 14px; border-radius: 10px; border: 1.5px solid #cbd5e1; font-weight: 700; font-size: 0.95rem; box-sizing: border-box;" />
             </div>
           </div>
 
@@ -160,7 +171,7 @@ export function renderLiveTabHTML(props) {
             </div>
           </div>
 
-          <!-- MULTI-SKILL SELECTION -->
+          <!-- MULTI-SKILL SELECTION (WITH PRESERVED CHECKBOXES) -->
           <div>
             <label style="display: block; font-weight: 700; color: #334155; margin-bottom: 6px; font-size: 0.9rem;">
               3. Select Skill(s) to Practice (Choose 1 to 3):
@@ -179,7 +190,7 @@ export function renderLiveTabHTML(props) {
                   <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px;">
                     ${skills.map(sk => `
                       <label style="display: flex; align-items: center; gap: 8px; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
-                        <input type="checkbox" class="chk-live-skill" value="${sk.generatorPath}" style="width: 16px; height: 16px; accent-color: #2563eb;" />
+                        <input type="checkbox" class="chk-live-skill" value="${sk.generatorPath}" ${selectedSkillPaths.has(sk.generatorPath) ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: #2563eb;" />
                         <span>${sk.title}</span>
                       </label>
                     `).join('')}
@@ -343,9 +354,6 @@ export function renderLiveTabHTML(props) {
   `;
 }
 
-/**
- * Renders Teacher Post-Session Summary View
- */
 function renderTeacherSummaryHTML(summary, curriculum) {
   const { className, durationMins, skillPaths, studentStats, overallAccuracy, avgScoreStart, avgScoreEnd } = summary;
 
@@ -459,24 +467,28 @@ function renderTeacherSummaryHTML(summary, curriculum) {
 export function initLiveTabEvents(container, props) {
   const { onStartSession, onEndSession, onToggleProjector, onFilterChange, onDoneSummary, onSaveAutoTags } = props;
 
-  // Setup Form Target Type Change
+  // 1. Target Type Change Event Handler (Persists in State)
   container.querySelector("#live-target-type")?.addEventListener("change", (e) => {
-    const val = e.target.value;
-    const inputContainer = container.querySelector("#live-target-input-container");
-    const inputLabel = container.querySelector("#live-target-input-label");
-    const inputVal = container.querySelector("#live-target-val-input");
+    activeTargetType = e.target.value;
+    if (activeTargetType === "SCORE") activeTargetVal = 80;
+    else if (activeTargetType === "TIME") activeTargetVal = 15;
+    if (typeof onFilterChange === "function") onFilterChange();
+  });
 
-    if (val === "SCORE") {
-      if (inputContainer) inputContainer.style.display = "block";
-      if (inputLabel) inputLabel.innerText = "Target Mastery Score (1-100):";
-      if (inputVal) { inputVal.value = "80"; inputVal.max = "100"; }
-    } else if (val === "TIME") {
-      if (inputContainer) inputContainer.style.display = "block";
-      if (inputLabel) inputLabel.innerText = "Target Time Limit (Minutes):";
-      if (inputVal) { inputVal.value = "15"; inputVal.max = "120"; }
-    } else {
-      if (inputContainer) inputContainer.style.display = "none";
-    }
+  // 2. Target Value Input Event Handler (Persists in State)
+  container.querySelector("#live-target-val-input")?.addEventListener("input", (e) => {
+    activeTargetVal = Number(e.target.value) || 0;
+  });
+
+  // 3. Skill Checkboxes Event Handlers (Persists Selections in Set)
+  container.querySelectorAll(".chk-live-skill").forEach(chk => {
+    chk.addEventListener("change", (e) => {
+      if (e.target.checked) {
+        selectedSkillPaths.add(e.target.value);
+      } else {
+        selectedSkillPaths.delete(e.target.value);
+      }
+    });
   });
 
   // Filter Event Handlers
@@ -503,27 +515,25 @@ export function initLiveTabEvents(container, props) {
     }
   });
 
-  // Start Live Session Form
+  // Start Live Session Form Submit
   const form = container.querySelector("#form-start-live-session");
   if (form) {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const selectedClass = container.querySelector("#live-select-class")?.value;
-      const checkedBoxes = Array.from(container.querySelectorAll(".chk-live-skill:checked")).map(cb => cb.value);
-      const targetType = container.querySelector("#live-target-type")?.value || "NONE";
-      const targetVal = Number(container.querySelector("#live-target-val-input")?.value) || 0;
+      const checkedArray = Array.from(selectedSkillPaths);
 
-      if (!checkedBoxes || checkedBoxes.length === 0) {
+      if (!checkedArray || checkedArray.length === 0) {
         alert("Please select at least 1 skill to assign for live practice.");
         return;
       }
-      if (checkedBoxes.length > 3) {
+      if (checkedArray.length > 3) {
         alert("Please select a maximum of 3 skills for live practice.");
         return;
       }
 
       if (typeof onStartSession === "function") {
-        onStartSession(selectedClass, checkedBoxes, targetType, targetVal);
+        onStartSession(selectedClass, checkedArray, activeTargetType, activeTargetVal);
       }
     });
   }
@@ -543,6 +553,7 @@ export function initLiveTabEvents(container, props) {
 
   // Summary Actions
   container.querySelector("#btn-summary-done")?.addEventListener("click", () => {
+    selectedSkillPaths.clear();
     if (typeof onDoneSummary === "function") onDoneSummary();
   });
 
