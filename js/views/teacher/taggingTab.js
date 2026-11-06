@@ -33,7 +33,7 @@ export function renderTaggingTabHTML(props) {
             📌 Class Skill Tagging for ${selectedClass === 'All' ? 'All Classes' : `Class ${selectedClass}`}
           </h3>
           <p style="margin: 4px 0 0 0; font-size: 0.86rem; color: #64748b;">
-            Tag skills as <strong>Current Skill</strong> (Daily quest priority), <strong>Past Skill</strong> (Spaced review), or <strong>Future Skill</strong> (Excluded from Daily Quest & greyed out in Skill Tree).
+            Tag skills as <strong>Priority Skill</strong> (High catch-up weight in Smart Review), <strong>Current Skill</strong> (Daily quest priority), <strong>Past Skill</strong> (Standard review), or <strong>Future Skill</strong> (Excluded).
           </p>
         </div>
 
@@ -71,11 +71,12 @@ export function renderTaggingTabHTML(props) {
             </select>
           </div>
 
-          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
             <span style="font-weight: 800; font-size: 0.82rem; color: #64748b;">Bulk Tag (${taggingSkills.length}):</span>
-            <button type="button" id="btn-mass-past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #0284c7; background: #e0f2fe; color: #0369a1; font-weight: 700; font-size: 0.82rem; cursor: pointer; touch-action: manipulation;">🔵 Set All Past</button>
-            <button type="button" id="btn-mass-current" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #16a34a; background: #dcfce7; color: #15803d; font-weight: 700; font-size: 0.82rem; cursor: pointer; touch-action: manipulation;">🟢 Set All Current</button>
-            <button type="button" id="btn-mass-future" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #64748b; background: #f1f5f9; color: #475569; font-weight: 700; font-size: 0.82rem; cursor: pointer; touch-action: manipulation;">⚪ Set All Future</button>
+            <button type="button" id="btn-mass-priority" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #ea580c; background: #ffedd5; color: #c2410c; font-weight: 700; font-size: 0.80rem; cursor: pointer;">🔥 All Priority</button>
+            <button type="button" id="btn-mass-current" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #16a34a; background: #dcfce7; color: #15803d; font-weight: 700; font-size: 0.80rem; cursor: pointer;">🟢 All Current</button>
+            <button type="button" id="btn-mass-past" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #0284c7; background: #e0f2fe; color: #0369a1; font-weight: 700; font-size: 0.80rem; cursor: pointer;">🔵 All Past</button>
+            <button type="button" id="btn-mass-future" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #64748b; background: #f1f5f9; color: #475569; font-weight: 700; font-size: 0.80rem; cursor: pointer;">⚪ All Future</button>
           </div>
 
         </div>
@@ -108,15 +109,18 @@ export function renderTaggingTabHTML(props) {
                         </div>
                       </div>
 
-                      <div style="display: flex; gap: 6px; flex-shrink: 0;" class="tag-toggle-group" data-path="${sk.generatorPath}">
-                        <button type="button" class="btn-tag-toggle ${currentTag === 'Past' ? 'active' : ''}" data-tag="Past" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; touch-action: manipulation; ${currentTag === 'Past' ? 'background:#0284c7; color:#fff; border-color:#0284c7;' : 'background:#fff; color:#475569;'}">
-                          <span style="pointer-events: none;">🔵 Past Skill</span>
+                      <div style="display: flex; gap: 5px; flex-shrink: 0;" class="tag-toggle-group" data-path="${sk.generatorPath}">
+                        <button type="button" class="btn-tag-toggle ${currentTag === 'Priority' ? 'active' : ''}" data-tag="Priority" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.80rem; font-weight: 700; cursor: pointer; touch-action: manipulation; ${currentTag === 'Priority' ? 'background:#ea580c; color:#fff; border-color:#ea580c;' : 'background:#fff; color:#475569;'}">
+                          <span style="pointer-events: none;">🔥 Priority</span>
                         </button>
-                        <button type="button" class="btn-tag-toggle ${currentTag === 'Current' ? 'active' : ''}" data-tag="Current" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; touch-action: manipulation; ${currentTag === 'Current' ? 'background:#16a34a; color:#fff; border-color:#16a34a;' : 'background:#fff; color:#475569;'}">
-                          <span style="pointer-events: none;">🟢 Current Skill</span>
+                        <button type="button" class="btn-tag-toggle ${currentTag === 'Current' ? 'active' : ''}" data-tag="Current" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.80rem; font-weight: 700; cursor: pointer; touch-action: manipulation; ${currentTag === 'Current' ? 'background:#16a34a; color:#fff; border-color:#16a34a;' : 'background:#fff; color:#475569;'}">
+                          <span style="pointer-events: none;">🟢 Current</span>
                         </button>
-                        <button type="button" class="btn-tag-toggle ${currentTag === 'Future' ? 'active' : ''}" data-tag="Future" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.82rem; font-weight: 700; cursor: pointer; touch-action: manipulation; ${currentTag === 'Future' ? 'background:#64748b; color:#fff; border-color:#64748b;' : 'background:#fff; color:#475569;'}">
-                          <span style="pointer-events: none;">⚪ Future Skill</span>
+                        <button type="button" class="btn-tag-toggle ${currentTag === 'Past' ? 'active' : ''}" data-tag="Past" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.80rem; font-weight: 700; cursor: pointer; touch-action: manipulation; ${currentTag === 'Past' ? 'background:#0284c7; color:#fff; border-color:#0284c7;' : 'background:#fff; color:#475569;'}">
+                          <span style="pointer-events: none;">🔵 Past</span>
+                        </button>
+                        <button type="button" class="btn-tag-toggle ${currentTag === 'Future' ? 'active' : ''}" data-tag="Future" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.80rem; font-weight: 700; cursor: pointer; touch-action: manipulation; ${currentTag === 'Future' ? 'background:#64748b; color:#fff; border-color:#64748b;' : 'background:#fff; color:#475569;'}">
+                          <span style="pointer-events: none;">⚪ Future</span>
                         </button>
                       </div>
 
@@ -135,7 +139,7 @@ export function renderTaggingTabHTML(props) {
 }
 
 /**
- * Initializes Event Handlers using Event Delegation (Guarantees touch/click responsiveness)
+ * Initializes Event Handlers using Event Delegation
  */
 export function initTaggingTabEvents(container, props) {
   const {
@@ -162,10 +166,12 @@ export function initTaggingTabEvents(container, props) {
       const bTag = btn.getAttribute("data-tag");
       if (bTag === activeTag) {
         btn.classList.add("active");
-        if (bTag === "Past") {
-          btn.style.background = "#0284c7"; btn.style.color = "#ffffff"; btn.style.borderColor = "#0284c7";
+        if (bTag === "Priority") {
+          btn.style.background = "#ea580c"; btn.style.color = "#ffffff"; btn.style.borderColor = "#ea580c";
         } else if (bTag === "Current") {
           btn.style.background = "#16a34a"; btn.style.color = "#ffffff"; btn.style.borderColor = "#16a34a";
+        } else if (bTag === "Past") {
+          btn.style.background = "#0284c7"; btn.style.color = "#ffffff"; btn.style.borderColor = "#0284c7";
         } else if (bTag === "Future") {
           btn.style.background = "#64748b"; btn.style.color = "#ffffff"; btn.style.borderColor = "#64748b";
         }
@@ -194,9 +200,8 @@ export function initTaggingTabEvents(container, props) {
     });
   }
 
-  // 2. EVENT DELEGATION: Catches ALL taps & clicks on individual skill buttons & bulk buttons
+  // 2. EVENT DELEGATION
   container.addEventListener("click", (e) => {
-    // Individual Tag Toggle Button Tapped/Clicked
     const tagBtn = e.target.closest(".btn-tag-toggle");
     if (tagBtn) {
       e.preventDefault();
@@ -213,17 +218,16 @@ export function initTaggingTabEvents(container, props) {
       return;
     }
 
-    // Bulk Mass Tag Button Tapped/Clicked
-    const massBtn = e.target.closest("#btn-mass-past, #btn-mass-current, #btn-mass-future");
+    const massBtn = e.target.closest("#btn-mass-priority, #btn-mass-current, #btn-mass-past, #btn-mass-future");
     if (massBtn) {
       e.preventDefault();
-      if (massBtn.id === "btn-mass-past") applyBulkTag("Past");
+      if (massBtn.id === "btn-mass-priority") applyBulkTag("Priority");
       else if (massBtn.id === "btn-mass-current") applyBulkTag("Current");
+      else if (massBtn.id === "btn-mass-past") applyBulkTag("Past");
       else if (massBtn.id === "btn-mass-future") applyBulkTag("Future");
       return;
     }
 
-    // Save to Google Sheet Button Tapped/Clicked
     const saveBtn = e.target.closest("#btn-save-class-tags");
     if (saveBtn && typeof onSaveClassTags === "function") {
       e.preventDefault();
