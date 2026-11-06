@@ -103,7 +103,7 @@ export function renderSmartReviewSetup(container) {
             </div>
           </div>
 
-          <!-- ACTION BUTTON (POSITIONED ABOVE PRIORITY TOPICS) -->
+          <!-- ACTION BUTTON -->
           <div style="flex: 0 0 auto; width: 100%; margin-bottom: 12px;">
             <button id="btn-start-srs" ${refreshCount === 0 ? 'disabled' : ''} style="
               width: 100%; padding: 12px; font-size: 0.95rem; font-weight: 800; border-radius: 10px; border: none; color: #ffffff; cursor: pointer; transition: all 0.2s;
@@ -151,10 +151,20 @@ export function renderSmartReviewSetup(container) {
           allowSkip: false,
           onComplete: (summary) => renderSRSSummary(container, summary, renderSetup, false),
           onExit: (summary) => {
-            // Early Exit Handler: If questions were attempted, show summary; otherwise return to setup
-            const attemptedCount = summary && summary.sessionInitialScores ? Object.keys(summary.sessionInitialScores).length : 0;
-            if (attemptedCount > 0) {
-              renderSRSSummary(container, summary, renderSetup, true);
+            // Filter out DOM event objects if passed directly
+            const isEvent = summary && (typeof summary === 'object' && (summary instanceof Event || summary.target || summary.type));
+            const validSummary = isEvent ? null : summary;
+
+            const attemptedPaths = validSummary && validSummary.sessionInitialScores 
+              ? Object.keys(validSummary.sessionInitialScores) 
+              : [];
+
+            const totalAttempted = validSummary 
+              ? (validSummary.totalQuestions || validSummary.questionsAttempted || validSummary.totalAttempted || validSummary.answeredCount || attemptedPaths.length || 0)
+              : 0;
+
+            if (totalAttempted > 0) {
+              renderSRSSummary(container, validSummary, renderSetup, true);
             } else {
               renderSetup();
             }
@@ -171,12 +181,13 @@ function renderSRSSummary(container, summary, onReturnToSetup, isEarlyExit = fal
   const remainingMetrics = getSRSMetrics();
   const hasMoreTopics = (remainingMetrics.totalRefreshNeeded || 0) > 0;
 
-  let totalNetPoints = 0;
-  const attemptedPaths = summary && summary.sessionInitialScores ? Object.keys(summary.sessionInitialScores) : [];
+  const safeSummary = summary || {};
+  const attemptedPaths = safeSummary.sessionInitialScores ? Object.keys(safeSummary.sessionInitialScores) : [];
 
+  let totalNetPoints = 0;
   const summaryRowsHtml = attemptedPaths.map(path => {
     const skillObj = (state.curriculum || []).find(s => s.generatorPath === path) || { title: "Practice Skill" };
-    const startScore = summary.sessionInitialScores[path] || 0;
+    const startScore = safeSummary.sessionInitialScores[path] || 0;
     const currentScore = state.mastery[path] ? state.mastery[path].score : startScore;
     const diff = currentScore - startScore;
     totalNetPoints += diff;
@@ -194,8 +205,12 @@ function renderSRSSummary(container, summary, onReturnToSetup, isEarlyExit = fal
     `;
   }).join("");
 
-  const questionsAttempted = attemptedPaths.length;
-  const totalXP = ((summary?.sessionScore || 0) * 10) + (summary?.bonusXP || 0);
+  const correctCount = safeSummary.sessionScore || 0;
+  const totalAttempted = safeSummary.totalQuestions || safeSummary.questionsAttempted || safeSummary.totalAttempted || safeSummary.answeredCount || attemptedPaths.length || 0;
+  const pct = totalAttempted > 0 ? Math.round((correctCount / totalAttempted) * 100) : 0;
+  const correctRateDisplay = `${correctCount}/${totalAttempted} (${pct}%)`;
+
+  const totalXP = (correctCount * 10) + (safeSummary.bonusXP || 0);
   const netGainText = totalNetPoints >= 0 ? `+${totalNetPoints}` : `${totalNetPoints}`;
   const netGainColor = totalNetPoints >= 0 ? "#16a34a" : "#dc2626";
 
@@ -209,25 +224,25 @@ function renderSRSSummary(container, summary, onReturnToSetup, isEarlyExit = fal
             ${isEarlyExit ? '⏸️ Review Session Paused' : '🧠 Review Complete!'}
           </h2>
           <p style="color: #64748b; margin: 0; font-size: 0.84rem; font-weight: 600;">
-            ${isEarlyExit ? `You completed ${questionsAttempted} ${questionsAttempted === 1 ? 'question' : 'questions'} before exiting. Here is your summary:` : 'Great job reinforcing your memory retention and skill mastery!'}
+            ${isEarlyExit ? `You completed ${totalAttempted} ${totalAttempted === 1 ? 'question' : 'questions'} before exiting. Here is your summary:` : 'Great job reinforcing your memory retention and skill mastery!'}
           </p>
         </div>
 
         <!-- KEY STATS FEEDBACK BAR -->
         <div style="flex: 0 0 auto; display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; flex-wrap: wrap;">
-          <div style="flex: 1; min-width: 90px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 6px 8px;">
+          <div style="flex: 1; min-width: 100px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 6px 8px;">
             <div style="font-size: 0.70rem; font-weight: 700; color: #1e40af; text-transform: uppercase;">Correct Rate</div>
-            <div style="font-size: 1.05rem; font-weight: 800; color: #1d4ed8;">${summary?.sessionScore || 0} / ${questionsAttempted}</div>
+            <div style="font-size: 0.95rem; font-weight: 800; color: #1d4ed8;">${correctRateDisplay}</div>
           </div>
 
           <div style="flex: 1; min-width: 90px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 6px 8px;">
             <div style="font-size: 0.70rem; font-weight: 700; color: #166534; text-transform: uppercase;">XP Earned</div>
-            <div style="font-size: 1.05rem; font-weight: 800; color: #15803d;">+${totalXP} XP</div>
+            <div style="font-size: 0.95rem; font-weight: 800; color: #15803d;">+${totalXP} XP</div>
           </div>
 
           <div style="flex: 1; min-width: 90px; background: #fefce8; border: 1px solid #fef08a; border-radius: 10px; padding: 6px 8px;">
             <div style="font-size: 0.70rem; font-weight: 700; color: #854d0e; text-transform: uppercase;">Net Mastery</div>
-            <div style="font-size: 1.05rem; font-weight: 800; color: ${netGainColor};">${netGainText} pts</div>
+            <div style="font-size: 0.95rem; font-weight: 800; color: ${netGainColor};">${netGainText} pts</div>
           </div>
         </div>
 
