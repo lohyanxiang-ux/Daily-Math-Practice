@@ -45,6 +45,9 @@ export function renderQuestionView(container, options = {}) {
   const totalQuestions = options.maxQuestions || (isDailyQuest ? 5 : (isSRS ? queue.length || 4 : Infinity));
   const targetMastery = options.targetMastery || 90;
 
+  // Dynamic Target Score Resolution (Supports options.targetScore, options.targetVal, or live session target)
+  let currentLiveTargetScore = options.targetScore || options.targetVal || options.targetScoreVal || null;
+
   let questionIndex = 0;
   let sessionScore = 0;
   let totalAttemptedCount = 0;
@@ -97,7 +100,7 @@ export function renderQuestionView(container, options = {}) {
 
   /**
    * Prompts the student with an interactive target achievement modal.
-   * Allows explicit acknowledgment while letting them continue practice.
+   * Allows explicit acknowledgment while letting them continue practice uninterrupted.
    */
   function showTargetScoreAchievedModal(targetScore, currentScore) {
     const existingModal = document.querySelector("#target-achieved-modal-overlay");
@@ -108,40 +111,40 @@ export function renderQuestionView(container, options = {}) {
     overlay.style.cssText = `
       position: fixed;
       inset: 0;
-      background: rgba(15, 23, 42, 0.7);
-      backdrop-filter: blur(4px);
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(5px);
       z-index: 99999;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 20px;
       box-sizing: border-box;
-      animation: fadeIn 0.2s ease-out;
+      animation: fadeIn 0.25s ease-out;
     `;
 
     overlay.innerHTML = `
       <div style="
         background: #ffffff;
         border-radius: 20px;
-        max-width: 420px;
+        max-width: 440px;
         width: 100%;
         padding: 28px 24px;
         text-align: center;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
         border: 2px solid #3b82f6;
         box-sizing: border-box;
       ">
-        <div style="font-size: 3.2rem; margin-bottom: 10px; line-height: 1;">🎯🎉</div>
-        <h3 style="margin: 0 0 8px 0; font-size: 1.4rem; font-weight: 800; color: #0f172a;">Target Score Reached!</h3>
+        <div style="font-size: 3.5rem; margin-bottom: 10px; line-height: 1;">🎯🎉</div>
+        <h3 style="margin: 0 0 8px 0; font-size: 1.45rem; font-weight: 800; color: #0f172a;">Target Score Reached!</h3>
         <p style="margin: 0 0 16px 0; font-size: 0.95rem; color: #475569; line-height: 1.5;">
-          Awesome job! You reached the target mastery score of <strong style="color: #2563eb;">${targetScore}</strong> (Current Score: <strong>${currentScore}</strong>).
+          Congratulations! You have successfully reached the target mastery score of <strong style="color: #2563eb;">${targetScore}</strong> (Your Score: <strong>${currentScore}</strong>).
         </p>
-        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px; margin-bottom: 22px; color: #1e40af; font-size: 0.85rem; font-weight: 700;">
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px; margin-bottom: 22px; color: #1e40af; font-size: 0.88rem; font-weight: 700;">
           💪 Keep practicing to push your mastery even higher!
         </div>
         <button id="btn-ack-target-achieved" style="
           width: 100%;
-          padding: 12px 20px;
+          padding: 13px 20px;
           font-size: 1rem;
           font-weight: 800;
           color: #ffffff;
@@ -149,7 +152,7 @@ export function renderQuestionView(container, options = {}) {
           border: none;
           border-radius: 12px;
           cursor: pointer;
-          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
           transition: background 0.15s ease;
         ">
           Continue Practice ➔
@@ -184,6 +187,16 @@ export function renderQuestionView(container, options = {}) {
         const resData = await response.json();
         if (resData.status === "success") {
           const activeSession = resData.activeSession;
+          
+          if (activeSession) {
+            // Extract & sync target score dynamically from active live session
+            const sessTargetType = String(activeSession.targetType || "").toUpperCase();
+            if (sessTargetType === "SCORE") {
+              const val = Number(activeSession.targetVal ?? activeSession.targetScore ?? activeSession.targetValue ?? 0);
+              if (val > 0) currentLiveTargetScore = val;
+            }
+          }
+
           const isEnded = !activeSession || 
                           activeSession.status === "ENDED" || 
                           activeSession.status === "CLOSED" ||
@@ -399,10 +412,9 @@ export function renderQuestionView(container, options = {}) {
 
         </section>
 
-        <!-- RIGHT COLUMN: STRICTLY BOUNDED HEIGHT HINTS & KEYPAD -->
+        <!-- RIGHT COLUMN: HINTS & KEYPAD -->
         <section style="flex: 1 1 48%; min-width: 310px; max-width: 50%; display: flex; flex-direction: column; background: #ffffff; border-radius: 14px; border: 1px solid #cbd5e1; padding: 6px 8px 12px 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
           
-          <!-- HINTS & SOLUTION SCROLL AREA: DYNAMICALLY COMPRESSES TO FIT KEYPAD -->
           <div id="hints-scroll-area" style="
             flex: 1 1 0%;
             min-height: 0;
@@ -420,13 +432,11 @@ export function renderQuestionView(container, options = {}) {
             <div id="hints-container" class="hints-list"></div>
             <div id="daily-feedback" class="feedback-area" style="margin-top: 4px; font-weight: 700; border-radius: 8px;"></div>
             
-            <!-- RAW LATEX TROUBLESHOOTING DEBUG BOX -->
             <div id="troubleshoot-debug-box" style="display: none; margin-top: 6px; padding: 6px 8px; background: #0f172a; color: #f8fafc; border-radius: 8px; font-family: monospace; font-size: 0.75rem; line-height: 1.4; overflow-x: auto; border: 1px solid #334155;"></div>
 
             <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 6px; padding: 8px; background: #f8fafc; border-radius: 8px; border: 1px solid #cbd5e1; box-sizing: border-box; overflow: visible;"></div>
           </div>
 
-          <!-- KEYPAD DOCK SECTION (ANCHORED AT BOTTOM WITH SPACIOUS BUFFER FOR SUBMIT BUTTON) -->
           <div id="keypad-dock-section" style="
             flex: 0 0 auto;
             display: flex;
@@ -533,10 +543,13 @@ export function renderQuestionView(container, options = {}) {
     const topMasteryEl = document.querySelector("#top-nav-mastery-val");
     if (topMasteryEl) topMasteryEl.innerText = newScore;
 
-    // Check target score threshold and present acknowledgment modal
-    if (options.targetScore && newScore >= options.targetScore && !targetScoreAchievedAlertShown) {
+    // Resolve active target score dynamically across all possible property options
+    const effectiveTargetScore = currentLiveTargetScore || options.targetScore || options.targetVal || (isSkillTree ? targetMastery : null);
+
+    // Present acknowledgment congratulatory popup when target score is achieved
+    if (effectiveTargetScore && effectiveTargetScore > 0 && newScore >= effectiveTargetScore && !targetScoreAchievedAlertShown) {
       targetScoreAchievedAlertShown = true;
-      showTargetScoreAchievedModal(options.targetScore, newScore);
+      showTargetScoreAchievedModal(effectiveTargetScore, newScore);
     }
 
     if ((isLiveSession || options.sessionId) && options.sessionId) {
@@ -618,7 +631,6 @@ export function renderQuestionView(container, options = {}) {
       renderKaTeX(solutionBox);
     }
 
-    // AUTOMATIC IPAD / MOBILE SCROLL RE-ANCHOR ON SUBMIT
     if (hintsScrollArea) {
       setTimeout(() => {
         hintsScrollArea.scrollTop = feedbackEl ? feedbackEl.offsetTop : 0;
@@ -726,7 +738,7 @@ export function renderQuestionView(container, options = {}) {
   function renderDefaultSummary(summary) {
     const summaryRowsHtml = Object.keys(summary.sessionInitialScores).map(path => {
       const skillObj = (state.curriculum || []).find(s => s.generatorPath === path) || { title: "Practice Skill" };
-      const startScore = summary.sessionInitialScores[path] || 0;
+      const startScore = sessionInitialScores[path] || 0;
       const currentScore = state.mastery[path] ? state.mastery[path].score : startScore;
       const diff = currentScore - startScore;
       const diffText = diff >= 0 ? `+${diff}` : `${diff}`;
