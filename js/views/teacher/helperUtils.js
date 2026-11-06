@@ -21,6 +21,13 @@ export function getStudentClass(st) {
   return (c && String(c).trim()) ? String(c).trim() : "Unassigned";
 }
 
+/**
+ * Calculates default tag fallback when a skill has no saved tag in ClassSkillTags.
+ * Resolves:
+ * - skillLevel < classLevel   => "Past"
+ * - skillLevel === classLevel => "Current"
+ * - skillLevel > classLevel   => "Future"
+ */
 export function getAutoDefaultTag(skill, className) {
   if (!className || className === "All") return "Future";
   
@@ -33,6 +40,8 @@ export function getAutoDefaultTag(skill, className) {
 
     if (skillLevel < classLevel) {
       return "Past";
+    } else if (skillLevel === classLevel) {
+      return "Current";
     } else {
       return "Future";
     }
