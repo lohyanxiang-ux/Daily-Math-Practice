@@ -22,6 +22,9 @@ let isProjectorMode = false;
 let liveTimerInterval = null;
 let hasChimedForCurrentExpiry = false;
 
+// Local override tracker to prevent background polling from undoing live time extensions
+let activeSessionExtendedTime = null;
+
 // Persistent Filter & Setup State Variables
 let activeFilterLevel = null;
 let activeFilterStream = null;
@@ -48,6 +51,10 @@ export function playTimeUpChime() {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
+
+    if (ctx.state === "suspended") {
+      ctx.resume();
+    }
 
     const ringDuration = 5.0; 
     const pulseInterval = 0.6;
@@ -159,6 +166,7 @@ export function renderLiveTabHTML(props) {
 
   // MODE B: POST-SESSION SUMMARY VIEW
   if (summaryData) {
+    activeSessionExtendedTime = null;
     return renderTeacherSummaryHTML(summaryData, curriculum);
   }
 
@@ -194,6 +202,7 @@ export function renderLiveTabHTML(props) {
   // MODE C: SETUP FORM (No Active Live Session)
   if (!isActive) {
     hasChimedForCurrentExpiry = false;
+    activeSessionExtendedTime = null;
 
     const levels = Array.from(new Set(curriculum.map(c => c.level || c.year).filter(Boolean))).sort();
     const streams = Array.from(new Set(curriculum.map(c => c.stream).filter(Boolean))).sort();
@@ -327,7 +336,9 @@ export function renderLiveTabHTML(props) {
   }
 
   // MODE D: LIVE MONITORING DASHBOARD (Active Session)
-  const targetValNum = Number(activeSession.targetVal ?? activeSession.targetValue ?? activeSession.targetScore ?? activeSession.targetTime ?? 0);
+  const rawTargetVal = Number(activeSession.targetVal ?? activeSession.targetValue ?? activeSession.targetScore ?? activeSession.targetTime ?? 0);
+  const targetValNum = activeSessionExtendedTime !== null ? activeSessionExtendedTime : rawTargetVal;
+
   const sessTargetType = String(activeSession.targetType || "").toUpperCase();
   const sessTargetTime = sessTargetType === "TIME" ? targetValNum : 0;
   const sessTargetScore = sessTargetType === "SCORE" ? targetValNum : 0;
@@ -414,7 +425,7 @@ export function renderLiveTabHTML(props) {
   return `
     <div style="display: flex; flex-direction: column; gap: 16px;">
       
-      <!-- TIME EXPIRED ACTION BANNER FOR TEACHER -->
+      <!-- TIME EXPIRED ACTION BANNER FOR TEACHER (NON-BLOCKING: PRACTICE CONTINUES) -->
       <div id="live-time-expired-banner" style="
         display: ${isTimeExpired ? 'flex' : 'none'};
         background: #fef2f2;
@@ -431,7 +442,7 @@ export function renderLiveTabHTML(props) {
           <span style="font-size: 2rem;">⏰</span>
           <div>
             <div style="font-size: 1.05rem; font-weight: 800; color: #991b1b;">Target Time Limit (${sessTargetTime} mins) Reached!</div>
-            <div style="font-size: 0.85rem; color: #7f1d1d; margin-top: 2px;">Practice is still active for students. Choose to extend practice time or end session now.</div>
+            <div style="font-size: 0.85rem; color: #7f1d1d; margin-top: 2px;">Student practice is still active. Choose to extend practice time or end session now.</div>
           </div>
         </div>
 
@@ -441,6 +452,9 @@ export function renderLiveTabHTML(props) {
           </button>
           <button id="btn-banner-extend-10" style="background: #eff6ff; color: #1d4ed8; border: 1.5px solid #bfdbfe; padding: 8px 14px; border-radius: 8px; font-weight: 800; font-size: 0.85rem; cursor: pointer;">
             ⏱️ +10 Mins
+          </button>
+          <button id="btn-banner-extend-15" style="background: #eff6ff; color: #1d4ed8; border: 1.5px solid #bfdbfe; padding: 8px 14px; border-radius: 8px; font-weight: 800; font-size: 0.85rem; cursor: pointer;">
+            ⏱️ +15 Mins
           </button>
           <button id="btn-banner-end-session" style="background: #dc2626; color: #ffffff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 800; font-size: 0.85rem; cursor: pointer; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);">
             🛑 End Session
@@ -643,21 +657,23 @@ export function initLiveTabEvents(container, props) {
     liveTimerInterval = null;
   }
 
-  // 1-SECOND TIMER + REAL-TIME TARGET TIME EXPIRY MONITOR WITH 5-SEC CHIME & BANNER
+  // 1-SECOND TIMER TICKER AND EXPIRY MONITOR
   const timerReadout = container.querySelector("#live-timer-readout");
   if (timerReadout) {
     const startMs = Number(timerReadout.getAttribute("data-start"));
     const sessTargetType = String(timerReadout.getAttribute("data-target-type") || "").toUpperCase();
-    const sessTargetTimeMins = Number(timerReadout.getAttribute("data-target-time") || 0);
 
     liveTimerInterval = setInterval(() => {
       if (document.body.contains(timerReadout)) {
         const elapsedSecs = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
         timerReadout.innerText = formatElapsed(startMs);
 
-        // CHECK REAL-TIME EXPIRY ACCURATE TO 1 SECOND
-        if (sessTargetType === "TIME" && sessTargetTimeMins > 0) {
-          const limitSecs = sessTargetTimeMins * 60;
+        // Fetch current active target time limit (accounting for extensions)
+        const currentTargetMins = Number(timerReadout.getAttribute("data-target-time") || 0);
+
+        if (sessTargetType === "TIME" && currentTargetMins > 0) {
+          const limitSecs = currentTargetMins * 60;
+          
           if (elapsedSecs >= limitSecs) {
             const targetBadge = container.querySelector("#live-target-badge");
             if (targetBadge && !targetBadge.classList.contains("time-expired")) {
@@ -666,7 +682,7 @@ export function initLiveTabEvents(container, props) {
               targetBadge.style.color = "#991b1b";
               targetBadge.style.border = "1px solid #f87171";
               targetBadge.style.animation = "pulse 1s infinite";
-              targetBadge.innerHTML = `🚨 TIME EXPIRED! (${sessTargetTimeMins}m limit reached)`;
+              targetBadge.innerHTML = `🚨 TIME EXPIRED! (${currentTargetMins}m limit reached)`;
             }
 
             // Reveal Teacher Time-Expired Action Banner
@@ -675,7 +691,7 @@ export function initLiveTabEvents(container, props) {
               timeExpiredBanner.style.display = "flex";
             }
 
-            // Trigger 5-second ringing audio chime once per expiration cycle
+            // Trigger 5-second audio chime ONCE per expiration cycle
             if (!hasChimedForCurrentExpiry) {
               hasChimedForCurrentExpiry = true;
               playTimeUpChime();
@@ -689,36 +705,42 @@ export function initLiveTabEvents(container, props) {
     }, 1000);
   }
 
-  // TIME EXTENSION SYNC HANDLER (LOCAL UI + SERVER DATABASE)
+  // TIME EXTENSION HANDLER
   const extendTimeHandler = async (addedMins) => {
     const expiredBanner = container.querySelector("#live-time-expired-banner");
     if (expiredBanner) expiredBanner.style.display = "none";
     hasChimedForCurrentExpiry = false;
 
-    // 1. Immediately update activeSession in local state/props
+    // 1. Calculate new target value
+    const currentVal = activeSessionExtendedTime !== null 
+      ? activeSessionExtendedTime 
+      : Number(props.activeSession?.targetVal ?? props.activeSession?.targetTime ?? activeTargetVal);
+    
+    const newVal = currentVal + addedMins;
+    activeSessionExtendedTime = newVal;
+    activeTargetVal = newVal;
+
     if (props.activeSession) {
-      const currentVal = Number(props.activeSession.targetVal ?? props.activeSession.targetTime ?? activeTargetVal);
-      const newVal = currentVal + addedMins;
       props.activeSession.targetVal = newVal;
       props.activeSession.targetTime = newVal;
-      activeTargetVal = newVal;
-
-      const targetBadge = container.querySelector("#live-target-badge");
-      if (targetBadge) {
-        targetBadge.classList.remove("time-expired");
-        targetBadge.style.background = "#fef3c7";
-        targetBadge.style.color = "#92400e";
-        targetBadge.style.border = "none";
-        targetBadge.style.animation = "none";
-        targetBadge.innerHTML = `⏱️ Limit: ${newVal}m`;
-      }
-
-      if (timerReadout) {
-        timerReadout.setAttribute("data-target-time", String(newVal));
-      }
     }
 
-    // 2. Sync extended time limit to server database
+    // 2. Update UI target badge & timer attribute
+    const targetBadge = container.querySelector("#live-target-badge");
+    if (targetBadge) {
+      targetBadge.classList.remove("time-expired");
+      targetBadge.style.background = "#fef3c7";
+      targetBadge.style.color = "#92400e";
+      targetBadge.style.border = "none";
+      targetBadge.style.animation = "none";
+      targetBadge.innerHTML = `⏱️ Limit: ${newVal}m`;
+    }
+
+    if (timerReadout) {
+      timerReadout.setAttribute("data-target-time", String(newVal));
+    }
+
+    // 3. Sync extended time limit to server database
     try {
       await fetch(getApiUrl(), {
         method: "POST",
@@ -740,6 +762,7 @@ export function initLiveTabEvents(container, props) {
 
   container.querySelector("#btn-banner-extend-5")?.addEventListener("click", () => extendTimeHandler(5));
   container.querySelector("#btn-banner-extend-10")?.addEventListener("click", () => extendTimeHandler(10));
+  container.querySelector("#btn-banner-extend-15")?.addEventListener("click", () => extendTimeHandler(15));
 
   container.querySelector("#btn-banner-end-session")?.addEventListener("click", () => {
     const expiredBanner = container.querySelector("#live-time-expired-banner");
@@ -831,6 +854,7 @@ export function initLiveTabEvents(container, props) {
 
   container.querySelector("#btn-summary-done")?.addEventListener("click", () => {
     selectedSkillPaths.clear();
+    activeSessionExtendedTime = null;
     if (typeof onDoneSummary === "function") onDoneSummary();
   });
 
