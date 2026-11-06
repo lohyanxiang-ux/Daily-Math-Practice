@@ -66,12 +66,12 @@ export function renderSmartReviewSetup(container) {
     }).join("");
 
     container.innerHTML = `
-      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100dvh; padding: 16px; box-sizing: border-box; background: #f8fafc;">
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 100dvh; padding: 12px; box-sizing: border-box; background: #f8fafc; overflow: hidden;">
         
-        <div class="card" style="background: #ffffff; border-radius: 20px; padding: 20px; max-width: 640px; width: 100%; max-height: calc(100dvh - 32px); box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box; display: flex; flex-direction: column;">
+        <div class="card" style="background: #ffffff; border-radius: 20px; padding: 16px 20px 20px 20px; max-width: 640px; width: 100%; height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;">
           
           <!-- TOP HEADER -->
-          <div style="flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <div style="flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <div>
               <h2 style="font-size: 1.35rem; color: #0f172a; margin: 0; font-weight: 800;">🧠 Smart Review</h2>
               <p style="color: #64748b; font-size: 0.82rem; margin: 2px 0 0 0;">Adaptive refresher tuned to target topics</p>
@@ -86,7 +86,7 @@ export function renderSmartReviewSetup(container) {
               <div style="display: flex; gap: 6px;">
                 ${[5, 10, 15].map(num => `
                   <button type="button" class="opt-length ${num === selectedLength ? 'active' : ''}" data-val="${num}" style="
-                    flex: 1; padding: 8px 4px; border-radius: 8px; font-weight: 800; font-size: 0.85rem; cursor: pointer;
+                    flex: 1; padding: 6px 4px; border-radius: 8px; font-weight: 800; font-size: 0.85rem; cursor: pointer;
                     border: 2px solid ${num === selectedLength ? '#2563eb' : '#cbd5e1'};
                     background: ${num === selectedLength ? '#eff6ff' : '#ffffff'};
                     color: ${num === selectedLength ? '#2563eb' : '#334155'};
@@ -97,14 +97,14 @@ export function renderSmartReviewSetup(container) {
 
             <div style="flex: 1;">
               <label style="font-weight: 700; display: block; margin-bottom: 4px; color: #334155; font-size: 0.80rem;">Focus Strand:</label>
-              <select id="select-strand" style="width: 100%; padding: 8px 10px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-weight: 600; font-size: 0.82rem; color: #0f172a; background: #fff;">
+              <select id="select-strand" style="width: 100%; padding: 6px 10px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-weight: 600; font-size: 0.82rem; color: #0f172a; background: #fff;">
                 ${availableStrands.map(s => `<option value="${s}" ${s === selectedStrand ? 'selected' : ''}>${s}</option>`).join('')}
               </select>
             </div>
           </div>
 
-          <!-- SCROLLABLE TOPICS LIST -->
-          <div style="flex: 1 1 auto; min-height: 120px; overflow-y: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; background: #f8fafc; margin-bottom: 14px;">
+          <!-- SCROLLABLE TOPICS LIST (STRICTLY CONSTRAINED) -->
+          <div style="flex: 1 1 0px; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; background: #f8fafc; margin-bottom: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
               <span style="font-weight: 800; font-size: 0.85rem; color: #0f172a;">📊 Top Priority Topics by SRS Score:</span>
               <span style="font-size: 0.75rem; font-weight: 700; color: #2563eb;">${refreshCount} Total Candidate Topics</span>
@@ -115,9 +115,9 @@ export function renderSmartReviewSetup(container) {
           <!-- FIXED ACTION BUTTON -->
           <div style="flex: 0 0 auto; width: 100%;">
             <button id="btn-start-srs" ${refreshCount === 0 ? 'disabled' : ''} style="
-              width: 100%; padding: 14px; font-size: 1rem; font-weight: 800; border-radius: 12px; border: none; color: #ffffff; cursor: pointer; transition: all 0.2s;
+              width: 100%; padding: 12px; font-size: 0.95rem; font-weight: 800; border-radius: 10px; border: none; color: #ffffff; cursor: pointer; transition: all 0.2s;
               background: ${refreshCount === 0 ? '#9ca3af' : '#2563eb'};
-              box-shadow: ${refreshCount === 0 ? 'none' : '0 4px 14px rgba(37,99,235,0.3)'};
+              box-shadow: ${refreshCount === 0 ? 'none' : '0 4px 12px rgba(37,99,235,0.25)'};
             ">
               ${refreshCount === 0 ? '🎉 All Topics Refreshed!' : `🚀 Start Smart Review (${selectedLength} Questions)`}
             </button>
