@@ -9,7 +9,6 @@ const YEAR_LEVELS = { "Sec 1": 1, "Sec 2": 2, "Sec 3": 3, "Sec 4": 4 };
 export function getSkillTagFromMap(tagsMap, path) {
   if (!tagsMap || !path || typeof tagsMap !== "object") return null;
 
-  // Normalize input generator path
   const normInput = String(path)
     .trim()
     .replace(/\\/g, '/')
@@ -17,10 +16,8 @@ export function getSkillTagFromMap(tagsMap, path) {
     .replace(/\.js$/i, '')
     .toLowerCase();
 
-  // Direct key lookup check
   if (tagsMap[path]) return tagsMap[path];
 
-  // Iterate keys in tagsMap and compare normalized strings
   for (const [key, val] of Object.entries(tagsMap)) {
     if (!key || !val) continue;
 
@@ -48,17 +45,14 @@ export function getResolvedClassSkillTags() {
     .toLowerCase()
     .replace(/^class\s*/i, "");
 
-  // 1. Direct student skillTags populated at state root
   if (state.skillTags && typeof state.skillTags === "object" && Object.keys(state.skillTags).length > 0) {
     return state.skillTags;
   }
 
-  // 2. Student profile skillTags
   if (state.profile?.skillTags && typeof state.profile.skillTags === "object" && Object.keys(state.profile.skillTags).length > 0) {
     return state.profile.skillTags;
   }
 
-  // 3. Teacher dashboard classSkillTags map ("301" vs "Class 301")
   const teacherClassTags = state.teacherData?.classSkillTags || state.classSkillTags;
   if (teacherClassTags && typeof teacherClassTags === "object") {
     for (const [cKey, tags] of Object.entries(teacherClassTags)) {
@@ -84,6 +78,7 @@ function getFallbackTag(skill, studentYearLevel) {
 
 /**
  * Calculates the Smart Review Score (SRS) & component breakdown for a single skill (0–100 scale).
+ * Features a 3-attempt rolling average with a threshold of >= 2 hints used for Struggle Factor.
  */
 export function calculateSRSBreakdown(generatorPath, masteryRecord, skillTag) {
   const tag = String(skillTag || "").toUpperCase();
@@ -112,13 +107,26 @@ export function calculateSRSBreakdown(generatorPath, masteryRecord, skillTag) {
     timeDecay = (tag === "PRIORITY" || tag === "CURRENT") ? 15 : 10;
   }
 
-  // 4. STRUGGLE FACTOR (Max 15 pts)
+  // 4. STRUGGLE FACTOR (Max 15 pts - 3-Attempt Rolling Average, >= 2 Hints)
   let struggleFactor = 0;
   const rolling = masteryRecord?.rollingHistory || [];
   if (rolling.length > 0) {
-    const lastAttempt = rolling[rolling.length - 1];
-    if (lastAttempt && !lastAttempt.isCorrect) struggleFactor += 8;
-    if (lastAttempt && Number(lastAttempt.hintsUsed) >= 3) struggleFactor += 7;
+    const last3 = rolling.slice(-3);
+    const n = last3.length;
+
+    const incorrectCount = last3.filter(a => {
+      if (a.isCorrect !== undefined) return !a.isCorrect;
+      if (a.correct !== undefined) return !a.correct;
+      return false;
+    }).length;
+
+    // Count attempts where 2 or more hints were used
+    const heavyHintCount = last3.filter(a => Number(a.hintsUsed ?? a.hints ?? 0) >= 2).length;
+
+    const errorPts = (incorrectCount / n) * 8;
+    const hintPts = (heavyHintCount / n) * 7;
+
+    struggleFactor = Math.min(15, Math.round(errorPts + hintPts));
   }
 
   const rawTotal = tagWeight + masteryDeficit + timeDecay + struggleFactor;
@@ -141,7 +149,6 @@ export function calculateSRSBreakdown(generatorPath, masteryRecord, skillTag) {
 export function getSmartReviewQueue(options = {}) {
   const {
     questionCount = 5,
-    includePriorYears = false,
     selectedStrand = "All"
   } = options;
 
@@ -162,10 +169,6 @@ export function getSmartReviewQueue(options = {}) {
     const path = skill.generatorPath;
     const mappedTag = getSkillTagFromMap(resolvedTagsMap, path);
     const tag = mappedTag || getFallbackTag(skill, studentYearLevel);
-    const isPriorYear = skillYearLevel < studentYearLevel;
-
-    // Prior-year skills tagged as PRIORITY bypass the includePriorYears filter
-    if (isPriorYear && !includePriorYears && String(tag).toUpperCase() !== "PRIORITY") return;
 
     const mastery = state.mastery[path] || { score: 0, accuracy: 0, totalAttempted: 0, lastPracticed: "" };
     const breakdown = calculateSRSBreakdown(path, mastery, tag);
@@ -222,7 +225,7 @@ export function getSmartReviewQueue(options = {}) {
 }
 
 export function getSRSMetrics() {
-  const queue = getSmartReviewQueue({ questionCount: 100, includePriorYears: true });
+  const queue = getSmartReviewQueue({ questionCount: 100 });
   return {
     totalRefreshNeeded: queue.refreshCount || 0
   };
