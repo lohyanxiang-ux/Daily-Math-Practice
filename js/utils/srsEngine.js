@@ -3,29 +3,35 @@ import { state } from "../state.js";
 const YEAR_LEVELS = { "Sec 1": 1, "Sec 2": 2, "Sec 3": 3, "Sec 4": 4 };
 
 /**
- * Normalizes and matches skill paths from ClassSkillTags sheet (handles missing/extra '.js' extension,
- * slash differences, and case sensitivity).
+ * Robust path matcher: Strips prefixes ('js/questions/'), file extensions ('.js'),
+ * and normalizes casing to match sheet data against curriculum objects.
  */
 export function getSkillTagFromMap(tagsMap, path) {
-  if (!tagsMap || !path) return null;
-  const cleanPath = String(path).trim().replace(/\\/g, '/');
+  if (!tagsMap || !path || typeof tagsMap !== "object") return null;
 
-  // 1. Direct match
-  if (tagsMap[cleanPath]) return tagsMap[cleanPath];
+  // Normalize input generator path
+  const normInput = String(path)
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^(\.\/)?(js\/)?(questions\/)?/i, '')
+    .replace(/\.js$/i, '')
+    .toLowerCase();
 
-  // 2. Try without .js extension
-  const withoutJs = cleanPath.replace(/\.js$/i, '');
-  if (tagsMap[withoutJs]) return tagsMap[withoutJs];
+  // Direct key lookup check
+  if (tagsMap[path]) return tagsMap[path];
 
-  // 3. Try with .js extension
-  const withJs = cleanPath.endsWith('.js') ? cleanPath : (cleanPath + '.js');
-  if (tagsMap[withJs]) return tagsMap[withJs];
-
-  // 4. Case-insensitive / trailing path segment comparison
-  const normClean = withoutJs.toLowerCase();
+  // Iterate keys in tagsMap and compare normalized strings
   for (const [key, val] of Object.entries(tagsMap)) {
-    const keyClean = String(key).trim().replace(/\\/g, '/').replace(/\.js$/i, '').toLowerCase();
-    if (keyClean === normClean) {
+    if (!key || !val) continue;
+
+    const normKey = String(key)
+      .trim()
+      .replace(/\\/g, '/')
+      .replace(/^(\.\/)?(js\/)?(questions\/)?/i, '')
+      .replace(/\.js$/i, '')
+      .toLowerCase();
+
+    if (normKey === normInput) {
       return val;
     }
   }
@@ -34,13 +40,15 @@ export function getSkillTagFromMap(tagsMap, path) {
 }
 
 /**
- * Resolves skill tags across student and teacher state sources with normalized class name matching.
+ * Resolves skill tags across student and teacher state sources with normalized class matching.
  */
-function getResolvedClassSkillTags() {
-  const studentClass = state.profile?.class || state.profile?.className || state.user?.class || "";
-  const targetClassClean = String(studentClass).trim().toLowerCase().replace(/^class\s*/i, "");
+export function getResolvedClassSkillTags() {
+  const studentClass = String(state.profile?.class || state.profile?.className || state.user?.class || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^class\s*/i, "");
 
-  // 1. Direct student skillTags at state root (populated on PIN login)
+  // 1. Direct student skillTags populated at state root
   if (state.skillTags && typeof state.skillTags === "object" && Object.keys(state.skillTags).length > 0) {
     return state.skillTags;
   }
@@ -50,12 +58,12 @@ function getResolvedClassSkillTags() {
     return state.profile.skillTags;
   }
 
-  // 3. Teacher dashboard classSkillTags map with normalized matching ("301" vs "Class 301")
+  // 3. Teacher dashboard classSkillTags map ("301" vs "Class 301")
   const teacherClassTags = state.teacherData?.classSkillTags || state.classSkillTags;
   if (teacherClassTags && typeof teacherClassTags === "object") {
     for (const [cKey, tags] of Object.entries(teacherClassTags)) {
       const cleanCKey = String(cKey).trim().toLowerCase().replace(/^class\s*/i, "");
-      if (cleanCKey === targetClassClean && tags) {
+      if (cleanCKey === studentClass && tags) {
         return tags;
       }
     }
@@ -156,7 +164,7 @@ export function getSmartReviewQueue(options = {}) {
     const tag = mappedTag || getFallbackTag(skill, studentYearLevel);
     const isPriorYear = skillYearLevel < studentYearLevel;
 
-    // Prior-year skills tagged as PRIORITY will bypass the includePriorYears filter
+    // Prior-year skills tagged as PRIORITY bypass the includePriorYears filter
     if (isPriorYear && !includePriorYears && String(tag).toUpperCase() !== "PRIORITY") return;
 
     const mastery = state.mastery[path] || { score: 0, accuracy: 0, totalAttempted: 0, lastPracticed: "" };
