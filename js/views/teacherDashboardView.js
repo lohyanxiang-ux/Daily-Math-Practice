@@ -494,15 +494,12 @@ export function renderTeacherDashboard(container, onLogout) {
               method: "POST",
               headers: { "Content-Type": "text/plain;charset=utf-8" },
               body: JSON.stringify({
-                action: "setLiveSession",
+                action: "extendLiveSession",
                 token: state.userToken || state.token || "TEACHER_SESSION",
                 className: activeLiveSession.className,
-                skillPaths: activeLiveSession.skillPaths,
-                status: "ACTIVE",
-                targetType: "TIME",
-                targetVal: newTargetTime,
-                targetTime: newTargetTime,
-                targetScore: null
+                sessionId: activeLiveSession.sessionId,
+                addedMinutes: additionalMins,
+                newTargetVal: newTargetTime
               })
             });
           } catch (err) {
