@@ -168,21 +168,40 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
       return `((${a}) ${o1} (${b}) && (${b}) ${o2} (${c}))`;
     });
 
-    // Robustly convert ^ exponents into Math.pow(...)
-    let prev;
-    do {
-      prev = e;
-      e = e.replace(/(\([^\(\)]+\)|[a-zA-Z0-9\.]+)\s*\^\s*\{([^{}]+)\}/g, 'Math.pow($1, $2)');
-      e = e.replace(/(\([^\(\)]+\)|[a-zA-Z0-9\.]+)\s*\^\s*([0-9a-zA-Z]+)/g, 'Math.pow($1, $2)');
-    } while (e !== prev);
-
+    // Standardize brackets {} and [] to ()
     e = e.replace(/\{/g, '(').replace(/\}/g, ')').replace(/\[/g, '(').replace(/\]/g, ')');
 
-    // Insert implicit multiplications safely
+    // Protect standard Math functions
+    const mathFuncs = ['Math.pow', 'Math.sqrt', 'Math.sin', 'Math.cos', 'Math.tan', 'Math.log', 'Math.abs', 'Math.min', 'Math.max', 'Math.PI'];
+    mathFuncs.forEach((f, idx) => {
+      e = e.split(f).join(`__M${idx}__`);
+    });
+
+    // Insert implicit multiplication before operators/variables (e.g. 3x -> 3*x, 3( -> 3*()
     e = e.replace(/([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z\(])/g, '$1*$2');
     e = e.replace(/(\))\s*\(/g, ')*(');
     e = e.replace(/(\))\s*([0-9a-zA-Z])/g, ')*$2');
-    e = e.replace(/\b(?!(?:Math|pow|sqrt|sin|cos|tan|log|ln|abs|min|max)\b)([a-zA-Z])\s*\(/g, '$1*(');
+    e = e.replace(/([a-zA-Z])\s*\(/g, '$1*(');
+
+    // Insert implicit multiplication between adjacent single-letter variables (e.g. 3xy -> 3*x*y, 3yx -> 3*y*x)
+    let prevLetters;
+    do {
+      prevLetters = e;
+      e = e.replace(/([a-zA-Z])([a-zA-Z])/g, '$1*$2');
+    } while (e !== prevLetters);
+
+    // Robustly convert ^ exponents into Math.pow(...)
+    let prevExp;
+    const basePattern = r'(\((?:[^\(\)]+|\((?:[^\(\)]+|\([^\(\)]*\))*\))*\)|[a-zA-Z0-9\._]+)';
+    do {
+      prevExp = e;
+      e = e.replace(/(\((?:[^\(\)]+|\((?:[^\(\)]+|\([^\(\)]*\))*\))*\)|[a-zA-Z0-9\._]+)\s*\^\s*[\(\{]?([^{}\(\)]+)[\)\}]?/g, 'Math.pow($1, $2)');
+    } while (e !== prevExp);
+
+    // Restore Math function calls
+    mathFuncs.forEach((f, idx) => {
+      e = e.split(`__M${idx}__`).join(f);
+    });
 
     return e;
   };
@@ -195,8 +214,8 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
 
     // Test across distinct sample points
     const sampleSets = [
-      { x: 2.13, y: 3.47, p: 5.19, q: 7.23, m: 1.81, n: 4.37, a: 3.11, b: 2.71, theta: 0.785 },
-      { x: -1.45, y: -2.89, p: 1.12, q: 4.05, m: 2.93, n: 0.54, a: 1.67, b: 5.23, theta: 1.256 }
+      { x: 2.13, y: 3.47, z: 1.95, p: 5.19, q: 7.23, m: 1.81, n: 4.37, a: 3.11, b: 2.71, c: 4.19, theta: 0.785 },
+      { x: -1.45, y: -2.89, z: 3.12, p: 1.12, q: 4.05, m: 2.93, n: 0.54, a: 1.67, b: 5.23, c: 2.84, theta: 1.256 }
     ];
 
     for (const vars of sampleSets) {
