@@ -28,11 +28,11 @@ function getApiUrl() {
 function escapeHtml(str) {
   if (str == null) return "";
   return String(str)
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
-    .replace(/'/g, ''');
+    .replace(/&/g, "&")
+    .replace(/</g, "<")
+    .replace(/>/g, ">")
+    .replace(/\x22/g, """)
+    .replace(/\x27/g, "'");
 }
 
 export function renderQuestionView(container, options = {}) {
