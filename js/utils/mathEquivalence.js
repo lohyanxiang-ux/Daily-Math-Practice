@@ -9,21 +9,24 @@ export function canonicalizeLatex(str) {
   // 1. Normalize unicode minus / dashes / text minus
   s = s.replace(/[\u2212\u2013\u2014]|\\text\{-\}/g, '-');
 
-  // 2. Normalize LaTeX inequality operators to standard symbols
-  s = s.replace(/\\lt\b/g, '<')
-       .replace(/\\gt\b/g, '>')
-       .replace(/\\le\b|\\leq\b/g, '≤')
-       .replace(/\\ge\b|\\geq\b/g, '≥');
+  // 2. Normalize LaTeX inequality operators (using (?![a-zA-Z]) so digits like \le0 match correctly)
+  s = s.replace(/\\leq(?![a-zA-Z])|\\le(?![a-zA-Z])/g, '≤')
+       .replace(/\\geq(?![a-zA-Z])|\\ge(?![a-zA-Z])/g, '≥')
+       .replace(/\\lt(?![a-zA-Z])/g, '<')
+       .replace(/\\gt(?![a-zA-Z])/g, '>');
 
-  // 3. Normalize multiplication & division operators
-  s = s.replace(/\\times\b|\\cdot\b|\\ast\b|\\star\b|\\cdotp\b|\\centerdot\b/g, '*')
-       .replace(/\\div\b/g, '/');
+  // 3. Normalize spacing around inequality symbols (ensures "x ≤ 0" matches "x≤0")
+  s = s.replace(/\s*([≤≥<>])\s*/g, ' $1 ');
 
-  // 4. Strip MathLive placeholders & artifacts
+  // 4. Normalize multiplication & division operators
+  s = s.replace(/\\times(?![a-zA-Z])|\\cdot(?![a-zA-Z])|\\ast(?![a-zA-Z])|\\star(?![a-zA-Z])|\\cdotp(?![a-zA-Z])|\\centerdot(?![a-zA-Z])/g, '*')
+       .replace(/\\div(?![a-zA-Z])/g, '/');
+
+  // 5. Strip MathLive placeholders & artifacts
   s = s.replace(/\\placeholder(\{[^{}]*\}|\[[^{}]*\])?/g, '')
        .replace(/#\?|#0/g, '');
 
-  return s;
+  return s.trim();
 }
 
 /**
@@ -210,6 +213,8 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
 
       if (typeof val1 === 'number' && typeof val2 === 'number' && !isNaN(val1) && !isNaN(val2)) {
         if (Math.abs(val1 - val2) > 1e-4) return false;
+      } else if (typeof val1 === 'boolean' && typeof val2 === 'boolean') {
+        if (val1 !== val2) return false;
       } else {
         return false;
       }
