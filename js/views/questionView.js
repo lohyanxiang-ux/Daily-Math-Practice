@@ -304,7 +304,7 @@ export function renderQuestionView(container, options = {}) {
     }
 
     container.innerHTML = `
-      <div style="display: flex; justify-content: center; align-items: center; height: calc(100dvh - 82px); background: #f8fafc; color: #64748b; font-weight: 700;">
+      <div style="display: flex; justify-content: center; align-items: center; height: calc(100dvh - 96px); background: #f8fafc; color: #64748b; font-weight: 700;">
         <h3>🎲 Loading Question ${questionIndex + 1}...</h3>
       </div>
     `;
@@ -315,7 +315,7 @@ export function renderQuestionView(container, options = {}) {
 
     if (!currentQuestion) {
       container.innerHTML = `
-        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: calc(100dvh - 82px);">
+        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: calc(100dvh - 96px);">
           <h3>Unable to load question generator.</h3>
           <button id="btn-exit-err" class="secondary-btn" style="margin-top: 12px; padding: 10px 20px; cursor: pointer;">Back</button>
         </div>
@@ -339,7 +339,7 @@ export function renderQuestionView(container, options = {}) {
     ` : "";
 
     container.innerHTML = `
-      <main style="display: flex; height: calc(100dvh - 82px); max-height: calc(100dvh - 82px); width: 100%; overflow: hidden; padding: 4px 8px; gap: 8px; box-sizing: border-box; background: #f1f5f9;">
+      <main style="display: flex; height: calc(100dvh - 96px); max-height: calc(100dvh - 96px); width: 100%; overflow: hidden; padding: 4px 8px 10px 8px; gap: 8px; box-sizing: border-box; background: #f1f5f9;">
         
         <!-- LEFT COLUMN WORKSPACE -->
         <section id="left-column-workspace" style="flex: 1 1 52%; min-width: 0; display: flex; flex-direction: column; background: #ffffff; border-radius: 14px; border: 1px solid #cbd5e1; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
@@ -370,7 +370,21 @@ export function renderQuestionView(container, options = {}) {
             <div id="scratchpad-scroll-wrapper" style="position: relative; min-height: 1200px; width: 100%; padding: 12px; box-sizing: border-box;">
               
               <div id="question-underlay" style="position: relative; z-index: 1; pointer-events: none; max-width: 100%;">
-                <div id="question-prompt" class="math-display" style="font-size: 1rem; line-height: 1.7; color: #1e293b; background: #f8fafc; border-left: 4px solid #2563eb; padding: 12px 12px; border-radius: 8px; overflow-x: auto; overflow-y: visible; margin-bottom: 8px; box-sizing: border-box;">
+                <div id="question-prompt" class="math-display" style="
+                  font-size: 1.08rem; 
+                  line-height: 2.2; 
+                  color: #1e293b; 
+                  background: #f8fafc; 
+                  border-left: 4px solid #2563eb; 
+                  padding: 18px 16px; 
+                  min-height: 100px;
+                  border-radius: 10px; 
+                  overflow-x: auto; 
+                  overflow-y: visible; 
+                  margin-bottom: 12px; 
+                  box-sizing: border-box;
+                  display: block;
+                ">
                   ${currentQuestion.prompt}
                 </div>
                 ${diagramHtml}
@@ -386,7 +400,7 @@ export function renderQuestionView(container, options = {}) {
         </section>
 
         <!-- RIGHT COLUMN: STRICTLY BOUNDED HEIGHT HINTS & KEYPAD -->
-        <section style="flex: 1 1 48%; min-width: 310px; max-width: 50%; display: flex; flex-direction: column; background: #ffffff; border-radius: 14px; border: 1px solid #cbd5e1; padding: 6px 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
+        <section style="flex: 1 1 48%; min-width: 310px; max-width: 50%; display: flex; flex-direction: column; background: #ffffff; border-radius: 14px; border: 1px solid #cbd5e1; padding: 6px 8px 12px 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
           
           <!-- HINTS & SOLUTION SCROLL AREA: DYNAMICALLY COMPRESSES TO FIT KEYPAD -->
           <div id="hints-scroll-area" style="
@@ -412,7 +426,7 @@ export function renderQuestionView(container, options = {}) {
             <div id="full-solution-container" class="solution-box" style="display: none; margin-top: 6px; padding: 8px; background: #f8fafc; border-radius: 8px; border: 1px solid #cbd5e1; box-sizing: border-box; overflow: visible;"></div>
           </div>
 
-          <!-- KEYPAD DOCK SECTION (ANCHORED AT BOTTOM WITHOUT OVERFLOW) -->
+          <!-- KEYPAD DOCK SECTION (ANCHORED AT BOTTOM WITH SPACIOUS BUFFER FOR SUBMIT BUTTON) -->
           <div id="keypad-dock-section" style="
             flex: 0 0 auto;
             display: flex;
@@ -422,7 +436,7 @@ export function renderQuestionView(container, options = {}) {
             position: relative;
             background: #ffffff;
             box-sizing: border-box;
-            padding-bottom: 2px;
+            padding-bottom: 14px;
           ">
             <div id="keypad-display" style="width: 100%; box-sizing: border-box;"></div>
             <div class="keypad-grid" style="width: 100%; box-sizing: border-box;"></div>
@@ -642,7 +656,7 @@ export function renderQuestionView(container, options = {}) {
     }).join("");
 
     container.innerHTML = `
-      <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: calc(100dvh - 82px); padding: 20px; background: #f1f5f9;">
+      <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: calc(100dvh - 96px); padding: 20px; background: #f1f5f9;">
         <div class="card" style="max-width: 500px; width: 100%; text-align: center; padding: 32px; background: #ffffff; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box;">
           <h2 style="font-size: 1.6rem; color: #0f172a; margin: 0 0 6px 0; font-weight: 800;">🎉 Live Practice Completed!</h2>
           <p style="font-size: 0.92rem; color: #64748b; margin: 0 0 20px 0;">Your teacher has ended today's live session. Great work!</p>
@@ -732,7 +746,7 @@ export function renderQuestionView(container, options = {}) {
     const titleText = summary.isMastered ? "🏆 Skill Mastered (90+ Score)!" : "🎉 Session Completed!";
 
     container.innerHTML = `
-      <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: calc(100dvh - 82px); padding: 20px;">
+      <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: calc(100dvh - 96px); padding: 20px;">
         <div class="card" style="max-width: 520px; width: 100%; text-align: center; padding: 32px; background: #ffffff; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
           <h2 style="font-size: 1.8rem; color: #0f172a; margin-bottom: 6px;">${titleText}</h2>
           <p style="font-size: 1rem; color: var(--text-muted); margin: 8px 0 20px 0;">
