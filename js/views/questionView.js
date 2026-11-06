@@ -27,12 +27,9 @@ function getApiUrl() {
 
 function escapeHtml(str) {
   if (str == null) return "";
-  return String(str)
-    .replace(/&/g, "&")
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
-    .replace(/\x22/g, """)
-    .replace(/\x27/g, "'");
+  const div = document.createElement("div");
+  div.textContent = String(str);
+  return div.innerHTML;
 }
 
 export function renderQuestionView(container, options = {}) {
