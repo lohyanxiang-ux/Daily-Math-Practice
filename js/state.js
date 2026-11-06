@@ -58,8 +58,14 @@ export function setStateData(payload) {
   if (!payload) return;
   if (payload.profile) state.profile = { ...state.profile, ...payload.profile };
   if (payload.curriculum) state.curriculum = payload.curriculum;
-  if (payload.skillTags) state.skillTags = payload.skillTags; // Store class skill tags
+  
+  // Store class skill tags (handles empty or populated objects safely)
+  if (payload.skillTags && typeof payload.skillTags === "object") {
+    state.skillTags = { ...payload.skillTags };
+  }
+  
   if (payload.teacherData) state.teacherData = payload.teacherData;
+  
   if (payload.mastery) {
     state.mastery = {};
     // Process mastery map and apply decay / legacy conversions
@@ -89,7 +95,10 @@ export function setStateData(payload) {
       };
     });
   }
+  
   if (payload.token) state.userToken = payload.token;
+
+  console.log("State updated. Loaded skillTags count:", Object.keys(state.skillTags).length);
 }
 
 // Export alias so app.js imports work seamlessly
