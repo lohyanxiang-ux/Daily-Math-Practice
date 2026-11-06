@@ -149,8 +149,16 @@ export function renderSmartReviewSetup(container) {
           queue: previewQueue,
           maxQuestions: previewQueue.length,
           allowSkip: false,
-          onComplete: (summary) => renderSRSSummary(container, summary, renderSetup),
-          onExit: () => renderSetup()
+          onComplete: (summary) => renderSRSSummary(container, summary, renderSetup, false),
+          onExit: (summary) => {
+            // Early Exit Handler: If questions were attempted, show summary; otherwise return to setup
+            const attemptedCount = summary && summary.sessionInitialScores ? Object.keys(summary.sessionInitialScores).length : 0;
+            if (attemptedCount > 0) {
+              renderSRSSummary(container, summary, renderSetup, true);
+            } else {
+              renderSetup();
+            }
+          }
         });
       });
     }
@@ -159,12 +167,14 @@ export function renderSmartReviewSetup(container) {
   renderSetup();
 }
 
-function renderSRSSummary(container, summary, onReturnToSetup) {
+function renderSRSSummary(container, summary, onReturnToSetup, isEarlyExit = false) {
   const remainingMetrics = getSRSMetrics();
   const hasMoreTopics = (remainingMetrics.totalRefreshNeeded || 0) > 0;
 
   let totalNetPoints = 0;
-  const summaryRowsHtml = Object.keys(summary.sessionInitialScores).map(path => {
+  const attemptedPaths = summary && summary.sessionInitialScores ? Object.keys(summary.sessionInitialScores) : [];
+
+  const summaryRowsHtml = attemptedPaths.map(path => {
     const skillObj = (state.curriculum || []).find(s => s.generatorPath === path) || { title: "Practice Skill" };
     const startScore = summary.sessionInitialScores[path] || 0;
     const currentScore = state.mastery[path] ? state.mastery[path].score : startScore;
@@ -184,7 +194,8 @@ function renderSRSSummary(container, summary, onReturnToSetup) {
     `;
   }).join("");
 
-  const totalXP = (summary.sessionScore * 10) + (summary.bonusXP || 0);
+  const questionsAttempted = attemptedPaths.length;
+  const totalXP = ((summary?.sessionScore || 0) * 10) + (summary?.bonusXP || 0);
   const netGainText = totalNetPoints >= 0 ? `+${totalNetPoints}` : `${totalNetPoints}`;
   const netGainColor = totalNetPoints >= 0 ? "#16a34a" : "#dc2626";
 
@@ -194,9 +205,11 @@ function renderSRSSummary(container, summary, onReturnToSetup) {
         
         <!-- HEADER -->
         <div style="flex: 0 0 auto; margin-bottom: 10px;">
-          <h2 style="color: #0f172a; margin: 0 0 4px 0; font-size: 1.4rem; font-weight: 800;">🧠 Review Complete!</h2>
+          <h2 style="color: #0f172a; margin: 0 0 4px 0; font-size: 1.4rem; font-weight: 800;">
+            ${isEarlyExit ? '⏸️ Review Session Paused' : '🧠 Review Complete!'}
+          </h2>
           <p style="color: #64748b; margin: 0; font-size: 0.84rem; font-weight: 600;">
-            Great job reinforcing your memory retention and skill mastery!
+            ${isEarlyExit ? `You completed ${questionsAttempted} ${questionsAttempted === 1 ? 'question' : 'questions'} before exiting. Here is your summary:` : 'Great job reinforcing your memory retention and skill mastery!'}
           </p>
         </div>
 
@@ -204,7 +217,7 @@ function renderSRSSummary(container, summary, onReturnToSetup) {
         <div style="flex: 0 0 auto; display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; flex-wrap: wrap;">
           <div style="flex: 1; min-width: 90px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 6px 8px;">
             <div style="font-size: 0.70rem; font-weight: 700; color: #1e40af; text-transform: uppercase;">Correct Rate</div>
-            <div style="font-size: 1.05rem; font-weight: 800; color: #1d4ed8;">${summary.sessionScore} / ${summary.totalQuestions}</div>
+            <div style="font-size: 1.05rem; font-weight: 800; color: #1d4ed8;">${summary?.sessionScore || 0} / ${questionsAttempted}</div>
           </div>
 
           <div style="flex: 1; min-width: 90px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 6px 8px;">
@@ -218,14 +231,14 @@ function renderSRSSummary(container, summary, onReturnToSetup) {
           </div>
         </div>
 
-        <!-- ACTION BUTTONS (PLACED ABOVE SCROLLABLE TOPIC LIST FOR GUARANTEED VISIBILITY) -->
+        <!-- ACTION BUTTONS -->
         <div style="flex: 0 0 auto; display: flex; gap: 8px; width: 100%; margin-bottom: 12px;">
           <button id="btn-srs-summary-exit" type="button" style="flex: 1; padding: 10px; background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 0.88rem; font-weight: 700; cursor: pointer;">
             Return to Dashboard
           </button>
           ${hasMoreTopics ? `
             <button id="btn-srs-next-batch" type="button" style="flex: 1.3; padding: 10px; background: #2563eb; color: #ffffff; border: none; border-radius: 10px; font-size: 0.88rem; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.25);">
-              Review Next Batch ➔
+              ${isEarlyExit ? 'Resume Review ➔' : 'Review Next Batch ➔'}
             </button>
           ` : ''}
         </div>
@@ -233,9 +246,9 @@ function renderSRSSummary(container, summary, onReturnToSetup) {
         <!-- SCROLLABLE TOPICS LIST -->
         <div style="flex: 1 1 0px; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; background: #f8fafc;">
           <div style="font-size: 0.82rem; font-weight: 800; color: #475569; margin-bottom: 8px; text-align: left;">
-            📈 Restored Mastery Scores:
+            📈 Attempted Skill Mastery Progress:
           </div>
-          ${summaryRowsHtml || '<div style="color: #64748b; font-size: 0.88rem;">Review session completed.</div>'}
+          ${summaryRowsHtml || '<div style="color: #64748b; font-size: 0.88rem;">No questions answered in this session.</div>'}
         </div>
 
       </div>
