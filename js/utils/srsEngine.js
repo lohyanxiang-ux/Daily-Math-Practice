@@ -3,18 +3,50 @@ import { state } from "../state.js";
 const YEAR_LEVELS = { "Sec 1": 1, "Sec 2": 2, "Sec 3": 3, "Sec 4": 4 };
 
 /**
- * Calculates dynamic memory half-life in days based on baseline mastery score
+ * Calculates the Smart Review Score (SRS) for a single skill on a 0 to 100 scale.
+ * SRS = Tag Weight (Max 40) + Mastery Deficit (Max 30) + Time Decay (Max 15) + Struggle Factor (Max 15)
  */
-function getMemoryHalfLife(rawScore) {
-  if (rawScore < 40) return 1.5;    // Basic Tier: ~1.5 day half-life
-  if (rawScore < 70) return 4.0;    // Intermediate Tier: ~4 day half-life
-  if (rawScore < 90) return 9.0;    // Advanced Tier: ~9 day half-life
-  return 18.0;                      // Mastered Tier: ~18 day half-life (capped at 30 days max interval)
+export function calculateSRS(generatorPath, masteryRecord, skillTag) {
+  const tag = String(skillTag || "").toUpperCase();
+
+  // HARD GATE: Exclude unlearned / future topics
+  if (tag === "FUTURE") return 0;
+
+  let score = 0;
+
+  // 1. TAG WEIGHT (Max 40 pts)
+  if (tag === "PRIORITY") score += 40;
+  else if (tag === "CURRENT") score += 25;
+  else score += 10; // Past or default skills
+
+  // 2. MASTERY DEFICIT (Max 30 pts)
+  const currentScore = Number(masteryRecord?.score) || 0;
+  score += (100 - currentScore) * 0.30;
+
+  // 3. TIME DECAY (Max 15 pts)
+  const lastPracticedMs = masteryRecord?.lastPracticed ? new Date(masteryRecord.lastPracticed).getTime() : 0;
+  if (lastPracticedMs > 0) {
+    const daysSince = Math.floor((Date.now() - lastPracticedMs) / (1000 * 60 * 60 * 24));
+    score += Math.min(15, daysSince * 1.5);
+  } else {
+    // Unpracticed catch-up skills get full time-decay allocation
+    score += (tag === "PRIORITY" || tag === "CURRENT") ? 15 : 10;
+  }
+
+  // 4. STRUGGLE FACTOR (Max 15 pts)
+  const rolling = masteryRecord?.rollingHistory || [];
+  if (rolling.length > 0) {
+    const lastAttempt = rolling[rolling.length - 1];
+    if (lastAttempt && !lastAttempt.isCorrect) score += 8;
+    if (lastAttempt && Number(lastAttempt.hintsUsed) >= 3) score += 7;
+  }
+
+  // Cap final SRS score strictly at 100
+  return Math.min(100, Math.round(score));
 }
 
 /**
- * Builds a cognitive SRS review queue using memory retention modeling,
- * score-shielding for high-mastery topics, and micro-batch interleaving.
+ * Generates an adaptive Smart Review Queue using weighted probabilistic selection.
  */
 export function getSmartReviewQueue(options = {}) {
   const {
@@ -27,7 +59,9 @@ export function getSmartReviewQueue(options = {}) {
   const studentStreamStr = state.profile ? String(state.profile.stream).trim() : "G3";
   const studentYearLevel = YEAR_LEVELS[studentYearStr] || 1;
 
-  const now = Date.now();
+  const classTagsMap = state.teacherData?.classSkillTags?.[state.profile?.class] || 
+                       state.profile?.skillTags || {};
+
   const candidateSkills = [];
 
   (state.curriculum || []).forEach(skill => {
@@ -36,107 +70,62 @@ export function getSmartReviewQueue(options = {}) {
     if (selectedStrand !== "All" && skill.strand !== selectedStrand) return;
 
     const skillYearLevel = YEAR_LEVELS[String(skill.year).trim()] || 1;
-    const mastery = state.mastery[skill.generatorPath] || {
-      score: 0,
-      accuracy: 0,
-      totalAttempted: 0,
-      lastPracticed: ""
-    };
-
-    const isCurrentYear = skillYearLevel === studentYearLevel;
     const isPriorYear = skillYearLevel < studentYearLevel;
 
-    // Shield unpracticed skills (must be practiced first in Skill Tree mode)
-    if (mastery.totalAttempted < 1) return;
-    if (isPriorYear && !includePriorYears) return;
+    // Filter out higher grade skills
     if (skillYearLevel > studentYearLevel) return;
 
-    const rawScore = Number(mastery.score) || 0;
-    const accuracy = Number(mastery.accuracy) || 0;
-    const totalAttempted = Number(mastery.totalAttempted) || 0;
+    const path = skill.generatorPath;
+    const tag = classTagsMap[path] || (isPriorYear ? "Past" : "Current");
 
-    // Days Since Last Practice Calculation
-    const lastPracticedMs = mastery.lastPracticed ? new Date(mastery.lastPracticed).getTime() : 0;
-    const daysElapsed = lastPracticedMs > 0 ? (now - lastPracticedMs) / (1000 * 60 * 60 * 24) : 999;
-    
-    // Cognitive Half-Life & Retention Modeling
-    const halfLife = getMemoryHalfLife(rawScore);
-    const retentionProb = daysElapsed === 999 ? 0.3 : Math.pow(2, -daysElapsed / halfLife);
-    const effectiveScore = Math.max(0, Math.round(rawScore * retentionProb));
-    const daysOverdue = daysElapsed - halfLife;
+    // Skip prior year skills unless explicitly checked OR tagged as Priority
+    if (isPriorYear && !includePriorYears && String(tag).toUpperCase() !== "PRIORITY") return;
 
-    // HARD RETENTION SHIELD:
-    // If Retained Score >= 70 and accuracy is healthy (>= 60%), skill does NOT require review
-    const needsRefresh = effectiveScore < 70 || accuracy < 60 || daysOverdue >= 0;
+    const mastery = state.mastery[path] || { score: 0, accuracy: 0, totalAttempted: 0, lastPracticed: "" };
+    const srs = calculateSRS(path, mastery, tag);
 
-    if (!needsRefresh) return; // Topic is shielded / up-to-date
-
-    // Explicit Pedagogical Reasons
-    const reasons = [];
-    if (retentionProb < 0.75 && rawScore >= 40) {
-      const drop = rawScore - effectiveScore;
-      reasons.push(`⏳ Retained Score Decayed (-${drop} pts)`);
+    if (srs > 0) {
+      candidateSkills.push({
+        skill,
+        title: skill.title || "Practice Skill",
+        generatorPath: path,
+        srsScore: srs,
+        masteryScore: Number(mastery.score) || 0
+      });
     }
-    if (rawScore < 40) {
-      reasons.push("🚨 Basic Skill Tune-Up (< 40 Score)");
-    } else if (rawScore < 70) {
-      reasons.push("⚠️ Intermediate Consolidation");
-    }
-    if (accuracy < 60 && totalAttempted >= 2) {
-      reasons.push(`❌ Accuracy Drop (${accuracy}%)`);
-    }
-    if (daysOverdue >= 0 && daysElapsed < 900) {
-      reasons.push(`📅 Scheduled Refresh (${Math.floor(daysElapsed)} days elapsed)`);
-    }
-
-    // Urgency Priority Score Formula
-    let priority = (100 - effectiveScore) * (1 + (daysElapsed / halfLife));
-    if (accuracy < 60 && totalAttempted >= 2) priority += (60 - accuracy) * 1.5;
-    if (rawScore < 40) priority += 35;
-
-    candidateSkills.push({
-      skill,
-      title: skill.title || "Practice Skill",
-      generatorPath: skill.generatorPath,
-      rawScore,
-      effectiveScore,
-      accuracy,
-      totalAttempted,
-      lastPracticed: mastery.lastPracticed,
-      daysSincePracticed: Math.floor(daysElapsed),
-      reasons: reasons.length > 0 ? reasons : ["🔄 Memory Maintenance"],
-      primaryReason: reasons[0] || "🔄 Memory Maintenance",
-      needsRefresh: true,
-      priority
-    });
   });
 
   if (candidateSkills.length === 0) {
     const emptyQueue = [];
     emptyQueue.candidateSkills = [];
     emptyQueue.refreshCount = 0;
-    emptyQueue.uniqueTopicsCount = 0;
     return emptyQueue;
   }
 
-  // Sort candidate skills by urgency priority descending
-  candidateSkills.sort((a, b) => b.priority - a.priority);
+  // Sort candidate pool by SRS score descending
+  candidateSkills.sort((a, b) => b.srsScore - a.srsScore);
 
-  // Micro-Batch Interleaved Queue Distribution:
-  // Build exact questionCount length array by cycling through available candidate topics
+  // Weighted Probabilistic Selection to build queue
+  const pool = candidateSkills.map(c => ({ ...c }));
   const questionQueue = [];
-  let idx = 0;
-  while (questionQueue.length < questionCount) {
-    const item = candidateSkills[idx % candidateSkills.length];
-    questionQueue.push({ ...item });
-    idx++;
+
+  while (questionQueue.length < questionCount && pool.length > 0) {
+    const totalSRS = pool.reduce((sum, item) => sum + item.srsScore, 0);
+    let rand = Math.random() * totalSRS;
+
+    for (let i = 0; i < pool.length; i++) {
+      rand -= pool[i].srsScore;
+      if (rand <= 0) {
+        questionQueue.push(pool[i].generatorPath);
+        // Dampen score to reduce back-to-back duplicate selection
+        pool[i].srsScore = Math.round(pool[i].srsScore * 0.3);
+        break;
+      }
+    }
   }
 
-  // Attach metadata directly to returned array
   questionQueue.candidateSkills = candidateSkills;
   questionQueue.refreshCount = candidateSkills.length;
-  questionQueue.uniqueTopicsCount = candidateSkills.length;
-
   return questionQueue;
 }
 
