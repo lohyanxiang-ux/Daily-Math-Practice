@@ -66,9 +66,9 @@ export function renderSmartReviewSetup(container) {
     }).join("");
 
     container.innerHTML = `
-      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 100dvh; padding: 12px; box-sizing: border-box; background: #f8fafc; overflow: hidden;">
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100dvh; padding: 16px; box-sizing: border-box; background: #f8fafc;">
         
-        <div class="card" style="background: #ffffff; border-radius: 20px; padding: 16px 20px 20px 20px; max-width: 640px; width: 100%; height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;">
+        <div class="card" style="background: #ffffff; border-radius: 20px; padding: 20px; max-width: 640px; width: 100%; height: calc(100dvh - 32px); max-height: calc(100dvh - 32px); box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;">
           
           <!-- TOP HEADER -->
           <div style="flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -103,17 +103,8 @@ export function renderSmartReviewSetup(container) {
             </div>
           </div>
 
-          <!-- SCROLLABLE TOPICS LIST (STRICTLY CONSTRAINED) -->
-          <div style="flex: 1 1 0px; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; background: #f8fafc; margin-bottom: 12px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <span style="font-weight: 800; font-size: 0.85rem; color: #0f172a;">📊 Top Priority Topics by SRS Score:</span>
-              <span style="font-size: 0.75rem; font-weight: 700; color: #2563eb;">${refreshCount} Total Candidate Topics</span>
-            </div>
-            ${top10Html}
-          </div>
-
-          <!-- FIXED ACTION BUTTON -->
-          <div style="flex: 0 0 auto; width: 100%;">
+          <!-- ACTION BUTTON (POSITIONED ABOVE PRIORITY TOPICS) -->
+          <div style="flex: 0 0 auto; width: 100%; margin-bottom: 12px;">
             <button id="btn-start-srs" ${refreshCount === 0 ? 'disabled' : ''} style="
               width: 100%; padding: 12px; font-size: 0.95rem; font-weight: 800; border-radius: 10px; border: none; color: #ffffff; cursor: pointer; transition: all 0.2s;
               background: ${refreshCount === 0 ? '#9ca3af' : '#2563eb'};
@@ -121,6 +112,15 @@ export function renderSmartReviewSetup(container) {
             ">
               ${refreshCount === 0 ? '🎉 All Topics Refreshed!' : `🚀 Start Smart Review (${selectedLength} Questions)`}
             </button>
+          </div>
+
+          <!-- SCROLLABLE TOPICS LIST (FILLS REMAINING SPACE BELOW BUTTON) -->
+          <div style="flex: 1 1 0px; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; background: #f8fafc;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-weight: 800; font-size: 0.85rem; color: #0f172a;">📊 Top Priority Topics by SRS Score:</span>
+              <span style="font-size: 0.75rem; font-weight: 700; color: #2563eb;">${refreshCount} Total Candidate Topics</span>
+            </div>
+            ${top10Html}
           </div>
 
         </div>
