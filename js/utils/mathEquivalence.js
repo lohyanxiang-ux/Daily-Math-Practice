@@ -26,6 +26,9 @@ export function canonicalizeLatex(str) {
   s = s.replace(/\\placeholder(\{[^{}]*\}|\[[^{}]*\])?/g, '')
        .replace(/#\?|#0/g, '');
 
+  // 6. Normalize redundant unit coefficient '1' before variables, brackets, or LaTeX commands (e.g. 1x -> x, -1x -> -x, +1x -> +x)
+  s = s.replace(/(^|[^0-9.])1\s*(?=[a-zA-Z\\\(])/g, '$1');
+
   return s.trim();
 }
 
@@ -74,7 +77,7 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
     let prevText;
     do {
       prevText = s;
-      s = s.replace(/\\(mathrm|mathit|mathbf|mathsf|mathtt|text|operatorname|d)\{([^{}]+)\}/g, '$2');
+      s = s.replace(/\\(mathrm|mathit|mathbf|mathsf|mathtt|text|operatorn|d)\{([^{}]+)\}/g, '$2');
     } while (s !== prevText);
 
     // Strip formatting commands & invisible spacers
