@@ -78,7 +78,8 @@ function getFallbackTag(skill, studentYearLevel) {
 
 /**
  * Calculates the Smart Review Score (SRS) & component breakdown for a single skill (0–100 scale).
- * Features a 3-attempt rolling average with a threshold of >= 2 hints used for Struggle Factor.
+ * Updated with new tag weights (Priority +30, Current +25, Past +10), Time Decay (Max 25),
+ * and Low-Mastery (<50) Priority Struggle Override (+15).
  */
 export function calculateSRSBreakdown(generatorPath, masteryRecord, skillTag) {
   const tag = String(skillTag || "").toUpperCase();
@@ -88,45 +89,51 @@ export function calculateSRSBreakdown(generatorPath, masteryRecord, skillTag) {
     return { total: 0, tagWeight: 0, masteryDeficit: 0, timeDecay: 0, struggleFactor: 0, isFuture: true, tag };
   }
 
-  // 1. TAG WEIGHT (Max 40 pts)
-  let tagWeight = 10;
-  if (tag === "PRIORITY") tagWeight = 40;
+  // 1. TAG WEIGHT (Max 30 pts)
+  let tagWeight = 10; // Default for PAST
+  if (tag === "PRIORITY") tagWeight = 30;
   else if (tag === "CURRENT") tagWeight = 25;
 
   // 2. MASTERY DEFICIT (Max 30 pts)
   const currentScore = Number(masteryRecord?.score) || 0;
   const masteryDeficit = Math.round((100 - currentScore) * 0.30);
 
-  // 3. TIME DECAY (Max 15 pts)
+  // 3. TIME DECAY (Max 25 pts)
   let timeDecay = 0;
   const lastPracticedMs = masteryRecord?.lastPracticed ? new Date(masteryRecord.lastPracticed).getTime() : 0;
   if (lastPracticedMs > 0) {
     const daysSince = Math.floor((Date.now() - lastPracticedMs) / (1000 * 60 * 60 * 24));
-    timeDecay = Math.min(15, Math.round(daysSince * 1.5));
+    timeDecay = Math.min(25, Math.round(daysSince * 1.5));
   } else {
-    timeDecay = (tag === "PRIORITY" || tag === "CURRENT") ? 15 : 10;
+    timeDecay = (tag === "PRIORITY" || tag === "CURRENT") ? 25 : 15;
   }
 
-  // 4. STRUGGLE FACTOR (Max 15 pts - 3-Attempt Rolling Average, >= 2 Hints)
+  // 4. STRUGGLE FACTOR (Max 15 pts)
   let struggleFactor = 0;
-  const rolling = masteryRecord?.rollingHistory || [];
-  if (rolling.length > 0) {
-    const last3 = rolling.slice(-3);
-    const n = last3.length;
 
-    const incorrectCount = last3.filter(a => {
-      if (a.isCorrect !== undefined) return !a.isCorrect;
-      if (a.correct !== undefined) return !a.correct;
-      return false;
-    }).length;
+  // Rule Override: Priority skills with Mastery < 50 automatically receive max struggle (+15)
+  if (tag === "PRIORITY" && currentScore < 50) {
+    struggleFactor = 15;
+  } else {
+    // Standard 3-Attempt Rolling Average (>= 2 Hints)
+    const rolling = masteryRecord?.rollingHistory || [];
+    if (rolling.length > 0) {
+      const last3 = rolling.slice(-3);
+      const n = last3.length;
 
-    // Count attempts where 2 or more hints were used
-    const heavyHintCount = last3.filter(a => Number(a.hintsUsed ?? a.hints ?? 0) >= 2).length;
+      const incorrectCount = last3.filter(a => {
+        if (a.isCorrect !== undefined) return !a.isCorrect;
+        if (a.correct !== undefined) return !a.correct;
+        return false;
+      }).length;
 
-    const errorPts = (incorrectCount / n) * 8;
-    const hintPts = (heavyHintCount / n) * 7;
+      const heavyHintCount = last3.filter(a => Number(a.hintsUsed ?? a.hints ?? 0) >= 2).length;
 
-    struggleFactor = Math.min(15, Math.round(errorPts + hintPts));
+      const errorPts = (incorrectCount / n) * 8;
+      const hintPts = (heavyHintCount / n) * 7;
+
+      struggleFactor = Math.min(15, Math.round(errorPts + hintPts));
+    }
   }
 
   const rawTotal = tagWeight + masteryDeficit + timeDecay + struggleFactor;
