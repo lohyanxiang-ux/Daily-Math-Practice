@@ -5,16 +5,13 @@ import { renderQuestionView } from "./questionView.js";
 
 export function renderSmartReviewSetup(container) {
   let selectedLength = 5;
-  let includePriorYears = false;
   let selectedStrand = "All";
 
-  const studentYear = state.profile ? state.profile.year : "Sec 1";
   const availableStrands = ["All", ...new Set((state.curriculum || []).map(s => s.strand).filter(Boolean))];
 
   function renderSetup() {
     const previewQueue = getSmartReviewQueue({
       questionCount: selectedLength,
-      includePriorYears,
       selectedStrand
     });
 
@@ -23,7 +20,7 @@ export function renderSmartReviewSetup(container) {
     const refreshCount = candidateTopics.length;
 
     const top10Html = top10Topics.length === 0 ? `
-      <div style="text-align: center; padding: 20px; color: #64748b; font-weight: 600;">
+      <div style="text-align: center; padding: 24px; color: #64748b; font-weight: 600;">
         No active topics match the current filter.
       </div>
     ` : top10Topics.map((item, index) => {
@@ -69,11 +66,12 @@ export function renderSmartReviewSetup(container) {
     }).join("");
 
     container.innerHTML = `
-      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100dvh; max-height: 100dvh; padding: 12px; box-sizing: border-box; background: #f8fafc; overflow: hidden;">
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100dvh; padding: 16px; box-sizing: border-box; background: #f8fafc;">
         
-        <div class="card" style="background: #ffffff; border-radius: 20px; padding: 20px; max-width: 640px; width: 100%; height: 100%; max-height: calc(100dvh - 24px); box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;">
+        <div class="card" style="background: #ffffff; border-radius: 20px; padding: 20px; max-width: 640px; width: 100%; max-height: calc(100dvh - 32px); box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box; display: flex; flex-direction: column;">
           
-          <div style="flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <!-- TOP HEADER -->
+          <div style="flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
             <div>
               <h2 style="font-size: 1.35rem; color: #0f172a; margin: 0; font-weight: 800;">🧠 Smart Review</h2>
               <p style="color: #64748b; font-size: 0.82rem; margin: 2px 0 0 0;">Adaptive refresher tuned to target topics</p>
@@ -81,39 +79,32 @@ export function renderSmartReviewSetup(container) {
             <button id="btn-close-srs" style="padding: 6px 14px; background: #f1f5f9; color: #475569; border: none; border-radius: 8px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">← Back</button>
           </div>
 
-          <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
-            <div style="display: flex; gap: 10px; align-items: center;">
-              <div style="flex: 1;">
-                <label style="font-weight: 700; display: block; margin-bottom: 4px; color: #334155; font-size: 0.80rem;">Session Questions:</label>
-                <div style="display: flex; gap: 6px;">
-                  ${[5, 10, 15].map(num => `
-                    <button type="button" class="opt-length ${num === selectedLength ? 'active' : ''}" data-val="${num}" style="
-                      flex: 1; padding: 6px; border-radius: 8px; font-weight: 800; font-size: 0.85rem; cursor: pointer;
-                      border: 2px solid ${num === selectedLength ? '#2563eb' : '#cbd5e1'};
-                      background: ${num === selectedLength ? '#eff6ff' : '#ffffff'};
-                      color: ${num === selectedLength ? '#2563eb' : '#334155'};
-                    ">${num} Qs</button>
-                  `).join('')}
-                </div>
-              </div>
-
-              <div style="flex: 1;">
-                <label style="font-weight: 700; display: block; margin-bottom: 4px; color: #334155; font-size: 0.80rem;">Focus Strand:</label>
-                <select id="select-strand" style="width: 100%; padding: 6px 10px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-weight: 600; font-size: 0.82rem; color: #0f172a; background: #fff;">
-                  ${availableStrands.map(s => `<option value="${s}" ${s === selectedStrand ? 'selected' : ''}>${s}</option>`).join('')}
-                </select>
+          <!-- SETUP FILTERS -->
+          <div style="flex: 0 0 auto; display: flex; gap: 10px; align-items: center; margin-bottom: 12px;">
+            <div style="flex: 1;">
+              <label style="font-weight: 700; display: block; margin-bottom: 4px; color: #334155; font-size: 0.80rem;">Session Length:</label>
+              <div style="display: flex; gap: 6px;">
+                ${[5, 10, 15].map(num => `
+                  <button type="button" class="opt-length ${num === selectedLength ? 'active' : ''}" data-val="${num}" style="
+                    flex: 1; padding: 8px 4px; border-radius: 8px; font-weight: 800; font-size: 0.85rem; cursor: pointer;
+                    border: 2px solid ${num === selectedLength ? '#2563eb' : '#cbd5e1'};
+                    background: ${num === selectedLength ? '#eff6ff' : '#ffffff'};
+                    color: ${num === selectedLength ? '#2563eb' : '#334155'};
+                  ">${num} Qs</button>
+                `).join('')}
               </div>
             </div>
 
-            ${studentYear !== "Sec 1" ? `
-              <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 6px 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                <span style="font-weight: 700; color: #0f172a; font-size: 0.80rem;">Include Prior-Year Skills</span>
-                <input type="checkbox" id="toggle-prior-years" ${includePriorYears ? 'checked' : ''} style="width: 16px; height: 16px; cursor: pointer;">
-              </div>
-            ` : ''}
+            <div style="flex: 1;">
+              <label style="font-weight: 700; display: block; margin-bottom: 4px; color: #334155; font-size: 0.80rem;">Focus Strand:</label>
+              <select id="select-strand" style="width: 100%; padding: 8px 10px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-weight: 600; font-size: 0.82rem; color: #0f172a; background: #fff;">
+                ${availableStrands.map(s => `<option value="${s}" ${s === selectedStrand ? 'selected' : ''}>${s}</option>`).join('')}
+              </select>
+            </div>
           </div>
 
-          <div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 4px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; background: #f8fafc;">
+          <!-- SCROLLABLE TOPICS LIST -->
+          <div style="flex: 1 1 auto; min-height: 120px; overflow-y: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; background: #f8fafc; margin-bottom: 14px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
               <span style="font-weight: 800; font-size: 0.85rem; color: #0f172a;">📊 Top Priority Topics by SRS Score:</span>
               <span style="font-size: 0.75rem; font-weight: 700; color: #2563eb;">${refreshCount} Total Candidate Topics</span>
@@ -121,11 +112,12 @@ export function renderSmartReviewSetup(container) {
             ${top10Html}
           </div>
 
+          <!-- FIXED ACTION BUTTON -->
           <div style="flex: 0 0 auto; width: 100%;">
             <button id="btn-start-srs" ${refreshCount === 0 ? 'disabled' : ''} style="
-              width: 100%; padding: 12px; font-size: 0.95rem; font-weight: 800; border-radius: 10px; border: none; color: #ffffff; cursor: pointer; transition: all 0.2s;
+              width: 100%; padding: 14px; font-size: 1rem; font-weight: 800; border-radius: 12px; border: none; color: #ffffff; cursor: pointer; transition: all 0.2s;
               background: ${refreshCount === 0 ? '#9ca3af' : '#2563eb'};
-              box-shadow: ${refreshCount === 0 ? 'none' : '0 4px 12px rgba(37,99,235,0.25)'};
+              box-shadow: ${refreshCount === 0 ? 'none' : '0 4px 14px rgba(37,99,235,0.3)'};
             ">
               ${refreshCount === 0 ? '🎉 All Topics Refreshed!' : `🚀 Start Smart Review (${selectedLength} Questions)`}
             </button>
@@ -144,11 +136,6 @@ export function renderSmartReviewSetup(container) {
 
     container.querySelector("#select-strand")?.addEventListener("change", (e) => {
       selectedStrand = e.target.value;
-      renderSetup();
-    });
-
-    container.querySelector("#toggle-prior-years")?.addEventListener("change", (e) => {
-      includePriorYears = e.target.checked;
       renderSetup();
     });
 
