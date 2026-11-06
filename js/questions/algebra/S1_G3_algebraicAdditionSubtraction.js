@@ -1,5 +1,5 @@
 /**
- * Question Generator: Addition & Subtraction of Polynomials
+ * Question Generator: Addition & Subtraction of Algebraic Fractions
  * Curriculum Skill: Sec 3 G3 - Algebra
  */
 
@@ -22,280 +22,287 @@ function gcd(a, b) {
   return a || 1;
 }
 
-/**
- * Formats polynomial terms into a compact algebraic string for answer verification.
- * e.g. (2, -3, 5, 'x') => "2x^2-3x+5"
- */
-function formatAns(coeff2, coeff1, constTerm, varName = 'x') {
-  let parts = [];
-
-  // Degree 2 term
-  if (coeff2 !== 0) {
-    if (coeff2 === 1) parts.push(`${varName}^2`);
-    else if (coeff2 === -1) parts.push(`-${varName}^2`);
-    else parts.push(`${coeff2}${varName}^2`);
-  }
-
-  // Degree 1 term
-  if (coeff1 !== 0) {
-    if (coeff1 === 1) {
-      parts.push(parts.length > 0 ? `+${varName}` : `${varName}`);
-    } else if (coeff1 === -1) {
-      parts.push(`-${varName}`);
-    } else if (coeff1 > 0) {
-      parts.push(parts.length > 0 ? `+${coeff1}${varName}` : `${coeff1}${varName}`);
-    } else {
-      parts.push(`${coeff1}${varName}`);
-    }
-  }
-
-  // Constant term
-  if (constTerm !== 0) {
-    if (constTerm > 0) {
-      parts.push(parts.length > 0 ? `+${constTerm}` : `${constTerm}`);
-    } else {
-      parts.push(`${constTerm}`);
-    }
-  }
-
-  return parts.join('') || '0';
+function gcd3(a, b, c) {
+  return gcd(gcd(a, b), c);
 }
 
 export function generateQuestion(tier = 1) {
+  const extraKeys = ["x", "y", "z", "a", "b", "c"];
+
   // =========================================================
-  // TIER 1: BASIC (Level 1 - Combining Un-bracketed Like Terms)
+  // TIER 1: BASIC (Level 1 - Numerical & Simple Monomial Denominators)
   // =========================================================
   if (tier === 1) {
     const subType = randInt(1, 2);
 
     if (subType === 1) {
-      // Un-grouped terms in x (x^2, constant, x, x^2, x)
+      // Numerical denominators with linear numerators: (x + a)/b +/- (x + c)/d
+      const b = randInt(2, 5);
+      let d = randInt(2, 5);
+      if (b === d) d = b + 1;
+
       const a = randInt(-5, 5, true);
-      const b = randInt(-8, 8, true);
-      const c = randInt(-6, 6, true);
-      let d = randInt(-5, 5, true);
-      const e = randInt(-6, 6, true);
+      const c = randInt(-5, 5, true);
+      const isAdd = randInt(0, 1) === 1;
+      const opSym = isAdd ? "+" : "-";
 
-      // Ensure x^2 terms don't completely cancel out to zero
-      const d_eff = (a + d === 0) ? (d > 0 ? d + 1 : d - 1) : d;
+      const lcm = (b * d) / gcd(b, d);
+      const m1 = lcm / b;
+      const m2 = lcm / d;
 
-      const coeffX2 = a + d_eff;
-      const coeffX = c + e;
-      const constTerm = b;
+      const coeffX = isAdd ? (m1 + m2) : (m1 - m2);
+      const constVal = isAdd ? (m1 * a + m2 * c) : (m1 * a - m2 * c);
 
-      const t1 = a === 1 ? 'x^2' : (a === -1 ? '-x^2' : `${a}x^2`);
-      const t2 = b > 0 ? `+ ${b}` : `- ${Math.abs(b)}`;
-      const t3 = c === 1 ? '+ x' : (c === -1 ? '- x' : (c > 0 ? `+ ${c}x` : `- ${Math.abs(c)}x`));
-      const t4 = d_eff === 1 ? '+ x^2' : (d_eff === -1 ? '- x^2' : (d_eff > 0 ? `+ ${d_eff}x^2` : `- ${Math.abs(d_eff)}x^2`));
-      const t5 = e === 1 ? '+ x' : (e === -1 ? '- x' : (e > 0 ? `+ ${e}x` : `- ${Math.abs(e)}x`));
+      const g = gcd3(coeffX, constVal, lcm);
+      const simpCoeffX = coeffX / g;
+      const simpConstVal = constVal / g;
+      const simpDen = lcm / g;
 
-      const expr = `${t1} ${t2} ${t3} ${t4} ${t5}`;
-      const ans = formatAns(coeffX2, coeffX, constTerm, 'x');
-      const step1 = `(${t1} ${t4}) + (${t3} ${t5}) ${t2}`;
+      const term1_num = `x ${a > 0 ? '+ ' + a : '- ' + Math.abs(a)}`;
+      const term2_num = `x ${c > 0 ? '+ ' + c : '- ' + Math.abs(c)}`;
+      const expr = `\\frac{${term1_num}}{${b}} ${opSym} \\frac{${term2_num}}{${d}}`;
+
+      let numStr = "";
+      if (simpCoeffX === 1) numStr = "x";
+      else if (simpCoeffX === -1) numStr = "-x";
+      else if (simpCoeffX !== 0) numStr = `${simpCoeffX}x`;
+
+      if (simpConstVal > 0) {
+        numStr = numStr ? `${numStr} + ${simpConstVal}` : `${simpConstVal}`;
+      } else if (simpConstVal < 0) {
+        numStr = numStr ? `${numStr} - ${Math.abs(simpConstVal)}` : `-${Math.abs(simpConstVal)}`;
+      }
+
+      const ans = simpDen === 1 ? numStr : `\\frac{${numStr}}{${simpDen}}`;
+
+      const step1 = `\\frac{${m1}(${term1_num}) ${opSym} ${m2}(${term2_num})}{${lcm}}`;
+      const step2 = `\\frac{${m1 * 1}x ${m1 * a > 0 ? '+' : ''}${m1 * a} ${isAdd ? '+' : '-'}(${m2 * 1}x ${m2 * c > 0 ? '+' : ''}${m2 * c})}{${lcm}}`;
 
       return {
         strand: "Algebra",
         tier: 1,
         tierName: "Basic",
-        skillTitle: "Addition & Subtraction",
-        prompt: `Simplify the following expression:\n\n$$${expr}$$`,
+        skillTitle: "Addition & Subtraction of Algebraic Fractions",
+        prompt: `Express as a single fraction in its simplest form:\n\n$$${expr}$$`,
+        inputCount: 1,
+        inputLabels: ["="],
         expectedAnswer: ans,
+        displayAnswer: ans,
+        extraKeys: extraKeys,
         steps: [
-          `Group like terms together (terms with $x^2$, terms with $x$, and constant terms): $$${step1}$$`,
-          `Combine the coefficients of like terms: $$${ans}$$`
+          `Find the common denominator ($${lcm}$) and rewrite as a single fraction: $$${step1}$$`,
+          `Expand the numerators: $$${step2}$$`,
+          `Simplify by combining like terms: $$${ans}$$`
         ]
       };
     } else {
-      // Un-grouped terms in y (constant, y, y^2, constant, y^2)
-      const a = randInt(-9, 9, true);
-      const b = randInt(-7, 7, true);
-      const c = randInt(-5, 5, true);
-      const d = randInt(-9, 9, true);
-      let e = randInt(-5, 5, true);
+      // Monomial denominators with variables: a/(bx) +/- c/(dx)
+      const a = randInt(1, 5);
+      const c = randInt(1, 5);
+      const b = randInt(2, 4);
+      const d = randInt(2, 4);
+      const isAdd = randInt(0, 1) === 1;
+      const opSym = isAdd ? "+" : "-";
 
-      // Ensure y^2 terms don't cancel out completely
-      const e_eff = (c + e === 0) ? (e > 0 ? e + 1 : e - 1) : e;
+      const lcmCoeff = (b * d) / gcd(b, d);
+      const m1 = lcmCoeff / b;
+      const m2 = lcmCoeff / d;
 
-      const coeffY2 = c + e_eff;
-      const coeffY = b;
-      const constTerm = a + d;
+      const numRaw = isAdd ? (a * m1 + c * m2) : (a * m1 - c * m2);
+      const g = gcd(numRaw, lcmCoeff);
+      const simpNum = numRaw / g;
+      const simpDenCoeff = lcmCoeff / g;
 
-      const t1 = a.toString();
-      const t2 = b === 1 ? '+ y' : (b === -1 ? '- y' : (b > 0 ? `+ ${b}y` : `- ${Math.abs(b)}y`));
-      const t3 = c === 1 ? '+ y^2' : (c === -1 ? '- y^2' : (c > 0 ? `+ ${c}y^2` : `- ${Math.abs(c)}y^2`));
-      const t4 = d > 0 ? `+ ${d}` : `- ${Math.abs(d)}`;
-      const t5 = e_eff === 1 ? '+ y^2' : (e_eff === -1 ? '- y^2' : (e_eff > 0 ? `+ ${e_eff}y^2` : `- ${Math.abs(e_eff)}y^2`));
+      const expr = `\\frac{${a}}{${b}x} ${opSym} \\frac{${c}}{${d}x}`;
+      const denStr = simpDenCoeff === 1 ? "x" : `${simpDenCoeff}x`;
+      const ans = `\\frac{${simpNum}}{${denStr}}`;
 
-      const expr = `${t1} ${t2} ${t3} ${t4} ${t5}`;
-      const ans = formatAns(coeffY2, coeffY, constTerm, 'y');
-      const step1 = `(${t3} ${t5}) ${t2} + (${t1} ${t4})`;
+      const step1 = `\\frac{${a * m1} ${opSym} ${c * m2}}{${lcmCoeff}x}`;
 
       return {
         strand: "Algebra",
         tier: 1,
         tierName: "Basic",
-        skillTitle: "Addition & Subtraction",
-        prompt: `Simplify the following expression:\n\n$$${expr}$$`,
+        skillTitle: "Addition & Subtraction of Algebraic Fractions",
+        prompt: `Express as a single fraction in its simplest form:\n\n$$${expr}$$`,
+        inputCount: 1,
+        inputLabels: ["="],
         expectedAnswer: ans,
+        displayAnswer: ans,
+        extraKeys: extraKeys,
         steps: [
-          `Group like terms together: $$${step1}$$`,
-          `Simplify by combining like terms: $$${ans}$$`
+          `Find the lowest common denominator ($${lcmCoeff}x$): $$${step1}$$`,
+          `Simplify the numerator and reduce to simplest form: $$${ans}$$`
         ]
       };
     }
   }
 
   // =========================================================
-  // TIER 2: INTERMEDIATE (Level 2 - Polynomial Addition & Subtraction with Brackets)
+  // TIER 2: INTERMEDIATE (Level 2 - Linear Binomials & Difference of Squares)
   // =========================================================
   if (tier === 2) {
     const subType = randInt(1, 2);
 
     if (subType === 1) {
-      // Adding two polynomial brackets: (ax^2 + bx + c) + (dx^2 + ex + f)
-      const a = randInt(-4, 4, true);
-      const b = randInt(-6, 6, true);
-      const c = randInt(-8, 8, true);
+      // Linear binomial denominators: a/(x + b) + c/(x + d)
+      const a = randInt(1, 4);
+      const c = randInt(1, 4);
+      const b = randInt(-4, 4, true);
       let d = randInt(-4, 4, true);
-      const e = randInt(-6, 6, true);
-      const f = randInt(-8, 8, true);
+      if (b === d) d = b + 1;
 
-      const d_eff = (a + d === 0) ? (d > 0 ? d + 1 : d - 1) : d;
-      const coeffX2 = a + d_eff;
-      const coeffX = b + e;
-      const constTerm = c + f;
+      const isAdd = randInt(0, 1) === 1;
+      const opSym = isAdd ? "+" : "-";
 
-      const poly1 = `${a === 1 ? 'x^2' : (a === -1 ? '-x^2' : `${a}x^2`)} ${b === 1 ? '+ x' : (b === -1 ? '- x' : (b > 0 ? `+ ${b}x` : `- ${Math.abs(b)}x`))} ${c > 0 ? `+ ${c}` : `- ${Math.abs(c)}`}`;
-      const poly2 = `${d_eff === 1 ? 'x^2' : (d_eff === -1 ? '-x^2' : `${d_eff}x^2`)} ${e === 1 ? '+ x' : (e === -1 ? '- x' : (e > 0 ? `+ ${e}x` : `- ${Math.abs(e)}x`))} ${f > 0 ? `+ ${f}` : `- ${Math.abs(f)}`}`;
+      const coeffX = isAdd ? (a + c) : (a - c);
+      const constVal = isAdd ? (a * d + c * b) : (a * d - c * b);
 
-      const expr = `(${poly1}) + (${poly2})`;
-      const step1 = `${poly1} ${d_eff > 0 ? `+ ${d_eff}x^2` : `- ${Math.abs(d_eff)}x^2`} ${e > 0 ? `+ ${e}x` : `- ${Math.abs(e)}x`} ${f > 0 ? `+ ${f}` : `- ${Math.abs(f)}`}`;
-      const ans = formatAns(coeffX2, coeffX, constTerm, 'x');
+      let numStr = "";
+      if (coeffX === 1) numStr = "x";
+      else if (coeffX === -1) numStr = "-x";
+      else if (coeffX !== 0) numStr = `${coeffX}x`;
+
+      if (constVal > 0) {
+        numStr = numStr ? `${numStr} + ${constVal}` : `${constVal}`;
+      } else if (constVal < 0) {
+        numStr = numStr ? `${numStr} - ${Math.abs(constVal)}` : `-${Math.abs(constVal)}`;
+      }
+
+      const den1 = `x ${b > 0 ? '+ ' + b : '- ' + Math.abs(b)}`;
+      const den2 = `x ${d > 0 ? '+ ' + d : '- ' + Math.abs(d)}`;
+      const expr = `\\frac{${a}}{${den1}} ${opSym} \\frac{${c}}{${den2}}`;
+
+      const denAns = `(${den1.replace(/\s+/g, "")})(${den2.replace(/\s+/g, "")})`;
+      const ans = `\\frac{${numStr}}{${denAns}}`;
+
+      const step1 = `\\frac{${a}(${den2}) ${opSym} ${c}(${den1})}{(${den1.replace(/\s+/g, "")})(${den2.replace(/\s+/g, "")})}`;
 
       return {
         strand: "Algebra",
         tier: 2,
         tierName: "Intermediate",
-        skillTitle: "Addition & Subtraction",
-        prompt: `Simplify the following expression:\n\n$$${expr}$$`,
+        skillTitle: "Addition & Subtraction of Algebraic Fractions",
+        prompt: `Express as a single fraction in its simplest form:\n\n$$${expr}$$`,
+        inputCount: 1,
+        inputLabels: ["="],
         expectedAnswer: ans,
+        displayAnswer: ans,
+        extraKeys: extraKeys,
         steps: [
-          `Remove the brackets when adding polynomials: $$${step1}$$`,
-          `Combine like terms: $$${ans}$$`
+          `Combine over a common denominator: $$${step1}$$`,
+          `Expand and simplify the numerator: $$${ans}$$`
         ]
       };
     } else {
-      // Subtracting two polynomial brackets: (ay^2 + by + c) - (dy^2 + ey + f)
-      const a = randInt(-4, 4, true);
-      const b = randInt(-6, 6, true);
-      const c = randInt(-8, 8, true);
-      let d = randInt(-4, 4, true);
-      const e = randInt(-6, 6, true);
-      const f = randInt(-8, 8, true);
+      // Difference of two squares denominator: a/(x - b) - c/(x^2 - b^2)
+      const a = randInt(1, 4);
+      const b = randInt(1, 4);
+      const c = randInt(1, 6);
+      const b2 = b * b;
 
-      const d_eff = (a - d === 0) ? (d > 0 ? d + 1 : d - 1) : d;
-      const coeffY2 = a - d_eff;
-      const coeffY = b - e;
-      const constTerm = c - f;
+      const constVal = a * b - c;
 
-      const poly1 = `${a === 1 ? 'y^2' : (a === -1 ? '-y^2' : `${a}y^2`)} ${b === 1 ? '+ y' : (b === -1 ? '- y' : (b > 0 ? `+ ${b}y` : `- ${Math.abs(b)}y`))} ${c > 0 ? `+ ${c}` : `- ${Math.abs(c)}`}`;
-      const poly2 = `${d_eff === 1 ? 'y^2' : (d_eff === -1 ? '-y^2' : `${d_eff}y^2`)} ${e === 1 ? '+ y' : (e === -1 ? '- y' : (e > 0 ? `+ ${e}y` : `- ${Math.abs(e)}y`))} ${f > 0 ? `+ ${f}` : `- ${Math.abs(f)}`}`;
+      let numStr = a === 1 ? "x" : `${a}x`;
+      if (constVal > 0) numStr += ` + ${constVal}`;
+      else if (constVal < 0) numStr += ` - ${Math.abs(constVal)}`;
 
-      const expr = `(${poly1}) - (${poly2})`;
-
-      const negD = -d_eff;
-      const negE = -e;
-      const negF = -f;
-
-      const step1 = `${poly1} ${negD > 0 ? `+ ${negD}y^2` : `- ${Math.abs(negD)}y^2`} ${negE > 0 ? `+ ${negE}y` : `- ${Math.abs(negE)}y`} ${negF > 0 ? `+ ${negF}` : `- ${Math.abs(negF)}`}`;
-      const ans = formatAns(coeffY2, coeffY, constTerm, 'y');
+      const expr = `\\frac{${a}}{x - ${b}} - \\frac{${c}}{x^2 - ${b2}}`;
+      const step1 = `\\frac{${a}}{x - ${b}} - \\frac{${c}}{(x - ${b})(x + ${b})}`;
+      const step2 = `\\frac{${a}(x + ${b}) - ${c}}{(x - ${b})(x + ${b})}`;
+      const ans = `\\frac{${numStr.replace(/\s+/g, "")}}{(x-${b})(x+${b})}`;
 
       return {
         strand: "Algebra",
         tier: 2,
         tierName: "Intermediate",
-        skillTitle: "Addition & Subtraction",
-        prompt: `Simplify the following expression:\n\n$$${expr}$$`,
+        skillTitle: "Addition & Subtraction of Algebraic Fractions",
+        prompt: `Express as a single fraction in its simplest form:\n\n$$${expr}$$`,
+        inputCount: 1,
+        inputLabels: ["="],
         expectedAnswer: ans,
+        displayAnswer: ans,
+        extraKeys: extraKeys,
         steps: [
-          `Distribute the minus sign through the second set of brackets: $$${step1}$$`,
-          `Combine like terms to simplify: $$${ans}$$`
+          `Factorize the quadratic denominator $x^2 - ${b2}$: $$${step1}$$`,
+          `Write over a common denominator $(x - ${b})(x + ${b})$: $$${step2}$$`,
+          `Expand and simplify the numerator: $$${ans}$$`
         ]
       };
     }
   }
 
   // =========================================================
-  // TIER 3: ADVANCED (Level 3 - Polynomials with Fractional Coefficients)
+  // TIER 3: ADVANCED (Level 3 - Quadratic Trinomials & Opposite Sign Denominators)
   // =========================================================
-  const a = randInt(1, 5);
-  const b = randInt(-6, -1);
-  const c = randInt(1, 8);
-  const d = randInt(-8, -1);
-  const p = randInt(3, 11);
-  const q = randInt(2, 4);
+  const subType = randInt(1, 2);
 
-  // Ensure p/q doesn't simplify to a whole number initially
-  const p_eff = (p % q === 0) ? p + 1 : p;
-  const num_raw = a * q - p_eff;
-  const gcdVal = gcd(num_raw, q);
-  const simpNum = num_raw / gcdVal;
-  const simpDen = q / gcdVal;
+  if (subType === 1) {
+    // Quadratic Trinomial Denominator: a/(x + b) + c/(x^2 + (b+d)x + bd)
+    const a = randInt(1, 4);
+    const b = randInt(1, 4);
+    const d = randInt(1, 4);
+    const c = randInt(1, 5);
 
-  const coeffY = b + d;
-  const constTerm = c;
-  const fracLaTeX = `\\frac{${p_eff}}{${q}}`;
+    const sumBD = b + d;
+    const prodBD = b * d;
+    const constVal = a * d + c;
 
-  const term1 = a === 1 ? 'y^2' : `${a}y^2`;
-  const term2 = b === -1 ? '- y' : `${b}y`;
-  const term4 = d === -1 ? '- y' : `${d}y`;
+    const expr = `\\frac{${a}}{x + ${b}} + \\frac{${c}}{x^2 + ${sumBD}x + ${prodBD}}`;
+    const numStr = a === 1 ? `x + ${constVal}` : `${a}x + ${constVal}`;
+    const ans = `\\frac{${numStr.replace(/\s+/g, "")}}{(x+${b})(x+${d})}`;
 
-  const expr = `${term1} ${term2} + ${c} ${term4} - ${fracLaTeX}y^2`;
+    const step1 = `\\frac{${a}}{x + ${b}} + \\frac{${c}}{(x + ${b})(x + ${d})}`;
+    const step2 = `\\frac{${a}(x + ${d}) + ${c}}{(x + ${b})(x + ${d})}`;
 
-  // Format y^2 term fraction for answer string
-  let partY2 = "";
-  if (simpDen === 1) {
-    if (simpNum === 1) partY2 = "y^2";
-    else if (simpNum === -1) partY2 = "-y^2";
-    else if (simpNum !== 0) partY2 = `${simpNum}y^2`;
+    return {
+      strand: "Algebra",
+      tier: 3,
+      tierName: "Advanced",
+      skillTitle: "Addition & Subtraction of Algebraic Fractions",
+      prompt: `Express as a single fraction in its simplest form:\n\n$$${expr}$$`,
+      inputCount: 1,
+      inputLabels: ["="],
+      expectedAnswer: ans,
+      displayAnswer: ans,
+      extraKeys: extraKeys,
+      steps: [
+        `Factorize the quadratic denominator $x^2 + ${sumBD}x + ${prodBD}$: $$${step1}$$`,
+        `Combine numerators over the common denominator: $$${step2}$$`,
+        `Simplify to state final answer: $$${ans}$$`
+      ]
+    };
   } else {
-    if (simpNum === 1) partY2 = `1/${simpDen}y^2`;
-    else if (simpNum === -1) partY2 = `-1/${simpDen}y^2`;
-    else partY2 = `${simpNum}/${simpDen}y^2`;
+    // Opposite Sign Binomial Denominators: a/(x - b) - c/(b - x) = (a + c)/(x - b)
+    const a = randInt(2, 6);
+    const c = randInt(2, 6);
+    const b = randInt(1, 5);
+
+    const sumAC = a + c;
+    const expr = `\\frac{${a}}{x - ${b}} - \\frac{${c}}{${b} - x}`;
+    const step1 = `\\frac{${a}}{x - ${b}} - \\frac{${c}}{-(x - ${b})}`;
+    const step2 = `\\frac{${a}}{x - ${b}} + \\frac{${c}}{x - ${b}}`;
+    const ans = `\\frac{${sumAC}}{x-${b}}`;
+
+    return {
+      strand: "Algebra",
+      tier: 3,
+      tierName: "Advanced",
+      skillTitle: "Addition & Subtraction of Algebraic Fractions",
+      prompt: `Express as a single fraction in its simplest form:\n\n$$${expr}$$`,
+      inputCount: 1,
+      inputLabels: ["="],
+      expectedAnswer: ans,
+      displayAnswer: ans,
+      extraKeys: extraKeys,
+      steps: [
+        `Factor out $-1$ from the second denominator: $$${step1}$$`,
+        `Convert to addition of fractions with identical denominators: $$${step2}$$`,
+        `Combine numerators to simplify: $$${ans}$$`
+      ]
+    };
   }
-
-  // Format y term
-  let partY = "";
-  if (coeffY !== 0) {
-    if (coeffY === 1) partY = partY2 ? "+y" : "y";
-    else if (coeffY === -1) partY = "-y";
-    else if (coeffY > 0) partY = partY2 ? `+${coeffY}y` : `${coeffY}y`;
-    else partY = `${coeffY}y`;
-  }
-
-  // Format constant term
-  let partC = "";
-  if (constTerm !== 0) {
-    if (constTerm > 0) partC = (partY2 || partY) ? `+${constTerm}` : `${constTerm}`;
-    else partC = `${constTerm}`;
-  }
-
-  const ans = (partY2 + partY + partC) || '0';
-  const step1 = `\\left(${a} - ${fracLaTeX}\\right)y^2 + (${b} ${d > 0 ? `+ ${d}` : `- ${Math.abs(d)}`})y + ${c}`;
-
-  return {
-    strand: "Algebra",
-    tier: 3,
-    tierName: "Advanced",
-    skillTitle: "Addition & Subtraction",
-    prompt: `Simplify the expression containing fractional coefficients:\n\n$$${expr}$$`,
-    expectedAnswer: ans,
-    steps: [
-      `Group coefficients for like terms: $$${step1}$$`,
-      `Simplify the coefficients: $$${ans}$$`
-    ]
-  };
 }
 
-export const algebraicAdditionSubtraction = { generate: generateQuestion };
+export const additionSubtractionAlgebraicFractions = { generate: generateQuestion };
 export default generateQuestion;
