@@ -58,8 +58,7 @@ export function renderSmartReviewSetup(container) {
             </div>
           </div>
 
-          <!-- COMPONENT BREAKDOWN ROW -->
-          <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; pt: 6px; border-top: 1px dashed #e2e8f0; font-size: 0.73rem; font-weight: 700;">
+          <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; padding-top: 6px; border-top: 1px dashed #e2e8f0; font-size: 0.73rem; font-weight: 700;">
             <span style="background: #f1f5f9; color: #334155; padding: 2px 6px; border-radius: 4px;">🏷️ Tag: +${b.tagWeight}</span>
             <span style="background: #f1f5f9; color: #334155; padding: 2px 6px; border-radius: 4px;">🎯 Deficit: +${b.masteryDeficit}</span>
             <span style="background: #f1f5f9; color: #334155; padding: 2px 6px; border-radius: 4px;">⏳ Time: +${b.timeDecay}</span>
@@ -70,20 +69,19 @@ export function renderSmartReviewSetup(container) {
     }).join("");
 
     container.innerHTML = `
-      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100dvh; padding: 16px; box-sizing: border-box; background: #f8fafc;">
-        <div class="card" style="background: #ffffff; border-radius: 20px; padding: 24px; max-width: 640px; width: 100%; box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box; display: flex; flex-direction: column; max-height: calc(100vh - 32px);">
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100dvh; max-height: 100dvh; padding: 12px; box-sizing: border-box; background: #f8fafc; overflow: hidden;">
+        
+        <div class="card" style="background: #ffffff; border-radius: 20px; padding: 20px; max-width: 640px; width: 100%; height: 100%; max-height: calc(100dvh - 24px); box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;">
           
-          <!-- HEADER -->
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-shrink: 0;">
+          <div style="flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <div>
-              <h2 style="font-size: 1.4rem; color: #0f172a; margin: 0; font-weight: 800;">🧠 Smart Review (SRS Test Mode)</h2>
+              <h2 style="font-size: 1.35rem; color: #0f172a; margin: 0; font-weight: 800;">🧠 Smart Review</h2>
               <p style="color: #64748b; font-size: 0.82rem; margin: 2px 0 0 0;">Adaptive refresher tuned to target topics</p>
             </div>
             <button id="btn-close-srs" style="padding: 6px 14px; background: #f1f5f9; color: #475569; border: none; border-radius: 8px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">← Back</button>
           </div>
 
-          <!-- SETUP CONTROLS -->
-          <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; flex-shrink: 0;">
+          <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
             <div style="display: flex; gap: 10px; align-items: center;">
               <div style="flex: 1;">
                 <label style="font-weight: 700; display: block; margin-bottom: 4px; color: #334155; font-size: 0.80rem;">Session Questions:</label>
@@ -115,29 +113,28 @@ export function renderSmartReviewSetup(container) {
             ` : ''}
           </div>
 
-          <!-- TOP 10 SRS SCORE PREVIEW TABLE (SCROLLABLE) -->
-          <div style="flex: 1; overflow-y: auto; padding-right: 4px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; background: #f8fafc;">
+          <div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 4px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; background: #f8fafc;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <span style="font-weight: 800; font-size: 0.85rem; color: #0f172a;">📊 Top 10 Priority Topics by SRS Score:</span>
+              <span style="font-weight: 800; font-size: 0.85rem; color: #0f172a;">📊 Top Priority Topics by SRS Score:</span>
               <span style="font-size: 0.75rem; font-weight: 700; color: #2563eb;">${refreshCount} Total Candidate Topics</span>
             </div>
             ${top10Html}
           </div>
 
-          <!-- LAUNCH BUTTON -->
-          <button id="btn-start-srs" ${refreshCount === 0 ? 'disabled' : ''} style="
-            width: 100%; padding: 12px; font-size: 0.95rem; font-weight: 800; border-radius: 10px; border: none; color: #ffffff; cursor: pointer; transition: all 0.2s; flex-shrink: 0;
-            background: ${refreshCount === 0 ? '#9ca3af' : '#2563eb'};
-            box-shadow: ${refreshCount === 0 ? 'none' : '0 4px 12px rgba(37,99,235,0.25)'};
-          ">
-            ${refreshCount === 0 ? '🎉 All Topics Refreshed!' : `🚀 Start Smart Review (${selectedLength} Questions)`}
-          </button>
+          <div style="flex: 0 0 auto; width: 100%;">
+            <button id="btn-start-srs" ${refreshCount === 0 ? 'disabled' : ''} style="
+              width: 100%; padding: 12px; font-size: 0.95rem; font-weight: 800; border-radius: 10px; border: none; color: #ffffff; cursor: pointer; transition: all 0.2s;
+              background: ${refreshCount === 0 ? '#9ca3af' : '#2563eb'};
+              box-shadow: ${refreshCount === 0 ? 'none' : '0 4px 12px rgba(37,99,235,0.25)'};
+            ">
+              ${refreshCount === 0 ? '🎉 All Topics Refreshed!' : `🚀 Start Smart Review (${selectedLength} Questions)`}
+            </button>
+          </div>
 
         </div>
       </div>
     `;
 
-    // Event Listeners
     container.querySelectorAll(".opt-length").forEach(btn => {
       btn.addEventListener("click", () => {
         selectedLength = Number(btn.getAttribute("data-val"));
