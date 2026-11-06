@@ -192,7 +192,6 @@ export function isAlgebraicallyEquivalent(userAns, expectedAns, requiredForm = n
 
     // Robustly convert ^ exponents into Math.pow(...)
     let prevExp;
-    const basePattern = r'(\((?:[^\(\)]+|\((?:[^\(\)]+|\([^\(\)]*\))*\))*\)|[a-zA-Z0-9\._]+)';
     do {
       prevExp = e;
       e = e.replace(/(\((?:[^\(\)]+|\((?:[^\(\)]+|\([^\(\)]*\))*\))*\)|[a-zA-Z0-9\._]+)\s*\^\s*[\(\{]?([^{}\(\)]+)[\)\}]?/g, 'Math.pow($1, $2)');
