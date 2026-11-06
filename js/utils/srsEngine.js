@@ -3,46 +3,56 @@ import { state } from "../state.js";
 const YEAR_LEVELS = { "Sec 1": 1, "Sec 2": 2, "Sec 3": 3, "Sec 4": 4 };
 
 /**
- * Calculates the Smart Review Score (SRS) for a single skill on a 0 to 100 scale.
- * SRS = Tag Weight (Max 40) + Mastery Deficit (Max 30) + Time Decay (Max 15) + Struggle Factor (Max 15)
+ * Calculates the Smart Review Score (SRS) & component breakdown for a single skill (0–100 scale).
  */
-export function calculateSRS(generatorPath, masteryRecord, skillTag) {
+export function calculateSRSBreakdown(generatorPath, masteryRecord, skillTag) {
   const tag = String(skillTag || "").toUpperCase();
 
-  // HARD GATE: Exclude unlearned / future topics
-  if (tag === "FUTURE") return 0;
-
-  let score = 0;
+  // HARD GATE: Exclude future/unlearned skills
+  if (tag === "FUTURE") {
+    return { total: 0, tagWeight: 0, masteryDeficit: 0, timeDecay: 0, struggleFactor: 0, isFuture: true };
+  }
 
   // 1. TAG WEIGHT (Max 40 pts)
-  if (tag === "PRIORITY") score += 40;
-  else if (tag === "CURRENT") score += 25;
-  else score += 10; // Past or default skills
+  let tagWeight = 10;
+  if (tag === "PRIORITY") tagWeight = 40;
+  else if (tag === "CURRENT") tagWeight = 25;
 
   // 2. MASTERY DEFICIT (Max 30 pts)
   const currentScore = Number(masteryRecord?.score) || 0;
-  score += (100 - currentScore) * 0.30;
+  const masteryDeficit = Math.round((100 - currentScore) * 0.30);
 
   // 3. TIME DECAY (Max 15 pts)
+  let timeDecay = 0;
   const lastPracticedMs = masteryRecord?.lastPracticed ? new Date(masteryRecord.lastPracticed).getTime() : 0;
   if (lastPracticedMs > 0) {
     const daysSince = Math.floor((Date.now() - lastPracticedMs) / (1000 * 60 * 60 * 24));
-    score += Math.min(15, daysSince * 1.5);
+    timeDecay = Math.min(15, Math.round(daysSince * 1.5));
   } else {
-    // Unpracticed catch-up skills get full time-decay allocation
-    score += (tag === "PRIORITY" || tag === "CURRENT") ? 15 : 10;
+    timeDecay = (tag === "PRIORITY" || tag === "CURRENT") ? 15 : 10;
   }
 
   // 4. STRUGGLE FACTOR (Max 15 pts)
+  let struggleFactor = 0;
   const rolling = masteryRecord?.rollingHistory || [];
   if (rolling.length > 0) {
     const lastAttempt = rolling[rolling.length - 1];
-    if (lastAttempt && !lastAttempt.isCorrect) score += 8;
-    if (lastAttempt && Number(lastAttempt.hintsUsed) >= 3) score += 7;
+    if (lastAttempt && !lastAttempt.isCorrect) struggleFactor += 8;
+    if (lastAttempt && Number(lastAttempt.hintsUsed) >= 3) struggleFactor += 7;
   }
 
-  // Cap final SRS score strictly at 100
-  return Math.min(100, Math.round(score));
+  const rawTotal = tagWeight + masteryDeficit + timeDecay + struggleFactor;
+  const total = Math.min(100, rawTotal);
+
+  return {
+    total,
+    tagWeight,
+    masteryDeficit,
+    timeDecay,
+    struggleFactor,
+    currentScore,
+    tag
+  };
 }
 
 /**
@@ -65,32 +75,30 @@ export function getSmartReviewQueue(options = {}) {
   const candidateSkills = [];
 
   (state.curriculum || []).forEach(skill => {
-    // 1. Filter stream and strand
     if (skill.stream && String(skill.stream).trim() !== studentStreamStr) return;
     if (selectedStrand !== "All" && skill.strand !== selectedStrand) return;
 
     const skillYearLevel = YEAR_LEVELS[String(skill.year).trim()] || 1;
     const isPriorYear = skillYearLevel < studentYearLevel;
 
-    // Filter out higher grade skills
     if (skillYearLevel > studentYearLevel) return;
 
     const path = skill.generatorPath;
     const tag = classTagsMap[path] || (isPriorYear ? "Past" : "Current");
 
-    // Skip prior year skills unless explicitly checked OR tagged as Priority
     if (isPriorYear && !includePriorYears && String(tag).toUpperCase() !== "PRIORITY") return;
 
     const mastery = state.mastery[path] || { score: 0, accuracy: 0, totalAttempted: 0, lastPracticed: "" };
-    const srs = calculateSRS(path, mastery, tag);
+    const breakdown = calculateSRSBreakdown(path, mastery, tag);
 
-    if (srs > 0) {
+    if (breakdown.total > 0) {
       candidateSkills.push({
         skill,
         title: skill.title || "Practice Skill",
         generatorPath: path,
-        srsScore: srs,
-        masteryScore: Number(mastery.score) || 0
+        srsScore: breakdown.total,
+        breakdown: breakdown,
+        tag: tag
       });
     }
   });
@@ -106,19 +114,26 @@ export function getSmartReviewQueue(options = {}) {
   candidateSkills.sort((a, b) => b.srsScore - a.srsScore);
 
   // Weighted Probabilistic Selection to build queue
-  const pool = candidateSkills.map(c => ({ ...c }));
+  const pool = candidateSkills.map(c => ({ ...c, tempWeight: c.srsScore }));
   const questionQueue = [];
 
   while (questionQueue.length < questionCount && pool.length > 0) {
-    const totalSRS = pool.reduce((sum, item) => sum + item.srsScore, 0);
-    let rand = Math.random() * totalSRS;
+    const totalSRS = pool.reduce((sum, item) => sum + item.tempWeight, 0);
 
+    if (totalSRS <= 0) {
+      // Fallback: Cycle through pool if dampening hits 0
+      const nextItem = pool[questionQueue.length % pool.length];
+      questionQueue.push(nextItem.generatorPath);
+      continue;
+    }
+
+    let rand = Math.random() * totalSRS;
     for (let i = 0; i < pool.length; i++) {
-      rand -= pool[i].srsScore;
+      rand -= pool[i].tempWeight;
       if (rand <= 0) {
         questionQueue.push(pool[i].generatorPath);
-        // Dampen score to reduce back-to-back duplicate selection
-        pool[i].srsScore = Math.round(pool[i].srsScore * 0.3);
+        // Dampen score to avoid immediate consecutive duplicates
+        pool[i].tempWeight = Math.max(1, Math.round(pool[i].tempWeight * 0.3));
         break;
       }
     }
@@ -129,9 +144,6 @@ export function getSmartReviewQueue(options = {}) {
   return questionQueue;
 }
 
-/**
- * Returns metrics for Dashboard badges.
- */
 export function getSRSMetrics() {
   const queue = getSmartReviewQueue({ questionCount: 100, includePriorYears: true });
   return {
