@@ -64,7 +64,7 @@ export function generateQuestion(tier = 1) {
       expectedAnswer: ans,
       displayAnswer: ans,
       requiredForm: "factorised",
-      extraKeys: ["a", "b", "c", "x", "y"],
+      extraKeys: ["a", "b", "c", "p", "q", "x", "y"],
       steps: [
         `Identify the highest common numerical factor of both terms: $$${hcf}$$`,
         `Factorise out the common factor and write the remaining terms inside brackets: $$${ans}$$`
@@ -116,7 +116,7 @@ export function generateQuestion(tier = 1) {
         expectedAnswer: ans,
         displayAnswer: ans,
         requiredForm: "factorised",
-        extraKeys: ["a", "b", "c", "x", "y"],
+        extraKeys: ["a", "b", "c", "p", "q", "x", "y"],
         steps: [
           `Identify the highest common factor including variables: $$${hcf}$$`,
           `Factorise out $$${hcf}$$ from each term: $$${ans}$$`
@@ -159,7 +159,7 @@ export function generateQuestion(tier = 1) {
         expectedAnswer: ans,
         displayAnswer: ans,
         requiredForm: "factorised",
-        extraKeys: ["a", "b", "c", "x", "y"],
+        extraKeys: ["a", "b", "c", "p", "q", "x", "y"],
         steps: [
           `Identify the negative highest common factor: $$${hcf}$$`,
           `Factorise out $$${hcf}$$, making the remaining terms inside the bracket positive: $$${ans}$$`
@@ -212,7 +212,7 @@ export function generateQuestion(tier = 1) {
       expectedAnswer: ans,
       displayAnswer: ans,
       requiredForm: "factorised",
-      extraKeys: ["a", "b", "c", "x", "y"],
+      extraKeys: ["a", "b", "c", "p", "q", "x", "y"],
       steps: [
         `Find the highest common factor of all three terms: $$${hcf}$$`,
         `Divide each term by $$${hcf}$$ and write inside brackets: $$${ans}$$`
@@ -247,7 +247,7 @@ export function generateQuestion(tier = 1) {
       expectedAnswer: ans,
       displayAnswer: ans,
       requiredForm: "factorised",
-      extraKeys: ["a", "b", "c", "x", "y"],
+      extraKeys: ["a", "b", "c", "p", "q", "x", "y"],
       steps: [
         `Identify the common binomial factor in both terms: $$${hcf}$$`,
         `Factorise out $$${hcf}$$ to combine remaining coefficients into a second bracket: $$${ans}$$`
