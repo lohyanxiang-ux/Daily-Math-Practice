@@ -66,9 +66,9 @@ export function renderSmartReviewSetup(container) {
     }).join("");
 
     container.innerHTML = `
-      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100dvh; padding: 16px; box-sizing: border-box; background: #f8fafc;">
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: calc(100dvh - 80px); max-height: calc(100dvh - 80px); padding: 12px; box-sizing: border-box; background: #f8fafc; overflow: hidden;">
         
-        <div class="card" style="background: #ffffff; border-radius: 20px; padding: 20px; max-width: 640px; width: 100%; height: calc(100dvh - 32px); max-height: calc(100dvh - 32px); box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;">
+        <div class="card" style="background: #ffffff; border-radius: 20px; padding: 20px; max-width: 640px; width: 100%; height: calc(100dvh - 110px); max-height: calc(100dvh - 110px); box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;">
           
           <!-- TOP HEADER -->
           <div style="flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -163,7 +163,6 @@ function renderSRSSummary(container, summary, onReturnToSetup) {
   const remainingMetrics = getSRSMetrics();
   const hasMoreTopics = (remainingMetrics.totalRefreshNeeded || 0) > 0;
 
-  // Calculate Net Mastery Points Gained & build scrollable row cards
   let totalNetPoints = 0;
   const summaryRowsHtml = Object.keys(summary.sessionInitialScores).map(path => {
     const skillObj = (state.curriculum || []).find(s => s.generatorPath === path) || { title: "Practice Skill" };
@@ -190,53 +189,53 @@ function renderSRSSummary(container, summary, onReturnToSetup) {
   const netGainColor = totalNetPoints >= 0 ? "#16a34a" : "#dc2626";
 
   container.innerHTML = `
-    <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100dvh; padding: 16px; box-sizing: border-box; background: #f8fafc;">
-      <div class="card" style="max-width: 520px; width: 100%; height: calc(100dvh - 32px); max-height: calc(100dvh - 32px); background: #ffffff; border-radius: 20px; padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; text-align: center;">
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: calc(100dvh - 80px); max-height: calc(100dvh - 80px); padding: 12px; box-sizing: border-box; background: #f8fafc; overflow: hidden;">
+      <div class="card" style="max-width: 520px; width: 100%; height: calc(100dvh - 110px); max-height: calc(100dvh - 110px); background: #ffffff; border-radius: 20px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; text-align: center;">
         
         <!-- HEADER -->
-        <div style="flex: 0 0 auto; margin-bottom: 12px;">
-          <h2 style="color: #0f172a; margin: 0 0 4px 0; font-size: 1.5rem; font-weight: 800;">🧠 Review Complete!</h2>
-          <p style="color: #64748b; margin: 0; font-size: 0.88rem; font-weight: 600;">
+        <div style="flex: 0 0 auto; margin-bottom: 10px;">
+          <h2 style="color: #0f172a; margin: 0 0 4px 0; font-size: 1.4rem; font-weight: 800;">🧠 Review Complete!</h2>
+          <p style="color: #64748b; margin: 0; font-size: 0.84rem; font-weight: 600;">
             Great job reinforcing your memory retention and skill mastery!
           </p>
         </div>
 
         <!-- KEY STATS FEEDBACK BAR -->
-        <div style="flex: 0 0 auto; display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; flex-wrap: wrap;">
-          <div style="flex: 1; min-width: 100px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 8px 10px;">
-            <div style="font-size: 0.72rem; font-weight: 700; color: #1e40af; text-transform: uppercase;">Correct Rate</div>
-            <div style="font-size: 1.1rem; font-weight: 800; color: #1d4ed8;">${summary.sessionScore} / ${summary.totalQuestions}</div>
+        <div style="flex: 0 0 auto; display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 90px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 6px 8px;">
+            <div style="font-size: 0.70rem; font-weight: 700; color: #1e40af; text-transform: uppercase;">Correct Rate</div>
+            <div style="font-size: 1.05rem; font-weight: 800; color: #1d4ed8;">${summary.sessionScore} / ${summary.totalQuestions}</div>
           </div>
 
-          <div style="flex: 1; min-width: 100px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 8px 10px;">
-            <div style="font-size: 0.72rem; font-weight: 700; color: #166534; text-transform: uppercase;">XP Earned</div>
-            <div style="font-size: 1.1rem; font-weight: 800; color: #15803d;">+${totalXP} XP</div>
+          <div style="flex: 1; min-width: 90px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 6px 8px;">
+            <div style="font-size: 0.70rem; font-weight: 700; color: #166534; text-transform: uppercase;">XP Earned</div>
+            <div style="font-size: 1.05rem; font-weight: 800; color: #15803d;">+${totalXP} XP</div>
           </div>
 
-          <div style="flex: 1; min-width: 100px; background: #fefce8; border: 1px solid #fef08a; border-radius: 10px; padding: 8px 10px;">
-            <div style="font-size: 0.72rem; font-weight: 700; color: #854d0e; text-transform: uppercase;">Net Mastery</div>
-            <div style="font-size: 1.1rem; font-weight: 800; color: ${netGainColor};">${netGainText} pts</div>
+          <div style="flex: 1; min-width: 90px; background: #fefce8; border: 1px solid #fef08a; border-radius: 10px; padding: 6px 8px;">
+            <div style="font-size: 0.70rem; font-weight: 700; color: #854d0e; text-transform: uppercase;">Net Mastery</div>
+            <div style="font-size: 1.05rem; font-weight: 800; color: ${netGainColor};">${netGainText} pts</div>
           </div>
         </div>
 
-        <!-- SCROLLABLE TOPICS LIST (NO CUT OFF) -->
-        <div style="flex: 1 1 0px; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; background: #f8fafc; margin-bottom: 16px;">
+        <!-- ACTION BUTTONS (PLACED ABOVE SCROLLABLE TOPIC LIST FOR GUARANTEED VISIBILITY) -->
+        <div style="flex: 0 0 auto; display: flex; gap: 8px; width: 100%; margin-bottom: 12px;">
+          <button id="btn-srs-summary-exit" type="button" style="flex: 1; padding: 10px; background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 0.88rem; font-weight: 700; cursor: pointer;">
+            Return to Dashboard
+          </button>
+          ${hasMoreTopics ? `
+            <button id="btn-srs-next-batch" type="button" style="flex: 1.3; padding: 10px; background: #2563eb; color: #ffffff; border: none; border-radius: 10px; font-size: 0.88rem; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.25);">
+              Review Next Batch ➔
+            </button>
+          ` : ''}
+        </div>
+
+        <!-- SCROLLABLE TOPICS LIST -->
+        <div style="flex: 1 1 0px; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; background: #f8fafc;">
           <div style="font-size: 0.82rem; font-weight: 800; color: #475569; margin-bottom: 8px; text-align: left;">
             📈 Restored Mastery Scores:
           </div>
           ${summaryRowsHtml || '<div style="color: #64748b; font-size: 0.88rem;">Review session completed.</div>'}
-        </div>
-
-        <!-- FIXED ACTION BUTTONS -->
-        <div style="flex: 0 0 auto; display: flex; gap: 10px; width: 100%;">
-          <button id="btn-srs-summary-exit" type="button" style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 0.90rem; font-weight: 700; cursor: pointer;">
-            Return to Dashboard
-          </button>
-          ${hasMoreTopics ? `
-            <button id="btn-srs-next-batch" type="button" style="flex: 1.3; padding: 12px; background: #2563eb; color: #ffffff; border: none; border-radius: 10px; font-size: 0.90rem; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.25);">
-              Review Next Batch ➔
-            </button>
-          ` : ''}
         </div>
 
       </div>
