@@ -78,15 +78,16 @@ function isStreakContinuation(prevDateStr, todayStr) {
 
   const prevDow = getDayOfWeek(prevDateStr); // 0 = Sun, 1 = Mon, 5 = Fri, 6 = Sat
 
-  // Friday -> Sunday (skipped Saturday)
+  // Friday (5) -> Sunday (0) [diff 2]: Valid weekend grace
   if (diffDays === 2 && prevDow === 5) return true;
 
-  // Saturday -> Monday (skipped Sunday)
+  // Saturday (6) -> Monday (1) [diff 2]: Valid weekend grace
   if (diffDays === 2 && prevDow === 6) return true;
 
-  // Friday -> Monday (skipped Saturday & Sunday)
+  // Friday (5) -> Monday (1) [diff 3]: Valid weekend grace
   if (diffDays === 3 && prevDow === 5) return true;
 
+  // Thursday (4) -> Saturday (6) [diff 2]: Missed Friday -> Returns false (Streak Breaks)
   return false;
 }
 
@@ -114,7 +115,8 @@ export function getYesterdayDateString() {
 }
 
 /**
- * Checks active streak on login. If missed, resets streak to 0 and syncs to Google Sheets immediately.
+ * Checks active streak on login. If a required weekday was missed (e.g. Thu -> Sat),
+ * resets streak to 0 and syncs to Google Sheet Column J immediately.
  */
 export function getActiveStreakCount() {
   if (!state.profile) return 0;
