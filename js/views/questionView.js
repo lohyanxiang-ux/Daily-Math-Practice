@@ -319,6 +319,7 @@ export function renderQuestionView(container, options = {}) {
       </div>
     `;
 
+    // ✅ FIXED: Construct summaryData and pass it into options.onExit(summaryData)
     topNav.querySelector("#btn-top-exit")?.addEventListener("click", () => {
       cleanupListeners();
       flushMasterySync();
