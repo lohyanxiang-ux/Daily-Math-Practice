@@ -16,7 +16,7 @@ function parseYearNumber(val) {
 }
 
 /**
- * Normalizes any date input (Date object, ISO string, etc.) into a clean YYYY-MM-DD string
+ * Normalizes date inputs (Date objects, ISO strings, timestamp strings) into local YYYY-MM-DD
  */
 function normalizeDateStr(dateVal) {
   if (!dateVal) return "";
