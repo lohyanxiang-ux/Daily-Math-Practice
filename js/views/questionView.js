@@ -97,7 +97,6 @@ export function renderQuestionView(container, options = {}) {
       delete window._originalTopNavHtml;
     }
 
-    // Instantly sync restored DOM header elements with latest state values
     if (typeof window.renderTopNav === "function") {
       window.renderTopNav(state.profile);
     }
@@ -323,8 +322,23 @@ export function renderQuestionView(container, options = {}) {
     topNav.querySelector("#btn-top-exit")?.addEventListener("click", () => {
       cleanupListeners();
       flushMasterySync();
-      if (typeof options.onExit === "function") options.onExit();
-      else navigateTo("dashboard");
+
+      const summaryData = {
+        mode,
+        sessionScore,
+        totalQuestions: totalAttemptedCount,
+        questionsAttempted: totalAttemptedCount,
+        totalAttempted: totalAttemptedCount,
+        isMastered: false,
+        sessionInitialScores,
+        bonusXP: 0
+      };
+
+      if (typeof options.onExit === "function") {
+        options.onExit(summaryData);
+      } else {
+        navigateTo("dashboard");
+      }
     });
   }
 
@@ -740,6 +754,8 @@ export function renderQuestionView(container, options = {}) {
       mode,
       sessionScore,
       totalQuestions: totalQuestions === Infinity ? questionIndex : totalQuestions,
+      questionsAttempted: totalAttemptedCount,
+      totalAttempted: totalAttemptedCount,
       isMastered,
       sessionInitialScores,
       bonusXP
