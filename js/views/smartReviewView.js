@@ -151,16 +151,11 @@ export function renderSmartReviewSetup(container) {
           allowSkip: false,
           onComplete: (summary) => renderSRSSummary(container, summary, renderSetup, false),
           onExit: (summary) => {
-            // Filter out DOM event objects if passed directly
             const isEvent = summary && (typeof summary === 'object' && (summary instanceof Event || summary.target || summary.type));
             const validSummary = isEvent ? null : summary;
 
-            const attemptedPaths = validSummary && validSummary.sessionInitialScores 
-              ? Object.keys(validSummary.sessionInitialScores) 
-              : [];
-
             const totalAttempted = validSummary 
-              ? (validSummary.totalQuestions || validSummary.questionsAttempted || validSummary.totalAttempted || validSummary.answeredCount || attemptedPaths.length || 0)
+              ? (validSummary.questionsAttempted || validSummary.totalAttempted || validSummary.totalQuestions || 0)
               : 0;
 
             if (totalAttempted > 0) {
@@ -206,7 +201,7 @@ function renderSRSSummary(container, summary, onReturnToSetup, isEarlyExit = fal
   }).join("");
 
   const correctCount = safeSummary.sessionScore || 0;
-  const totalAttempted = safeSummary.totalQuestions || safeSummary.questionsAttempted || safeSummary.totalAttempted || safeSummary.answeredCount || attemptedPaths.length || 0;
+  const totalAttempted = safeSummary.questionsAttempted || safeSummary.totalAttempted || safeSummary.totalQuestions || attemptedPaths.length || 0;
   const pct = totalAttempted > 0 ? Math.round((correctCount / totalAttempted) * 100) : 0;
   const correctRateDisplay = `${correctCount}/${totalAttempted} (${pct}%)`;
 
