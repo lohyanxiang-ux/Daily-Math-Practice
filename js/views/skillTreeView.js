@@ -104,7 +104,6 @@ export function renderSkillTree(container) {
     }
   }
 
-  // Determine tag key: only skills in a different stream get OUT_OF_GRADE (purple)
   function getSkillTagKey(skill) {
     const skillStreamStr = String(skill.stream || "").trim();
     const isOtherStream = studentStream && skillStreamStr && skillStreamStr !== studentStream;
@@ -318,7 +317,7 @@ export function renderSkillTree(container) {
               </select>
             </div>
 
-            <button id="btn-tree-dashboard" style="padding: 8px 16px; border-radius: 10px; border: 1px solid #cbd5e1; font-weight: 700; background: #fff; color: #334155; cursor: pointer;">← Dashboard</button>
+            <button id="btn-tree-dashboard" style="padding: 10px 18px; border-radius: 12px; border: none; font-weight: 800; font-size: 0.90rem; background: #0f172a; color: #ffffff; cursor: pointer; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2); transition: all 0.15s ease;">🏠 Return to Dashboard</button>
           </div>
         </div>
 
