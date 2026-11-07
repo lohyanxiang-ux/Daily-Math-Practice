@@ -437,8 +437,21 @@ export function renderSkillTree(container) {
           generatorPath: selectedPath,
           targetMastery: 90,
           allowSkip: false,
-          onComplete: (summary) => renderSkillTreeSummary(container, summary, renderTree),
-          onExit: () => renderTree()
+          onComplete: (summary) => renderSkillTreeSummary(container, summary, renderTree, false),
+          onExit: (summary) => {
+            const isEvent = summary && (typeof summary === 'object' && (summary instanceof Event || summary.target || summary.type));
+            const validSummary = isEvent ? null : summary;
+
+            const totalAttempted = validSummary 
+              ? (validSummary.questionsAttempted || validSummary.totalAttempted || validSummary.totalQuestions || 0)
+              : 0;
+
+            if (totalAttempted > 0) {
+              renderSkillTreeSummary(container, validSummary, renderTree, true);
+            } else {
+              renderTree();
+            }
+          }
         });
       });
     });
@@ -447,45 +460,94 @@ export function renderSkillTree(container) {
   renderTree();
 }
 
-function renderSkillTreeSummary(container, summary, onReturnToTree) {
-  const summaryRowsHtml = Object.keys(summary.sessionInitialScores).map(path => {
+function renderSkillTreeSummary(container, summary, onReturnToTree, isEarlyExit = false) {
+  const safeSummary = summary || {};
+  const attemptedPaths = safeSummary.sessionInitialScores ? Object.keys(safeSummary.sessionInitialScores) : [];
+
+  let totalNetPoints = 0;
+  const summaryRowsHtml = attemptedPaths.map(path => {
     const skillObj = (state.curriculum || []).find(s => s.generatorPath === path) || { title: "Practice Skill" };
-    const startScore = summary.sessionInitialScores[path] || 0;
+    const startScore = safeSummary.sessionInitialScores[path] || 0;
     const currentScore = state.mastery && state.mastery[path] ? state.mastery[path].score : startScore;
     const diff = currentScore - startScore;
+    totalNetPoints += diff;
     const diffText = diff >= 0 ? `+${diff}` : `${diff}`;
     const diffColor = diff >= 0 ? "#16a34a" : "#dc2626";
 
     return `
-      <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #f8fafc; border-radius: 10px; margin-bottom: 8px; border: 1px solid #e2e8f0;">
-        <div style="font-weight: 700; color: #1e293b; font-size: 0.92rem;">${skillObj.title}</div>
-        <div style="font-weight: 800; font-size: 0.95rem; color: #0f172a;">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #ffffff; border-radius: 10px; margin-bottom: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+        <div style="font-weight: 700; color: #1e293b; font-size: 0.88rem; text-align: left; flex: 1; padding-right: 8px;">${skillObj.title}</div>
+        <div style="font-weight: 800; font-size: 0.90rem; color: #0f172a; white-space: nowrap;">
           ${startScore} ➔ <span style="color: #2563eb;">${currentScore}</span> 
-          <span style="font-size: 0.82rem; color: ${diffColor}; margin-left: 6px;">(${diffText} pts)</span>
+          <span style="font-size: 0.80rem; color: ${diffColor}; margin-left: 6px;">(${diffText} pts)</span>
         </div>
       </div>
     `;
   }).join("");
 
-  const headerTitle = summary.isMastered ? "🏆 Skill Mastered (90+ Score)!" : "💾 Practice Saved!";
+  const correctCount = safeSummary.sessionScore || 0;
+  const totalAttempted = safeSummary.questionsAttempted || safeSummary.totalAttempted || safeSummary.totalQuestions || attemptedPaths.length || 0;
+  const pct = totalAttempted > 0 ? Math.round((correctCount / totalAttempted) * 100) : 0;
+  const correctRateDisplay = `${correctCount}/${totalAttempted} (${pct}%)`;
+
+  const totalXP = (correctCount * 10) + (safeSummary.bonusXP || 0);
+  const netGainText = totalNetPoints >= 0 ? `+${totalNetPoints}` : `${totalNetPoints}`;
+  const netGainColor = totalNetPoints >= 0 ? "#16a34a" : "#dc2626";
+
+  let headerTitle = "🌳 Practice Complete!";
+  if (isEarlyExit) headerTitle = "💾 Practice Session Saved!";
+  else if (safeSummary.isMastered) headerTitle = "🏆 Skill Mastered (90+ Score)!";
 
   container.innerHTML = `
-    <div class="card" style="max-width: 540px; margin: 40px auto; text-align: center; padding: 32px; background: #ffffff; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
-      <h2 style="color: #0f172a; margin: 0 0 8px 0; font-size: 1.6rem;">${headerTitle}</h2>
-      <p style="color: #64748b; margin: 0 0 20px 0; font-size: 0.95rem;">Your updated mastery score has been saved.</p>
-      
-      <div style="margin-bottom: 24px; text-align: left;">
-        <div style="font-size: 0.85rem; font-weight: 700; color: #475569; margin-bottom: 8px;">Mastery Summary:</div>
-        ${summaryRowsHtml || '<div style="color: #64748b; font-size: 0.88rem;">Skill practice complete.</div>'}
-      </div>
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100dvh - 80px); padding: 16px; box-sizing: border-box; background: #f8fafc;">
+      <div class="card" style="max-width: 520px; width: 100%; background: #ffffff; border-radius: 20px; padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box; display: flex; flex-direction: column; text-align: center;">
+        
+        <!-- HEADER -->
+        <div style="flex: 0 0 auto; margin-bottom: 14px;">
+          <h2 style="color: #0f172a; margin: 0 0 6px 0; font-size: 1.5rem; font-weight: 800;">
+            ${headerTitle}
+          </h2>
+          <p style="color: #64748b; margin: 0; font-size: 0.88rem; font-weight: 600;">
+            ${isEarlyExit ? `You completed ${totalAttempted} ${totalAttempted === 1 ? 'question' : 'questions'} before saving. Here is your summary:` : 'Great job building your skill mastery!'}
+          </p>
+        </div>
 
-      <div style="display: flex; gap: 10px;">
-        <button id="btn-tree-summary-tree" type="button" style="flex: 1; padding: 14px; background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 0.95rem; font-weight: 700; cursor: pointer;">
-          Back to Skill Tree
-        </button>
-        <button id="btn-tree-summary-dash" type="button" style="flex: 1; padding: 14px; background: #2563eb; color: #ffffff; border: none; border-radius: 12px; font-size: 0.95rem; font-weight: 700; cursor: pointer;">
-          Dashboard
-        </button>
+        <!-- KEY STATS FEEDBACK BAR -->
+        <div style="flex: 0 0 auto; display: flex; gap: 8px; justify-content: center; margin-bottom: 16px; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 100px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 8px 10px;">
+            <div style="font-size: 0.70rem; font-weight: 700; color: #1e40af; text-transform: uppercase;">Correct Rate</div>
+            <div style="font-size: 0.98rem; font-weight: 800; color: #1d4ed8;">${correctRateDisplay}</div>
+          </div>
+
+          <div style="flex: 1; min-width: 90px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 8px 10px;">
+            <div style="font-size: 0.70rem; font-weight: 700; color: #166534; text-transform: uppercase;">XP Earned</div>
+            <div style="font-size: 0.98rem; font-weight: 800; color: #15803d;">+${totalXP} XP</div>
+          </div>
+
+          <div style="flex: 1; min-width: 90px; background: #fefce8; border: 1px solid #fef08a; border-radius: 10px; padding: 8px 10px;">
+            <div style="font-size: 0.70rem; font-weight: 700; color: #854d0e; text-transform: uppercase;">Net Mastery</div>
+            <div style="font-size: 0.98rem; font-weight: 800; color: ${netGainColor};">${netGainText} pts</div>
+          </div>
+        </div>
+
+        <!-- ACTION BUTTONS -->
+        <div style="flex: 0 0 auto; display: flex; gap: 10px; width: 100%; margin-bottom: 16px;">
+          <button id="btn-tree-summary-tree" type="button" style="flex: 1; padding: 12px; background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 0.90rem; font-weight: 800; cursor: pointer;">
+            🗺️ Back to Skill Tree
+          </button>
+          <button id="btn-tree-summary-dash" type="button" style="flex: 1; padding: 12px; background: #0f172a; color: #ffffff; border: none; border-radius: 12px; font-size: 0.90rem; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(15,23,42,0.2);">
+            🏠 Dashboard
+          </button>
+        </div>
+
+        <!-- TOPICS LIST -->
+        <div style="flex: 1 1 0px; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; background: #f8fafc;">
+          <div style="font-size: 0.82rem; font-weight: 800; color: #475569; margin-bottom: 8px; text-align: left;">
+            📈 Attempted Skill Mastery Progress:
+          </div>
+          ${summaryRowsHtml || '<div style="color: #64748b; font-size: 0.88rem;">No questions answered in this session.</div>'}
+        </div>
+
       </div>
     </div>
   `;
