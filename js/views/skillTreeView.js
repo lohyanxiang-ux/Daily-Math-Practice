@@ -192,6 +192,58 @@ export function renderSkillTree(container) {
     }
   }
 
+  function renderSkillCardHtml(skill) {
+    const m = (state.mastery && state.mastery[skill.generatorPath]) || { score: 0, accuracy: 0, totalAttempted: 0 };
+    
+    const prereqScore = skill.prerequisites && state.mastery && state.mastery[skill.prerequisites] 
+      ? (state.mastery[skill.prerequisites].score || 0) 
+      : 100;
+    const isPrereqLocked = skill.prerequisites ? prereqScore < 40 : false;
+    
+    const skillStreamStr = String(skill.stream || "").trim();
+    const isOtherStream = studentStream && skillStreamStr && skillStreamStr !== studentStream;
+
+    const cardCfg = getSkillCardStyle(skill, isOtherStream);
+    const meta = getMasteryMetadata(m.score || 0);
+
+    return `
+      <div style="${cardCfg.cardStyle} border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.15s ease;">
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: wrap;">
+            <span style="${cardCfg.badgeStyle} padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; font-weight: 800;">
+              ${cardCfg.badgeText}
+            </span>
+            <span style="${meta.badgeCss} padding: 3px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+              ${meta.tierName} • <strong>${meta.score}</strong>/100
+            </span>
+          </div>
+
+          <h4 style="font-size: 1.02rem; color: #0f172a; margin: 0 0 6px 0; font-weight: 800; line-height: 1.35;">${skill.title}</h4>
+          
+          <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
+            <span style="background: #e2e8f0; color: #334155; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 6px;">
+              ${skill.year || skill.level || ''} • ${skill.stream || ''}
+            </span>
+            <span style="font-size: 0.78rem; color: #64748b; font-weight: 600;">
+              ${skill.strand || ''}
+            </span>
+          </div>
+
+          <div style="font-size: 0.8rem; color: #64748b;">
+            Accuracy: <strong>${m.accuracy || 0}%</strong> (${m.totalAttempted || 0} attempted)
+          </div>
+        </div>
+
+        <button class="btn-launch-skill" data-path="${skill.generatorPath}" style="
+          margin-top: 14px; padding: 10px; border-radius: 10px; border: none; font-weight: 700; cursor: pointer;
+          ${cardCfg.btnStyle}
+        ">
+          ${isPrereqLocked ? '🔒 Prerequisites Locked' : cardCfg.btnText}
+        </button>
+      </div>
+    `;
+  }
+
   function renderTree() {
     const filtered = getFilteredCurriculum();
 
@@ -203,6 +255,29 @@ export function renderSkillTree(container) {
     });
 
     const isViewingDefaultGrade = selectedYear === studentYear && selectedStream === studentStream;
+
+    let topicGroupsHtml = '';
+    const topicKeys = Object.keys(groupedByTopic);
+    
+    if (topicKeys.length === 0) {
+      topicGroupsHtml = `
+        <div style="background: #fff; padding: 40px; text-align: center; border-radius: 16px; color: #64748b; border: 1px solid #e2e8f0;">
+          No active skills match your current search and tag filter criteria.
+        </div>
+      `;
+    } else {
+      topicGroupsHtml = Object.entries(groupedByTopic).map(([topicName, skills]) => `
+        <div style="background: #ffffff; padding: 20px; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
+          <h3 style="font-size: 1.15rem; margin: 0 0 14px 0; color: #0f172a; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; font-weight: 800;">
+            📂 ${topicName} (${skills.length} Skills)
+          </h3>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px;">
+            ${skills.map(renderSkillCardHtml).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
 
     container.innerHTML = `
       <div style="display: flex; flex-direction: column; height: 100%; padding: 16px; gap: 16px; overflow-y: auto; box-sizing: border-box; background: #f8fafc;">
@@ -304,71 +379,7 @@ export function renderSkillTree(container) {
 
         <!-- TOPIC GROUPS -->
         <div style="display: flex; flex-direction: column; gap: 20px;">
-          ${Object.keys(groupedByTopic).length === 0 ? `
-            <div style="background: #fff; padding: 40px; text-align: center; border-radius: 16px; color: #64748b; border: 1px solid #e2e8f0;">
-              No active skills match your current search and tag filter criteria.
-            </div>
-          ` : Object.entries(groupedByTopic).map(([topicName, skills]) => `
-            <div style="background: #ffffff; padding: 20px; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
-              <h3 style="font-size: 1.15rem; margin: 0 0 14px 0; color: #0f172a; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; font-weight: 800;">
-                📂 ${topicName} (${skills.length} Skills)
-              </h3>
-
-              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px;">
-                ${skills.map(skill => {
-                  const m = (state.mastery && state.mastery[skill.generatorPath]) || { score: 0, accuracy: 0, totalAttempted: 0 };
-                  
-                  const prereqScore = skill.prerequisites && state.mastery && state.mastery[skill.prerequisites] 
-                    ? (state.mastery[skill.prerequisites].score || 0) 
-                    : 100;
-                  const isPrereqLocked = skill.prerequisites ? prereqScore < 40 : false;
-                  
-                  const skillStreamStr = String(skill.stream || "").trim();
-                  const isOtherStream = studentStream && skillStreamStr && skillStreamStr !== studentStream;
-
-                  const cardCfg = getSkillCardStyle(skill, isOtherStream);
-                  const meta = getMasteryMetadata(m.score || 0);
-
-                  return `
-                    <div style="${cardCfg.cardStyle} border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.15s ease;">
-                      <div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: wrap;">
-                          <span style="${cardCfg.badgeStyle} padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; font-weight: 800;">
-                            ${cardCfg.badgeText}
-                          </span>
-                          <span style="${meta.badgeCss} padding: 3px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
-                            ${meta.tierName} • <strong>${meta.score}</strong>/100
-                          </span>
-                        </div>
-
-                        <h4 style="font-size: 1.02rem; color: #0f172a; margin: 0 0 6px 0; font-weight: 800; line-height: 1.35;">${skill.title}</h4>
-                        
-                        <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
-                          <span style="background: #e2e8f0; color: #334155; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 6px;">
-                            ${skill.year || skill.level || ''} • ${skill.stream || ''}
-                          </span>
-                          <span style="font-size: 0.78rem; color: #64748b; font-weight: 600;">
-                            ${skill.strand || ''}
-                          </span>
-                        </div>
-
-                        <div style="font-size: 0.8rem; color: #64748b;">
-                          Accuracy: <strong>${m.accuracy || 0}%</strong> (${m.totalAttempted || 0} attempted)
-                        </div>
-                      </div>
-
-                      <button class="btn-launch-skill" data-path="${skill.generatorPath}" style="
-                        margin-top: 14px; padding: 10px; border-radius: 10px; border: none; font-weight: 700; cursor: pointer;
-                        ${cardCfg.btnStyle}
-                      ">
-                        ${isPrereqLocked ? '🔒 Prerequisites Locked' : cardCfg.btnText}
-                      </button>
-                    </div>
-                  `;
-                }).join('')}
-              </div>
-            </div>
-          `).join('')}
+          ${topicGroupsHtml}
         </div>
       </div>
     `;
@@ -483,4 +494,3 @@ function renderSkillTreeSummary(container, summary, onReturnToTree) {
   container.querySelector("#btn-tree-summary-tree")?.addEventListener("click", () => onReturnToTree());
   container.querySelector("#btn-tree-summary-dash")?.addEventListener("click", () => navigateTo("dashboard"));
 }
-```[cite: 15]
