@@ -16,7 +16,7 @@ function parseYearNumber(val) {
 }
 
 /**
- * Normalizes date inputs (Date objects, ISO strings, or space-separated dates) into YYYY-MM-DD
+ * Normalizes all date inputs (Date objects, ISO strings, YYYY-MM-DD, M/D/YYYY) into YYYY-MM-DD
  */
 function normalizeDateStr(dateVal) {
   if (!dateVal) return "";
@@ -26,9 +26,68 @@ function normalizeDateStr(dateVal) {
     const d = String(dateVal.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   }
+  
   const str = String(dateVal).trim();
-  const match = str.match(/\d{4}-\d{2}-\d{2}/);
-  return match ? match[0] : str;
+  
+  // Handle ISO or YYYY-MM-DD / YYYY/MM/DD
+  const isoMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${String(isoMatch[2]).padStart(2, '0')}-${String(isoMatch[3]).padStart(2, '0')}`;
+  }
+
+  // Handle M/D/YYYY or MM/DD/YYYY
+  const usMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (usMatch) {
+    return `${usMatch[3]}-${String(usMatch[1]).padStart(2, '0')}-${String(usMatch[2]).padStart(2, '0')}`;
+  }
+
+  return str;
+}
+
+/**
+ * Calculates exact calendar day difference between two YYYY-MM-DD strings using UTC Date objects
+ */
+function getDaysBetween(dateStr1, dateStr2) {
+  if (!dateStr1 || !dateStr2) return null;
+  const [y1, m1, d1] = dateStr1.split('-').map(Number);
+  const [y2, m2, d2] = dateStr2.split('-').map(Number);
+  
+  const utc1 = Date.UTC(y1, m1 - 1, d1);
+  const utc2 = Date.UTC(y2, m2 - 1, d2);
+  
+  return Math.round((utc2 - utc1) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Returns Day of Week index (0 = Sunday, 1 = Monday, ..., 5 = Friday, 6 = Saturday)
+ */
+function getDayOfWeek(dateStr) {
+  if (!dateStr) return null;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+/**
+ * Evaluates whether a streak is continued based on calendar gap and weekend grace rules
+ */
+function isStreakContinuation(prevDateStr, todayStr) {
+  if (!prevDateStr || !todayStr) return false;
+  
+  const diffDays = getDaysBetween(prevDateStr, todayStr);
+  if (diffDays === 0 || diffDays === 1) return true; // Same day or consecutive day
+
+  const prevDow = getDayOfWeek(prevDateStr); // 0 = Sun, 1 = Mon, 5 = Fri, 6 = Sat
+
+  // Friday -> Sunday (skipped Saturday)
+  if (diffDays === 2 && prevDow === 5) return true;
+
+  // Saturday -> Monday (skipped Sunday)
+  if (diffDays === 2 && prevDow === 6) return true;
+
+  // Friday -> Monday (skipped Saturday & Sunday)
+  if (diffDays === 3 && prevDow === 5) return true;
+
+  return false;
 }
 
 /**
@@ -55,18 +114,41 @@ export function getYesterdayDateString() {
 }
 
 /**
- * Returns active streak count, resetting to 0 if 1+ days were missed
+ * Checks active streak on login. If missed, resets streak to 0 and syncs to Google Sheets immediately.
  */
 export function getActiveStreakCount() {
   if (!state.profile) return 0;
   const lastDateClean = normalizeDateStr(state.profile.lastDailyQuestDate);
   const todayStr = getTodayDateString();
-  const yesterdayStr = getYesterdayDateString();
 
-  if (lastDateClean === todayStr || lastDateClean === yesterdayStr) {
+  if (!lastDateClean) {
+    if (state.profile.streakCount !== 0) {
+      state.profile.streakCount = 0;
+      if (state.userToken) {
+        syncUserProgress(state.userToken, state.profile.xp, 0, "");
+      }
+    }
+    return 0;
+  }
+
+  // Check if current streak is still active
+  if (isStreakContinuation(lastDateClean, todayStr)) {
     return state.profile.streakCount || 0;
   }
-  
+
+  // Streak missed: Reset to 0 upon login and sync to Google Sheet Column J
+  if (state.profile.streakCount !== 0) {
+    state.profile.streakCount = 0;
+    if (state.userToken) {
+      syncUserProgress(
+        state.userToken,
+        state.profile.xp,
+        0,
+        state.profile.lastDailyQuestDate
+      );
+    }
+  }
+
   return 0;
 }
 
@@ -78,45 +160,38 @@ export function isDailyQuestCompletedToday() {
   const todayStr = getTodayDateString();
   const lastDateClean = normalizeDateStr(state.profile?.lastDailyQuestDate);
   
-  // Single Source of Truth: Matches today's date against Column L (LastDailyQuestDate)
   return lastDateClean === todayStr;
 }
 
 /**
- * Marks today's Daily Quest as completed, calculates streak progression, and updates Column L in Google Sheets
+ * Marks today's Daily Quest as completed:
+ * - If streak was 0 (reset on login), sets streak to 1.
+ * - If streak was active, increments streak count (+1).
+ * - Writes new streak and today's date to Google Sheet Columns J & L.
  */
 export function markDailyQuestCompletedToday() {
   const todayStr = getTodayDateString();
 
   if (!state.profile) state.profile = {};
 
-  const lastDateClean = normalizeDateStr(state.profile.lastDailyQuestDate);
+  const previousDateClean = normalizeDateStr(state.profile.lastDailyQuestDate);
 
-  if (lastDateClean === todayStr) {
-    // Retain streak if completed again today
+  if (previousDateClean === todayStr) {
+    // Retain streak if completed again on the same day
     state.profile.streakCount = Math.max(state.profile.streakCount || 1, 1);
-  } else if (lastDateClean) {
-    const todayDateObj = new Date(todayStr);
-    const lastDateObj = new Date(lastDateClean);
-    const diffTime = todayDateObj.getTime() - lastDateObj.getTime();
-    const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
-
-    if (diffDays === 1) {
-      // Completed on consecutive day: Increment streak
-      state.profile.streakCount = (state.profile.streakCount || 0) + 1;
-    } else {
-      // Missed 2+ days: Reset streak to 1
-      state.profile.streakCount = 1;
-    }
+  } else if (previousDateClean && isStreakContinuation(previousDateClean, todayStr)) {
+    // Increment active streak (+1)
+    const currentVal = Number(state.profile.streakCount) || 0;
+    state.profile.streakCount = currentVal > 0 ? currentVal + 1 : 1;
   } else {
-    // First daily quest completion
+    // Streak was reset to 0 or missed: Start new streak at 1
     state.profile.streakCount = 1;
   }
 
   // Update memory state for Column L
   state.profile.lastDailyQuestDate = todayStr;
 
-  // Sync updated streak and new LastDailyQuestDate (today's date) directly to Column L in Google Sheets
+  // Sync updated streak count (Column J) and today's date (Column L) to Google Sheets
   if (state.userToken) {
     syncUserProgress(
       state.userToken,
