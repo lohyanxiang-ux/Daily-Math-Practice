@@ -89,6 +89,7 @@ export function renderSkillTree(container) {
   let searchQuery = "";
 
   const activeTagFilters = {
+    PRIORITY: true,
     CURRENT: true,
     PAST: true,
     FUTURE: true,
@@ -111,6 +112,7 @@ export function renderSkillTree(container) {
     if (isOtherStream) return "OUT_OF_GRADE";
 
     const resolvedTag = String(resolveSkillTag(skill, studentClass || studentYear)).toUpperCase();
+    if (resolvedTag === "PRIORITY") return "PRIORITY";
     if (resolvedTag === "CURRENT") return "CURRENT";
     if (resolvedTag === "PAST") return "PAST";
     return "FUTURE";
@@ -155,7 +157,15 @@ export function renderSkillTree(container) {
     const resolvedTag = resolveSkillTag(skill, studentClass || studentYear);
     const t = String(resolvedTag).toUpperCase();
 
-    if (t === "CURRENT") {
+    if (t === "PRIORITY") {
+      return {
+        cardStyle: "background: #fff7ed; border: 2px solid #ea580c; box-shadow: 0 4px 12px rgba(234, 88, 12, 0.12);",
+        btnText: "Practice Priority Skill ➔",
+        btnStyle: "background: #ea580c; color: #ffffff;",
+        badgeText: "🔥 Priority Skill",
+        badgeStyle: "background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa;"
+      };
+    } else if (t === "CURRENT") {
       return {
         cardStyle: "background: #f0fdf4; border: 2px solid #22c55e; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.12);",
         btnText: "Practice Current Skill ➔",
@@ -241,6 +251,16 @@ export function renderSkillTree(container) {
         <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: #ffffff; padding: 12px 20px; border-radius: 14px; border: 1px solid #e2e8f0; font-size: 0.85rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
           <span style="font-weight: 800; color: #0f172a; margin-right: 4px;">Filter by Tag:</span>
           
+          <button class="btn-legend-toggle ${activeTagFilters.PRIORITY ? 'active' : ''}" data-tag-key="PRIORITY" style="
+            display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 10px; cursor: pointer; user-select: none; transition: all 0.15s ease;
+            ${activeTagFilters.PRIORITY 
+              ? 'background: #ffedd5; color: #c2410c; border: 1.5px solid #ea580c; font-weight: 800;' 
+              : 'background: #f1f5f9; color: #94a3b8; border: 1.5px solid #cbd5e1; font-weight: 600; opacity: 0.55; text-decoration: line-through;'}
+          ">
+            <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${activeTagFilters.PRIORITY ? '#ea580c' : '#cbd5e1'};"></span>
+            Priority Skill
+          </button>
+
           <button class="btn-legend-toggle ${activeTagFilters.CURRENT ? 'active' : ''}" data-tag-key="CURRENT" style="
             display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 10px; cursor: pointer; user-select: none; transition: all 0.15s ease;
             ${activeTagFilters.CURRENT 
@@ -463,3 +483,4 @@ function renderSkillTreeSummary(container, summary, onReturnToTree) {
   container.querySelector("#btn-tree-summary-tree")?.addEventListener("click", () => onReturnToTree());
   container.querySelector("#btn-tree-summary-dash")?.addEventListener("click", () => navigateTo("dashboard"));
 }
+```[cite: 15]
