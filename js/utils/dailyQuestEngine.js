@@ -16,6 +16,22 @@ function parseYearNumber(val) {
 }
 
 /**
+ * Normalizes any date input (Date object, ISO string, etc.) into a clean YYYY-MM-DD string
+ */
+function normalizeDateStr(dateVal) {
+  if (!dateVal) return "";
+  if (dateVal instanceof Date) {
+    const y = dateVal.getFullYear();
+    const m = String(dateVal.getMonth() + 1).padStart(2, '0');
+    const d = String(dateVal.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const str = String(dateVal).trim();
+  const match = str.match(/\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : str;
+}
+
+/**
  * Returns today's date string in local YYYY-MM-DD format
  */
 export function getTodayDateString() {
@@ -43,11 +59,11 @@ export function getYesterdayDateString() {
  */
 export function getActiveStreakCount() {
   if (!state.profile) return 0;
-  const lastDate = state.profile.lastDailyQuestDate;
+  const lastDateClean = normalizeDateStr(state.profile.lastDailyQuestDate);
   const todayStr = getTodayDateString();
   const yesterdayStr = getYesterdayDateString();
 
-  if (lastDate === todayStr || lastDate === yesterdayStr) {
+  if (lastDateClean === todayStr || lastDateClean === yesterdayStr) {
     return state.profile.streakCount || 0;
   }
   
@@ -60,8 +76,9 @@ export function getActiveStreakCount() {
 export function isDailyQuestCompletedToday() {
   const todayStr = getTodayDateString();
   const userKey = state.profile?.email || state.profile?.studentEmail || state.profile?.displayName || "guest";
+  const lastDateClean = normalizeDateStr(state.profile?.lastDailyQuestDate);
 
-  if (state.profile?.lastDailyQuestDate === todayStr) {
+  if (lastDateClean === todayStr) {
     return true;
   }
 
@@ -78,18 +95,30 @@ export function isDailyQuestCompletedToday() {
  */
 export function markDailyQuestCompletedToday() {
   const todayStr = getTodayDateString();
-  const yesterdayStr = getYesterdayDateString();
   const userKey = state.profile?.email || state.profile?.studentEmail || state.profile?.displayName || "guest";
 
   if (!state.profile) state.profile = {};
 
-  const lastDate = state.profile.lastDailyQuestDate;
+  const lastDateClean = normalizeDateStr(state.profile.lastDailyQuestDate);
 
-  if (lastDate === todayStr) {
-    // Retain active streak
-  } else if (lastDate === yesterdayStr) {
-    state.profile.streakCount = (state.profile.streakCount || 0) + 1;
+  if (lastDateClean === todayStr) {
+    // Retain active streak if completed again today
+    state.profile.streakCount = Math.max(state.profile.streakCount || 1, 1);
+  } else if (lastDateClean) {
+    const todayDateObj = new Date(todayStr);
+    const lastDateObj = new Date(lastDateClean);
+    const diffTime = todayDateObj.getTime() - lastDateObj.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
+
+    if (diffDays === 1) {
+      // Completed on consecutive day
+      state.profile.streakCount = (state.profile.streakCount || 0) + 1;
+    } else {
+      // Missed 2+ days
+      state.profile.streakCount = 1;
+    }
   } else {
+    // First daily quest completion
     state.profile.streakCount = 1;
   }
 
