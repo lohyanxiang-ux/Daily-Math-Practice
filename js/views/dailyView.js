@@ -2,6 +2,7 @@ import { state } from "../state.js";
 import { renderQuestionView } from "./questionView.js";
 import { buildDailyQuestQueue, markDailyQuestCompletedToday } from "../utils/dailyQuestEngine.js";
 import { navigateTo } from "../router.js";
+import { renderTopNav } from "../app.js";
 
 export function renderDailyPractice(container, params = {}) {
   let dailyQueue = Array.isArray(params.queue) && params.queue.length > 0
@@ -19,6 +20,11 @@ export function renderDailyPractice(container, params = {}) {
     allowSkip: true,
     onComplete: (summary) => {
       markDailyQuestCompletedToday();
+      if (typeof window.renderTopNav === "function") {
+        window.renderTopNav(state.profile);
+      } else {
+        renderTopNav(state.profile);
+      }
       renderDailyQuestSummary(container, summary);
     },
     onExit: () => navigateTo("dashboard")
