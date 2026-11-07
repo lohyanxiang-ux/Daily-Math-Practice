@@ -16,7 +16,7 @@ function parseYearNumber(val) {
 }
 
 /**
- * Normalizes date inputs (Date objects, ISO strings, timestamp strings) into local YYYY-MM-DD
+ * Normalizes date inputs (Date objects, ISO strings, or space-separated dates) into YYYY-MM-DD
  */
 function normalizeDateStr(dateVal) {
   if (!dateVal) return "";
@@ -71,38 +71,29 @@ export function getActiveStreakCount() {
 }
 
 /**
- * Checks if the student completed today's Daily Quest (Cross-device capable)
+ * Checks if the student completed today's Daily Quest strictly by comparing today's date
+ * with Column L (LastDailyQuestDate) from the Google Sheet Roster table.
  */
 export function isDailyQuestCompletedToday() {
   const todayStr = getTodayDateString();
-  const userKey = state.profile?.email || state.profile?.studentEmail || state.profile?.displayName || "guest";
   const lastDateClean = normalizeDateStr(state.profile?.lastDailyQuestDate);
-
-  if (lastDateClean === todayStr) {
-    return true;
-  }
-
-  if (state.dailySession?.lastCompletedDate === todayStr || state.dailySession?.completedToday) {
-    return true;
-  }
-
-  const savedDate = localStorage.getItem(`daily_quest_date_${userKey}`);
-  return savedDate === todayStr;
+  
+  // Single Source of Truth: Matches today's date against Column L (LastDailyQuestDate)
+  return lastDateClean === todayStr;
 }
 
 /**
- * Marks today's Daily Quest as completed, calculates streak progression, and syncs to backend
+ * Marks today's Daily Quest as completed, calculates streak progression, and updates Column L in Google Sheets
  */
 export function markDailyQuestCompletedToday() {
   const todayStr = getTodayDateString();
-  const userKey = state.profile?.email || state.profile?.studentEmail || state.profile?.displayName || "guest";
 
   if (!state.profile) state.profile = {};
 
   const lastDateClean = normalizeDateStr(state.profile.lastDailyQuestDate);
 
   if (lastDateClean === todayStr) {
-    // Retain active streak if completed again today
+    // Retain streak if completed again today
     state.profile.streakCount = Math.max(state.profile.streakCount || 1, 1);
   } else if (lastDateClean) {
     const todayDateObj = new Date(todayStr);
@@ -111,10 +102,10 @@ export function markDailyQuestCompletedToday() {
     const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
 
     if (diffDays === 1) {
-      // Completed on consecutive day
+      // Completed on consecutive day: Increment streak
       state.profile.streakCount = (state.profile.streakCount || 0) + 1;
     } else {
-      // Missed 2+ days
+      // Missed 2+ days: Reset streak to 1
       state.profile.streakCount = 1;
     }
   } else {
@@ -122,13 +113,10 @@ export function markDailyQuestCompletedToday() {
     state.profile.streakCount = 1;
   }
 
+  // Update memory state for Column L
   state.profile.lastDailyQuestDate = todayStr;
-  localStorage.setItem(`daily_quest_date_${userKey}`, todayStr);
 
-  if (!state.dailySession) state.dailySession = {};
-  state.dailySession.lastCompletedDate = todayStr;
-  state.dailySession.completedToday = true;
-
+  // Sync updated streak and new LastDailyQuestDate (today's date) directly to Column L in Google Sheets
   if (state.userToken) {
     syncUserProgress(
       state.userToken,
@@ -140,9 +128,7 @@ export function markDailyQuestCompletedToday() {
 }
 
 /**
- * Builds a 5-question Daily Quest queue based on strict rules:
- * 1. Must match the student's current stream (e.g., G3).
- * 2. Must ONLY be Past or Current skills (Future skills & out-of-stream skills are strictly excluded).
+ * Builds a 5-question Daily Quest queue based on stream and current/past unit rules
  */
 export function buildDailyQuestQueue(userState = state) {
   const curriculum = userState.curriculum || [];
@@ -160,13 +146,13 @@ export function buildDailyQuestQueue(userState = state) {
   curriculum.forEach((skill) => {
     const path = skill.generatorPath;
 
-    // RULE 1: STREAM MATCHING - Exclude skills from other streams
+    // RULE 1: STREAM MATCHING
     const skillStream = String(skill.stream || "").trim().toUpperCase();
     if (studentStream && skillStream && skillStream !== studentStream) {
       return;
     }
 
-    // RESOLVE SKILL TAG: Check explicit teacher tag or fallback to year comparison
+    // RESOLVE SKILL TAG
     let rawTag = skillTags[path];
     if (!rawTag) {
       const skillYearNum = parseYearNumber(skill.year || skill.level);
@@ -179,7 +165,7 @@ export function buildDailyQuestQueue(userState = state) {
 
     const tag = String(rawTag).toUpperCase();
 
-    // RULE 2: STRICT TAG MATCHING - Only allow CURRENT or PAST (strictly exclude FUTURE)
+    // RULE 2: STRICT TAG MATCHING (Only allow CURRENT or PAST)
     if (tag !== "CURRENT" && tag !== "PAST") {
       return;
     }
@@ -216,7 +202,7 @@ export function buildDailyQuestQueue(userState = state) {
     }
   }
 
-  // 2. Pick up to 2 questions from SAME STREAM + PAST skills for spaced repetition
+  // 2. Pick up to 2 questions from SAME STREAM + PAST skills
   for (const item of shuffle(pastTopicPool)) {
     if (selectedQueue.length < 5 && !usedPaths.has(item.generatorPath)) {
       selectedQueue.push(item);
@@ -224,7 +210,7 @@ export function buildDailyQuestQueue(userState = state) {
     }
   }
 
-  // 3. Fallback fill remaining slots from any eligible SAME STREAM (Past/Current) skills
+  // 3. Fallback fill remaining slots
   for (const item of shuffle(fallbackEligiblePool)) {
     if (selectedQueue.length < 5 && !usedPaths.has(item.generatorPath)) {
       selectedQueue.push(item);
