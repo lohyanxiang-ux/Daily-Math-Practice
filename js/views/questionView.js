@@ -45,7 +45,6 @@ export function renderQuestionView(container, options = {}) {
   const totalQuestions = options.maxQuestions || (isDailyQuest ? 5 : (isSRS ? queue.length || 4 : Infinity));
   const targetMastery = options.targetMastery || 90;
 
-  // Dynamic Target Score Resolution (Supports options.targetScore, options.targetVal, or live session target)
   let currentLiveTargetScore = options.targetScore || options.targetVal || options.targetScoreVal || null;
 
   let questionIndex = 0;
@@ -91,10 +90,16 @@ export function renderQuestionView(container, options = {}) {
       clearInterval(liveSessionCheckTimer);
       liveSessionCheckTimer = null;
     }
+
     const topNav = document.querySelector(".top-nav");
     if (topNav && window._originalTopNavHtml) {
       topNav.innerHTML = window._originalTopNavHtml;
       delete window._originalTopNavHtml;
+    }
+
+    // Instantly sync restored DOM header elements with latest state values
+    if (typeof window.renderTopNav === "function") {
+      window.renderTopNav(state.profile);
     }
   }
 
@@ -310,7 +315,7 @@ export function renderQuestionView(container, options = {}) {
           🎯 Mastery <b id="top-nav-mastery-val">${currentMastery}</b>
         </span>
         <span class="stat">XP <b id="top-nav-xp-val">${userXp}</b></span>
-        <span class="stat">Streak <b>${userStreak}</b> 🔥</span>
+        <span class="stat">Streak <b id="top-nav-streak-val">${userStreak}</b> 🔥</span>
         <span style="font-size: 0.85rem; font-weight: 700; color: #475569; background: #f1f5f9; padding: 4px 10px; border-radius: 8px;">${displayName}</span>
       </div>
     `;
@@ -722,8 +727,6 @@ export function renderQuestionView(container, options = {}) {
     const bonusXP = (!isSkillTree && !isLiveSession && sessionScore === totalQuestions) ? 20 : 0;
     if (bonusXP > 0) {
       addXP(bonusXP);
-      const topXpEl = document.querySelector("#top-nav-xp-val");
-      if (topXpEl && state.profile) topXpEl.innerText = state.profile.xp;
     }
 
     if (state.userToken) {
