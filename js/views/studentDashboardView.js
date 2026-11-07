@@ -1,6 +1,11 @@
 import { state } from "../state.js";
 import { navigateTo } from "../router.js";
-import { isDailyQuestCompletedToday } from "../utils/dailyQuestEngine.js";
+import { 
+  isDailyQuestCompletedToday, 
+  checkStreakStatus, 
+  preserveStreakWithXP, 
+  declineStreakPreservation 
+} from "../utils/dailyQuestEngine.js";
 import { renderQuestionView } from "./questionView.js";
 
 const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbwEsVnKapmwUFuv0vyG1wFvyAXoFKQMrpsNxibUqYh891PHXzFgmBThnT62lGoEPo_xiQ/exec";
@@ -29,13 +34,11 @@ export async function renderStudentDashboard(container) {
 
   let activeLiveSession = null;
 
-  // Stop any existing poll timer when re-rendering
   if (studentLivePollTimer) {
     clearInterval(studentLivePollTimer);
     studentLivePollTimer = null;
   }
 
-  // Helper to fetch live session data with authorization token
   async function checkLiveSession() {
     if (!studentClass) return null;
     try {
@@ -58,7 +61,6 @@ export async function renderStudentDashboard(container) {
     return null;
   }
 
-  // Initial Check
   activeLiveSession = await checkLiveSession();
 
   function renderUI() {
@@ -193,6 +195,106 @@ export async function renderStudentDashboard(container) {
     `;
 
     bindEvents();
+    checkAndDisplayStreakBrokenBanner();
+  }
+
+  function checkAndDisplayStreakBrokenBanner() {
+    const streakStatus = checkStreakStatus();
+    if (!streakStatus.isBroken || state.streakRepairHandled) return;
+
+    const existingModal = document.querySelector("#streak-repair-modal-overlay");
+    if (existingModal) existingModal.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "streak-repair-modal-overlay";
+    overlay.style.cssText = `
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(6px);
+      z-index: 99999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      box-sizing: border-box;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    overlay.innerHTML = `
+      <div style="
+        background: #ffffff;
+        border-radius: 24px;
+        max-width: 440px;
+        width: 100%;
+        padding: 28px 24px;
+        text-align: center;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25);
+        border: 2px solid #f97316;
+        box-sizing: border-box;
+      ">
+        <div style="font-size: 3.5rem; margin-bottom: 8px; line-height: 1;">🔥💔</div>
+        
+        <h3 style="margin: 0 0 8px 0; font-size: 1.5rem; font-weight: 800; color: #0f172a;">Streak Broken!</h3>
+        
+        <p style="margin: 0 0 16px 0; font-size: 0.95rem; color: #475569; line-height: 1.5;">
+          You missed a daily quest! Your <strong>${streakStatus.previousStreak}-day streak</strong> will reset to 0 unless you preserve it.
+        </p>
+
+        <div style="background: #fff7ed; border: 1px solid #ffedd5; border-radius: 12px; padding: 12px; margin-bottom: 20px; color: #c2410c; font-size: 0.9rem; font-weight: 700; display: flex; justify-content: space-between; align-items: center;">
+          <span>💰 Your Balance:</span>
+          <span style="font-size: 1rem; color: #9a3412;">${streakStatus.userXp} XP</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <button id="btn-preserve-streak" type="button" style="
+            width: 100%;
+            padding: 14px;
+            font-size: 1rem;
+            font-weight: 800;
+            border-radius: 12px;
+            border: none;
+            box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+            transition: all 0.15s ease;
+            ${streakStatus.canAfford 
+              ? 'background: #f97316; color: #ffffff; cursor: pointer;' 
+              : 'background: #cbd5e1; color: #64748b; cursor: not-allowed;'}
+          " ${!streakStatus.canAfford ? 'disabled' : ''}>
+            ${streakStatus.canAfford ? `🛡️ Preserve Streak (-50 XP)` : `Not Enough XP (Requires 50 XP)`}
+          </button>
+
+          <button id="btn-decline-streak" type="button" style="
+            width: 100%;
+            padding: 12px;
+            font-size: 0.92rem;
+            font-weight: 700;
+            background: #f1f5f9;
+            color: #64748b;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 12px;
+            cursor: pointer;
+          ">
+            Reset Streak to 0
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    overlay.querySelector("#btn-preserve-streak")?.addEventListener("click", () => {
+      const success = preserveStreakWithXP();
+      if (success) {
+        overlay.remove();
+        renderUI();
+      }
+    });
+
+    overlay.querySelector("#btn-decline-streak")?.addEventListener("click", () => {
+      declineStreakPreservation();
+      overlay.remove();
+      renderUI();
+    });
   }
 
   function stopPolling() {
@@ -234,7 +336,6 @@ export async function renderStudentDashboard(container) {
 
   renderUI();
 
-  // Start 4-second live polling loop for instant detection
   studentLivePollTimer = setInterval(async () => {
     const freshSession = await checkLiveSession();
     const wasActive = !!activeLiveSession;
