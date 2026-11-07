@@ -247,10 +247,25 @@ export function renderQuestionView(container, options = {}) {
 
     try {
       const genModule = await loadQuestionGenerator(activeGeneratorPath);
-      return genModule.generateQuestion(tier);
+      const q = await genModule.generateQuestion(tier);
+      if (q) {
+        q.tier = q.tier || tier;
+      }
+      return q;
     } catch (err) {
       console.error(`Failed to load generator for [${activeGeneratorPath}]:`, err);
       return null;
+    }
+  }
+
+  function getTierBadgeInfo(qTier) {
+    const tierNum = Number(qTier) || 1;
+    if (tierNum === 1) {
+      return { text: "🟢 Tier 1 (Basic)", bg: "#dcfce7", color: "#166534", border: "#bbf7d0" };
+    } else if (tierNum === 2) {
+      return { text: "🟡 Tier 2 (Medium)", bg: "#fef9c3", color: "#854d0e", border: "#fef08a" };
+    } else {
+      return { text: "🔴 Tier 3 (Hard)", bg: "#fee2e2", color: "#991b1b", border: "#fecaca" };
     }
   }
 
@@ -276,11 +291,14 @@ export function renderQuestionView(container, options = {}) {
     const userXp = state.profile ? (state.profile.xp || 0) : 0;
     const userStreak = state.profile ? (state.profile.streakCount || 0) : 0;
     const currentMastery = state.mastery[activeGeneratorPath]?.score || 0;
+    
+    const tierInfo = getTierBadgeInfo(currentQuestion?.tier);
 
     topNav.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
         <button id="btn-top-exit" class="secondary-btn" style="padding: 5px 12px; font-size: 0.85rem; font-weight: 700; cursor: pointer;">${exitBtnText}</button>
         <span style="background: ${modeBadgeBg}; color: ${modeBadgeColor}; font-weight: 700; padding: 4px 10px; border-radius: 8px; font-size: 0.82rem;">${modeBadgeText}</span>
+        <span style="background: ${tierInfo.bg}; color: ${tierInfo.color}; border: 1px solid ${tierInfo.border}; font-weight: 800; padding: 4px 10px; border-radius: 8px; font-size: 0.82rem;">${tierInfo.text}</span>
       </div>
 
       <div style="font-weight: 800; color: #0f172a; font-size: 0.95rem; background: #f1f5f9; padding: 4px 14px; border-radius: 12px; border: 1px solid #e2e8f0;">
@@ -338,6 +356,7 @@ export function renderQuestionView(container, options = {}) {
 
     updateGlobalTopNav();
 
+    const tierInfo = getTierBadgeInfo(currentQuestion.tier);
     const stepsList = currentQuestion.steps || currentQuestion.hints || [];
     const diagramSvgContent = currentQuestion.diagramSvg || currentQuestion.svg || "";
     const diagramHtml = (diagramSvgContent || currentQuestion.imageUrl) ? `
@@ -353,7 +372,11 @@ export function renderQuestionView(container, options = {}) {
         <section id="left-column-workspace" style="flex: 1 1 52%; min-width: 0; display: flex; flex-direction: column; background: #ffffff; border-radius: 14px; border: 1px solid #cbd5e1; box-shadow: 0 2px 8px rgba(0,0,0,0.04); box-sizing: border-box; overflow: hidden; height: 100%;">
           
           <div class="scratchpad-toolbar" style="padding: 4px 10px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
-            <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">✏️ Scratchpad Workspace</div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">✏️ Workspace</span>
+              <span style="background: ${tierInfo.bg}; color: ${tierInfo.color}; border: 1px solid ${tierInfo.border}; font-weight: 800; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem;">${tierInfo.text}</span>
+            </div>
+            
             <div style="display: flex; gap: 6px; align-items: center;">
               <div class="tool-group" style="padding: 2px;">
                 <button class="tool-icon-btn active" data-tool="pen" title="Pen" style="width: 26px; height: 26px; font-size: 0.78rem;">✏️</button>
