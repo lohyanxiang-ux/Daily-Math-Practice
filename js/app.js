@@ -149,7 +149,8 @@ function handleLoginSuccess(res) {
   }
 }
 
-function renderTopNav(profile) {
+export function renderTopNav(profile = state.profile) {
+  if (!profile) return;
   const nameEl = document.getElementById("nav-profile-name");
   const metaEl = document.getElementById("nav-profile-meta");
   const xpEl = document.getElementById("nav-profile-xp");
@@ -166,3 +167,5 @@ function renderTopNav(profile) {
   if (xpEl) xpEl.innerText = profile.xp || 0;
   if (streakEl) streakEl.innerText = profile.streakCount || 0;
 }
+
+window.renderTopNav = renderTopNav;
