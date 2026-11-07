@@ -16,29 +16,42 @@ function parseYearNumber(val) {
 }
 
 /**
- * Normalizes all date inputs (Date objects, ISO strings, YYYY-MM-DD, M/D/YYYY) into YYYY-MM-DD
+ * Normalizes all date inputs (Date objects, ISO strings, YYYY-MM-DD, M/D/YYYY) into local YYYY-MM-DD.
+ * Converts ISO UTC timestamps into local timezone dates to prevent Google Sheets timezone shifts.
  */
 function normalizeDateStr(dateVal) {
   if (!dateVal) return "";
+
   if (dateVal instanceof Date) {
     const y = dateVal.getFullYear();
     const m = String(dateVal.getMonth() + 1).padStart(2, '0');
     const d = String(dateVal.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   }
-  
+
   const str = String(dateVal).trim();
-  
-  // Handle ISO or YYYY-MM-DD / YYYY/MM/DD
-  const isoMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-  if (isoMatch) {
-    return `${isoMatch[1]}-${String(isoMatch[2]).padStart(2, '0')}-${String(isoMatch[3]).padStart(2, '0')}`;
+
+  // 1. ISO Timestamps containing time component (e.g., "2026-11-05T16:00:00.000Z")
+  if (str.includes('T')) {
+    const parsedDate = new Date(str);
+    if (!isNaN(parsedDate.getTime())) {
+      const y = parsedDate.getFullYear();
+      const m = String(parsedDate.getMonth() + 1).padStart(2, '0');
+      const d = String(parsedDate.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
   }
 
-  // Handle M/D/YYYY or MM/DD/YYYY
+  // 2. M/D/YYYY or MM/DD/YYYY (e.g., "11/6/2026" or "11/6/2026 10:28")
   const usMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
   if (usMatch) {
     return `${usMatch[3]}-${String(usMatch[1]).padStart(2, '0')}-${String(usMatch[2]).padStart(2, '0')}`;
+  }
+
+  // 3. Plain YYYY-MM-DD or YYYY/MM/DD
+  const plainYmd = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (plainYmd) {
+    return `${plainYmd[1]}-${String(plainYmd[2]).padStart(2, '0')}-${String(plainYmd[3]).padStart(2, '0')}`;
   }
 
   return str;
@@ -51,10 +64,10 @@ function getDaysBetween(dateStr1, dateStr2) {
   if (!dateStr1 || !dateStr2) return null;
   const [y1, m1, d1] = dateStr1.split('-').map(Number);
   const [y2, m2, d2] = dateStr2.split('-').map(Number);
-  
+
   const utc1 = Date.UTC(y1, m1 - 1, d1);
   const utc2 = Date.UTC(y2, m2 - 1, d2);
-  
+
   return Math.round((utc2 - utc1) / (1000 * 60 * 60 * 24));
 }
 
@@ -72,9 +85,10 @@ function getDayOfWeek(dateStr) {
  */
 function isStreakContinuation(prevDateStr, todayStr) {
   if (!prevDateStr || !todayStr) return false;
-  
+
   const diffDays = getDaysBetween(prevDateStr, todayStr);
-  if (diffDays === 0 || diffDays === 1) return true; // Same day or consecutive day
+  if (diffDays <= 0) return true; // Same day or duplicate completion
+  if (diffDays === 1) return true; // Consecutive calendar day
 
   const prevDow = getDayOfWeek(prevDateStr); // 0 = Sun, 1 = Mon, 5 = Fri, 6 = Sat
 
@@ -87,7 +101,7 @@ function isStreakContinuation(prevDateStr, todayStr) {
   // Friday (5) -> Monday (1) [diff 3]: Valid weekend grace
   if (diffDays === 3 && prevDow === 5) return true;
 
-  // Thursday (4) -> Saturday (6) [diff 2]: Missed Friday -> Returns false (Streak Breaks)
+  // Thursday (4) -> Saturday (6) [diff 2]: Missed Friday -> Streak Breaks
   return false;
 }
 
@@ -135,7 +149,7 @@ export function getActiveStreakCount() {
 
   // Check if current streak is still active
   if (isStreakContinuation(lastDateClean, todayStr)) {
-    return state.profile.streakCount || 0;
+    return Number(state.profile.streakCount) || 0;
   }
 
   // Streak missed: Reset to 0 upon login and sync to Google Sheet Column J
@@ -161,14 +175,13 @@ export function getActiveStreakCount() {
 export function isDailyQuestCompletedToday() {
   const todayStr = getTodayDateString();
   const lastDateClean = normalizeDateStr(state.profile?.lastDailyQuestDate);
-  
+
   return lastDateClean === todayStr;
 }
 
 /**
  * Marks today's Daily Quest as completed:
- * - If streak was 0 (reset on login), sets streak to 1.
- * - If streak was active, increments streak count (+1).
+ * - Increments active streak (+1) for consecutive days or valid weekend grace.
  * - Writes new streak and today's date to Google Sheet Columns J & L.
  */
 export function markDailyQuestCompletedToday() {
@@ -177,14 +190,14 @@ export function markDailyQuestCompletedToday() {
   if (!state.profile) state.profile = {};
 
   const previousDateClean = normalizeDateStr(state.profile.lastDailyQuestDate);
+  const currentStreakVal = Number(state.profile.streakCount) || 0;
 
   if (previousDateClean === todayStr) {
     // Retain streak if completed again on the same day
-    state.profile.streakCount = Math.max(state.profile.streakCount || 1, 1);
+    state.profile.streakCount = Math.max(currentStreakVal, 1);
   } else if (previousDateClean && isStreakContinuation(previousDateClean, todayStr)) {
     // Increment active streak (+1)
-    const currentVal = Number(state.profile.streakCount) || 0;
-    state.profile.streakCount = currentVal > 0 ? currentVal + 1 : 1;
+    state.profile.streakCount = currentStreakVal + 1;
   } else {
     // Streak was reset to 0 or missed: Start new streak at 1
     state.profile.streakCount = 1;
@@ -211,7 +224,7 @@ export function buildDailyQuestQueue(userState = state) {
   const curriculum = userState.curriculum || [];
   const mastery = userState.mastery || {};
   const skillTags = userState.skillTags || {};
-  
+
   const studentStream = String(userState.profile?.stream || "G3").trim().toUpperCase();
   const studentYear = userState.profile?.year || userState.profile?.grade || "Sec 1";
   const studentYearNum = parseYearNumber(studentYear);
@@ -250,11 +263,11 @@ export function buildDailyQuestQueue(userState = state) {
     const record = mastery[path];
     const score = record ? (Number(record.score) || 0) : 0;
 
-    const queueItem = { 
-      generatorPath: path, 
-      skill, 
-      score, 
-      primaryReason: tag === "CURRENT" ? "🟢 Current Unit Practice" : "🔵 Spaced Repetition (Past Unit)" 
+    const queueItem = {
+      generatorPath: path,
+      skill,
+      score,
+      primaryReason: tag === "CURRENT" ? "🟢 Current Unit Practice" : "🔵 Spaced Repetition (Past Unit)"
     };
 
     if (tag === "CURRENT") {
