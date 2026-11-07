@@ -305,7 +305,19 @@ export function renderQuestionView(container, options = {}) {
     topNav.querySelector("#btn-top-exit")?.addEventListener("click", () => {
       cleanupListeners();
       flushMasterySync();
-      if (typeof options.onExit === "function") options.onExit();
+
+      const summarySnapshot = {
+        mode,
+        sessionScore,
+        totalQuestions: totalAttemptedCount,
+        questionsAttempted: totalAttemptedCount,
+        totalAttempted: totalAttemptedCount,
+        answeredCount: totalAttemptedCount,
+        sessionInitialScores,
+        bonusXP: 0
+      };
+
+      if (typeof options.onExit === "function") options.onExit(summarySnapshot);
       else navigateTo("dashboard");
     });
   }
@@ -335,7 +347,17 @@ export function renderQuestionView(container, options = {}) {
       `;
       container.querySelector("#btn-exit-err")?.addEventListener("click", () => {
         cleanupListeners();
-        if (typeof options.onExit === "function") options.onExit();
+        const summarySnapshot = {
+          mode,
+          sessionScore,
+          totalQuestions: totalAttemptedCount,
+          questionsAttempted: totalAttemptedCount,
+          totalAttempted: totalAttemptedCount,
+          answeredCount: totalAttemptedCount,
+          sessionInitialScores,
+          bonusXP: 0
+        };
+        if (typeof options.onExit === "function") options.onExit(summarySnapshot);
         else navigateTo("dashboard");
       });
       return;
@@ -692,7 +714,17 @@ export function renderQuestionView(container, options = {}) {
     `;
 
     container.querySelector("#btn-live-summary-dash")?.addEventListener("click", () => {
-      if (typeof options.onExit === "function") options.onExit();
+      const summarySnapshot = {
+        mode,
+        sessionScore,
+        totalQuestions: totalAttemptedCount,
+        questionsAttempted: totalAttemptedCount,
+        totalAttempted: totalAttemptedCount,
+        answeredCount: totalAttemptedCount,
+        sessionInitialScores,
+        bonusXP: 0
+      };
+      if (typeof options.onExit === "function") options.onExit(summarySnapshot);
       else navigateTo("dashboard");
     });
   }
@@ -778,7 +810,17 @@ export function renderQuestionView(container, options = {}) {
     `;
 
     container.querySelector("#btn-return-dash")?.addEventListener("click", () => {
-      if (typeof options.onExit === "function") options.onExit();
+      const summarySnapshot = {
+        mode,
+        sessionScore,
+        totalQuestions: totalAttemptedCount,
+        questionsAttempted: totalAttemptedCount,
+        totalAttempted: totalAttemptedCount,
+        answeredCount: totalAttemptedCount,
+        sessionInitialScores,
+        bonusXP: 0
+      };
+      if (typeof options.onExit === "function") options.onExit(summarySnapshot);
       else navigateTo("dashboard");
     });
   }
