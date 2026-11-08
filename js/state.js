@@ -10,6 +10,9 @@ export const state = {
     xp: 0,
     streakCount: 0
   },
+  features: {
+    enableAIHandwriting: true // Set to false anytime to disable AI handwriting recognition
+  },
   curriculum: [],
   mastery: {}, // Keyed by generatorPath
   skillTags: {}, // Class skill tag mappings for logged-in student
