@@ -1,6 +1,19 @@
 import { getAutoDefaultTag } from "./helperUtils.js";
 
 /**
+ * Helper to filter skills array based on level, stream, and strand selections
+ */
+function filterSkills(skills, level, stream, strand) {
+  if (!skills) return [];
+  return skills.filter(sk => {
+    const matchLevel = !level || level === "All" || String(sk.year || sk.level || "") === String(level);
+    const matchStream = !stream || stream === "All" || String(sk.stream || "") === String(stream);
+    const matchStrand = !strand || strand === "All" || String(sk.strand || "") === String(strand);
+    return matchLevel && matchStream && matchStrand;
+  });
+}
+
+/**
  * Renders HTML for Tab 2: Class Skill Tagging
  */
 export function renderTaggingTabHTML(props) {
@@ -16,8 +29,11 @@ export function renderTaggingTabHTML(props) {
     currentClassTagsBuffer
   } = props;
 
+  // Filter skills based on current level/stream/strand filter state
+  const visibleSkills = filterSkills(taggingSkills, tagFilterLevel, tagFilterStream, tagFilterStrand);
+
   const skillsByTopic = {};
-  taggingSkills.forEach(sk => {
+  visibleSkills.forEach(sk => {
     const topic = sk.topic || "General Mathematics";
     if (!skillsByTopic[topic]) skillsByTopic[topic] = [];
     skillsByTopic[topic].push(sk);
@@ -72,7 +88,7 @@ export function renderTaggingTabHTML(props) {
           </div>
 
           <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-            <span style="font-weight: 800; font-size: 0.82rem; color: #64748b;">Bulk Tag (${taggingSkills.length}):</span>
+            <span style="font-weight: 800; font-size: 0.82rem; color: #64748b;">Bulk Tag (${visibleSkills.length}):</span>
             <button type="button" id="btn-mass-priority" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #ea580c; background: #ffedd5; color: #c2410c; font-weight: 700; font-size: 0.80rem; cursor: pointer;">🔥 All Priority</button>
             <button type="button" id="btn-mass-current" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #16a34a; background: #dcfce7; color: #15803d; font-weight: 700; font-size: 0.80rem; cursor: pointer;">🟢 All Current</button>
             <button type="button" id="btn-mass-past" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #0284c7; background: #e0f2fe; color: #0369a1; font-weight: 700; font-size: 0.80rem; cursor: pointer;">🔵 All Past</button>
@@ -145,6 +161,9 @@ export function initTaggingTabEvents(container, props) {
   const {
     currentClassTagsBuffer,
     taggingSkills,
+    tagFilterLevel,
+    tagFilterStream,
+    tagFilterStrand,
     onFilterChange,
     onSaveClassTags
   } = props;
@@ -184,18 +203,25 @@ export function initTaggingTabEvents(container, props) {
     });
   }
 
-  // Helper to apply bulk tags across all currently filtered skills
+  // Helper to apply bulk tags ONLY across currently filtered skills
   function applyBulkTag(targetTag) {
-    if (!taggingSkills || taggingSkills.length === 0) return;
+    const activeLevel = container.querySelector("#tag-filter-level")?.value || tagFilterLevel;
+    const activeStream = container.querySelector("#tag-filter-stream")?.value || tagFilterStream;
+    const activeStrand = container.querySelector("#tag-filter-strand")?.value || tagFilterStrand;
 
-    taggingSkills.forEach(sk => {
-      currentClassTagsBuffer[sk.generatorPath] = targetTag;
+    const visibleSkills = filterSkills(taggingSkills, activeLevel, activeStream, activeStrand);
+    if (!visibleSkills || visibleSkills.length === 0) return;
+
+    const visiblePaths = new Set(visibleSkills.map(s => s.generatorPath));
+
+    visiblePaths.forEach(path => {
+      currentClassTagsBuffer[path] = targetTag;
     });
 
     container.querySelectorAll(".tag-toggle-group").forEach(group => {
       const path = group.getAttribute("data-path");
-      if (path && currentClassTagsBuffer[path]) {
-        updateGroupUI(group, currentClassTagsBuffer[path]);
+      if (path && visiblePaths.has(path)) {
+        updateGroupUI(group, targetTag);
       }
     });
   }
