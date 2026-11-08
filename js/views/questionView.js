@@ -32,6 +32,103 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+/**
+ * Returns Tier (1, 2, or 3) based on mastery score thresholds:
+ * Tier 1: < 50
+ * Tier 2: 50 to 79
+ * Tier 3: 80+
+ */
+function getTierFromScore(score) {
+  const s = Number(score) || 0;
+  if (s < 50) return 1;
+  if (s < 80) return 2;
+  return 3;
+}
+
+/**
+ * Weighted Tier Probability Distribution Engine:
+ * - Daily Quest & SRS mode: 70% Tier 2, 30% Tier 1
+ * - Tier 1 level (<50): 100% Tier 1
+ * - Tier 2 level (50-79): 70% Tier 2, 30% Tier 1
+ * - Tier 3 level (80+): 60% Tier 3, 30% Tier 2, 10% Tier 1
+ */
+function selectTierForQuestion(score, isDailyQuest, isSRS) {
+  const rand = Math.random();
+
+  // Daily Quest & SRS Mode
+  if (isDailyQuest || isSRS) {
+    return rand < 0.70 ? 2 : 1;
+  }
+
+  // Skill Tree & Live Practice Mode
+  if (score < 50) {
+    return 1; // 100% Tier 1
+  } else if (score < 80) {
+    return rand < 0.70 ? 2 : 1; // 70% Tier 2, 30% Tier 1
+  } else {
+    // Score >= 80
+    if (rand < 0.60) return 3; // 60% Tier 3
+    if (rand < 0.90) return 2; // 30% Tier 2
+    return 1;                  // 10% Tier 1
+  }
+}
+
+/**
+ * Toast alert displayed when a student crosses a threshold boundary UP or DOWN.
+ */
+function showTierChangeAlert(oldTier, newTier, newScore, skillTitle) {
+  const existingToast = document.querySelector("#tier-change-toast");
+  if (existingToast) existingToast.remove();
+
+  const isPromotion = newTier > oldTier;
+  const toast = document.createElement("div");
+  toast.id = "tier-change-toast";
+
+  const tierNames = { 1: "Tier 1 (Basic)", 2: "Tier 2 (Medium)", 3: "Tier 3 (Hard)" };
+  const borderCol = isPromotion ? "#22c55e" : "#eab308";
+  const bgCol = isPromotion ? "#f0fdf4" : "#fefce8";
+  const textCol = isPromotion ? "#15803d" : "#854d0e";
+  const icon = isPromotion ? "🚀 Tier Unlocked!" : "🔄 Level Adjusted";
+
+  toast.style.cssText = `
+    position: fixed;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 99999;
+    background: ${bgCol};
+    border: 2px solid ${borderCol};
+    color: ${textCol};
+    padding: 12px 24px;
+    border-radius: 14px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 800;
+    font-size: 0.95rem;
+    animation: fadeInDown 0.3s ease-out;
+  `;
+
+  toast.innerHTML = `
+    <span style="font-size: 1.4rem;">${isPromotion ? '🎉' : '💡'}</span>
+    <div>
+      <div style="font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px;">${icon}</div>
+      <div>Moved to <strong>${tierNames[newTier]}</strong> for ${escapeHtml(skillTitle)} (Mastery: ${newScore})</div>
+    </div>
+  `;
+
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.style.opacity = "0";
+      toast.style.transition = "opacity 0.4s ease";
+      setTimeout(() => toast.remove(), 400);
+    }
+  }, 3200);
+}
+
 export function renderQuestionView(container, options = {}) {
   const mode = options.mode || "dailyQuest";
   const isDailyQuest = mode === "dailyQuest";
@@ -43,7 +140,6 @@ export function renderQuestionView(container, options = {}) {
   let activeGeneratorPath = options.generatorPath || "";
 
   const totalQuestions = options.maxQuestions || (isDailyQuest ? 5 : (isSRS ? queue.length || 4 : Infinity));
-  const targetMastery = options.targetMastery || 90;
 
   let currentLiveTargetScore = options.targetScore || options.targetVal || options.targetScoreVal || null;
 
@@ -247,7 +343,7 @@ export function renderQuestionView(container, options = {}) {
     }
 
     const currentScore = state.mastery[activeGeneratorPath]?.score || 0;
-    let tier = isSRS ? 1 : (currentScore < 40 ? 1 : (currentScore < 70 ? 2 : 3));
+    const tier = selectTierForQuestion(currentScore, isDailyQuest, isSRS);
 
     try {
       const genModule = await loadQuestionGenerator(activeGeneratorPath);
@@ -319,7 +415,6 @@ export function renderQuestionView(container, options = {}) {
       </div>
     `;
 
-    // ✅ FIXED: Construct summaryData and pass it into options.onExit(summaryData)
     topNav.querySelector("#btn-top-exit")?.addEventListener("click", () => {
       cleanupListeners();
       flushMasterySync();
@@ -569,18 +664,25 @@ export function renderQuestionView(container, options = {}) {
     const requiredForm = currentQuestion.requiredForm || currentQuestion.form || null;
     const isCorrect = isAlgebraicallyEquivalent(userAns, currentQuestion.expectedAnswer, requiredForm);
     const oldScore = state.mastery[activeGeneratorPath]?.score || 0;
+    const oldTier = getTierFromScore(oldScore);
 
     recordQuestionAttempt(activeGeneratorPath, isCorrect, currentHintStep, stepsList.length || 3);
 
     const newScore = state.mastery[activeGeneratorPath]?.score || 0;
+    const newTier = getTierFromScore(newScore);
     const scoreDiff = newScore - oldScore;
     const diffBadge = scoreDiff >= 0 ? `+${scoreDiff}` : `${scoreDiff}`;
-    const diffColor = scoreDiff >= 0 ? "#15803d" : "#b91c1c";
+    const diffColor = scoreDiff >= 0 ? "#16a34a" : "#b91c1c";
+
+    // Trigger Threshold Crossing Toast Alert UP or DOWN
+    if (oldTier !== newTier) {
+      showTierChangeAlert(oldTier, newTier, newScore, currentSkillTitle);
+    }
 
     const topMasteryEl = document.querySelector("#top-nav-mastery-val");
     if (topMasteryEl) topMasteryEl.innerText = newScore;
 
-    const effectiveTargetScore = currentLiveTargetScore || options.targetScore || options.targetVal || (isSkillTree ? targetMastery : null);
+    const effectiveTargetScore = currentLiveTargetScore || options.targetScore || options.targetVal || options.targetMastery || null;
 
     if (effectiveTargetScore && effectiveTargetScore > 0 && newScore >= effectiveTargetScore && !targetScoreAchievedAlertShown) {
       targetScoreAchievedAlertShown = true;
@@ -670,11 +772,6 @@ export function renderQuestionView(container, options = {}) {
       setTimeout(() => {
         hintsScrollArea.scrollTop = feedbackEl ? feedbackEl.offsetTop : 0;
       }, 80);
-    }
-
-    const currentScore = state.mastery[activeGeneratorPath]?.score || 0;
-    if (isSkillTree && currentScore >= targetMastery) {
-      setTimeout(() => finishSession(true), 1200);
     }
   }
 
@@ -790,7 +887,7 @@ export function renderQuestionView(container, options = {}) {
       `;
     }).join("");
 
-    const titleText = summary.isMastered ? "🏆 Skill Mastered (90+ Score)!" : "🎉 Session Completed!";
+    const titleText = summary.isMastered ? "🏆 Skill Mastered!" : "🎉 Session Completed!";
 
     container.innerHTML = `
       <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: calc(100dvh - 96px); padding: 20px;">
