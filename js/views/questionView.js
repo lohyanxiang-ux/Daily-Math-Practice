@@ -7,6 +7,7 @@ import { initKeypad } from "../components/keypad.js";
 import { renderKaTeX } from "../utils/katexHelper.js";
 import { isAlgebraicallyEquivalent } from "../utils/mathEquivalence.js";
 import { textToLatex } from "../utils/mathFormatter.js";
+import { recognizeHandwritingFromCanvas } from "../utils/handwritingOCR.js";
 
 const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbwEsVnKapmwUFuv0vyG1wFvyAXoFKQMrpsNxibUqYh891PHXzFgmBThnT62lGoEPo_xiQ/exec";
 
@@ -319,7 +320,6 @@ export function renderQuestionView(container, options = {}) {
       </div>
     `;
 
-    // ✅ FIXED: Construct summaryData and pass it into options.onExit(summaryData)
     topNav.querySelector("#btn-top-exit")?.addEventListener("click", () => {
       cleanupListeners();
       flushMasterySync();
@@ -385,6 +385,8 @@ export function renderQuestionView(container, options = {}) {
       </div>
     ` : "";
 
+    const showAiButton = state.features && state.features.enableAIHandwriting !== false;
+
     container.innerHTML = `
       <main style="display: flex; height: calc(100dvh - 96px); max-height: calc(100dvh - 96px); width: 100%; overflow: hidden; padding: 4px 8px 10px 8px; gap: 8px; box-sizing: border-box; background: #f1f5f9;">
         
@@ -398,6 +400,12 @@ export function renderQuestionView(container, options = {}) {
             </div>
             
             <div style="display: flex; gap: 6px; align-items: center;">
+              ${showAiButton ? `
+                <button id="btn-ai-handwriting" class="tool-icon-btn" title="Convert Handwriting to LaTeX" style="padding: 2px 8px; font-size: 0.78rem; font-weight: 800; background: #ede9fe; color: #6d28d9; border: 1px solid #ddd6fe; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease;">
+                  🪄 AI Auto-Key
+                </button>
+              ` : ''}
+
               <div class="tool-group" style="padding: 2px;">
                 <button class="tool-icon-btn active" data-tool="pen" title="Pen" style="width: 26px; height: 26px; font-size: 0.78rem;">✏️</button>
                 <button class="tool-icon-btn" data-tool="eraser" title="Eraser" style="width: 26px; height: 26px; font-size: 0.78rem;">🧹</button>
@@ -504,6 +512,45 @@ export function renderQuestionView(container, options = {}) {
       (val) => { activeAnswer = val; },
       (val) => { handleSubmission(val); }
     );
+
+    // AI Handwriting Auto-Key Event Handler
+    const aiBtn = container.querySelector("#btn-ai-handwriting");
+    if (aiBtn) {
+      aiBtn.addEventListener("click", async () => {
+        const canvas = container.querySelector("#scratchpad-canvas");
+        const keypadDisplay = container.querySelector("#keypad-display");
+        if (!canvas) return;
+
+        const originalBtnHtml = aiBtn.innerHTML;
+        aiBtn.disabled = true;
+        aiBtn.innerHTML = "⏳ Converting...";
+        if (keypadDisplay) keypadDisplay.innerText = "🪄 Reading handwriting...";
+
+        const result = await recognizeHandwritingFromCanvas(canvas);
+
+        aiBtn.disabled = false;
+        aiBtn.innerHTML = originalBtnHtml;
+
+        if (result.status === "success" && result.latex) {
+          activeAnswer = result.latex;
+
+          if (keypadDisplay) {
+            keypadDisplay.innerHTML = `$${result.latex}$`;
+            renderKaTeX(keypadDisplay);
+          }
+
+          if (typeof window._setKeypadValue === "function") {
+            window._setKeypadValue(result.latex);
+          }
+        } else {
+          alert(result.message || "Could not recognize handwriting cleanly. Please write clearly or use the keypad.");
+          if (keypadDisplay) {
+            keypadDisplay.innerText = activeAnswer ? `$${activeAnswer}$` : "";
+            if (activeAnswer) renderKaTeX(keypadDisplay);
+          }
+        }
+      });
+    }
 
     const hintsContainer = container.querySelector("#hints-container");
     const hintsScrollArea = container.querySelector("#hints-scroll-area");
