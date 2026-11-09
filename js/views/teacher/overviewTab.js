@@ -1,4 +1,7 @@
 import { safeGetMasteryMetadata, getStudentClass, analyzeAtRiskStudents } from "./helperUtils.js";
+import { openStudentDrawer } from "./studentDrawer.js";
+import { processRedemptionClaim } from "../../services/backend.js";
+import { state } from "../../state.js";
 
 export function renderOverviewTabHTML(props) {
   const {
@@ -21,6 +24,7 @@ export function renderOverviewTabHTML(props) {
   } = props;
 
   const riskAlerts = analyzeAtRiskStudents(filteredStudents, classMastery, curriculum);
+  const pendingRedemptions = state.teacherData?.pendingRedemptions || [];
 
   let totalScoreSum = 0;
   let totalScoreCount = 0;
@@ -45,7 +49,6 @@ export function renderOverviewTabHTML(props) {
   const classAvgScore = totalScoreCount > 0 ? Math.round(totalScoreSum / totalScoreCount) : 0;
   const avgMeta = safeGetMasteryMetadata(classAvgScore);
 
-  // Group filtered skills by topic
   const skillsByTopic = {};
   filteredSkills.forEach(sk => {
     const topic = sk.topic || "General Topics";
@@ -84,6 +87,31 @@ export function renderOverviewTabHTML(props) {
         </div>
       </div>
     </div>
+
+    <!-- PENDING REAL-WORLD PERKS REWARD CLAIMS -->
+    ${pendingRedemptions.length > 0 ? `
+      <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 16px; padding: 16px;">
+        <h3 style="font-size: 1.05rem; color: #0369a1; margin: 0 0 12px 0; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+          🎁 Pending Real-World Reward Claims (${pendingRedemptions.filter(r => r.status === 'PENDING').length})
+        </h3>
+        
+        <div style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto;">
+          ${pendingRedemptions.filter(r => r.status === 'PENDING').map(claim => `
+            <div style="background: #ffffff; padding: 10px 16px; border-radius: 10px; border: 1px solid #e0f2fe; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+              <div>
+                <span style="font-weight: 800; color: #0f172a;">${claim.studentEmail}</span>
+                <span style="color: #475569; font-size: 0.88rem;"> requested <strong>"${claim.itemTitle}"</strong> (${claim.gemCost} 💎)</span>
+              </div>
+              
+              <div style="display: flex; gap: 6px;">
+                <button class="btn-approve-claim" data-id="${claim.id}" style="background: #16a34a; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.80rem;">✓ Approve</button>
+                <button class="btn-reject-claim" data-id="${claim.id}" style="background: #dc2626; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.80rem;">✕ Reject & Refund</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}
 
     ${riskAlerts.length > 0 ? `
       <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 14px; padding: 16px;">
@@ -139,7 +167,6 @@ export function renderOverviewTabHTML(props) {
       <div style="overflow-x: auto; overflow-y: auto; flex: 1; border: 1px solid #e2e8f0; border-radius: 12px; min-height: 320px;">
         <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left;">
           <thead>
-            <!-- ROW 1: TOPIC SUPER-HEADERS -->
             <tr style="background: #f1f5f9;">
               <th rowspan="2" style="padding: 12px 16px; position: sticky; left: 0; background: #f8fafc; z-index: 3; min-width: 220px; border-right: 1px solid #cbd5e1; border-bottom: 2px solid #e2e8f0;">
                 Student Profile
@@ -159,7 +186,6 @@ export function renderOverviewTabHTML(props) {
               </th>
             </tr>
 
-            <!-- ROW 2: INDIVIDUAL SKILL HEADERS -->
             <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
               ${topicEntries.map(([topicName, skills], tIdx) => `
                 ${skills.map((sk, sIdx) => {
@@ -196,12 +222,13 @@ export function renderOverviewTabHTML(props) {
               const pinDisplay = isPinRevealed ? (st.pinCode || st.pin || 'N/A') : '••••';
 
               return `
-                <tr class="student-matrix-row" data-email="${emailKey}" style="border-bottom: 1px solid #e2e8f0; transition: background 0.15s;">
-                  <td style="padding: 10px 14px; position: sticky; left: 0; background: #ffffff; z-index: 2; border-right: 1px solid #e2e8f0;">
+                <tr class="student-matrix-row" data-email="${emailKey}" style="border-bottom: 1px solid #e2e8f0; cursor: pointer; transition: background 0.15s;" title="Click student name to open Diagnostic & Rewards Drawer">
+                  <td class="cell-student-drawer-trigger" data-email="${emailKey}" style="padding: 10px 14px; position: sticky; left: 0; background: #ffffff; z-index: 2; border-right: 1px solid #e2e8f0;">
                     <div style="display: flex; flex-direction: column; gap: 2px;">
-                      <span style="font-weight: 700; color: #0f172a; font-size: 0.9rem;">${st.displayName || st.name || 'Student'}</span>
+                      <span style="font-weight: 800; color: #2563eb; text-decoration: underline; font-size: 0.9rem;">${st.displayName || st.name || 'Student'}</span>
                       <div style="display: flex; align-items: center; gap: 8px; font-size: 0.76rem; color: #64748b;">
                         <span>⭐ ${st.xp || 0} XP</span>
+                        <span>💎 ${st.gems || 0}</span>
                         <span>🔥 ${st.streakCount || 0}d</span>
                         <span class="btn-toggle-pin" data-email="${emailKey}" style="cursor: pointer; background: #f1f5f9; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-weight: 700; user-select: none; border: 1px solid #cbd5e1;" title="Click to reveal/hide PIN">
                           🔑 ${pinDisplay}
