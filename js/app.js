@@ -1,13 +1,32 @@
 import { fetchUserData, loginWithPin } from "./services/backend.js";
-import { updateState, resetState, state } from "./state.js";
+import { updateState, resetState, state, CONFIG } from "./state.js";
 import { navigateTo } from "./router.js";
 
-// 1. PIN Keypad Global Window Handlers
+// Global Gem Earned Toast Notification
+window.showGemEarnedToast = function(amount) {
+  if (!CONFIG.ENABLE_GEMS) return;
+
+  const existingToast = document.querySelector(".gem-toast-popup");
+  if (existingToast) existingToast.remove();
+
+  const toast = document.createElement("div");
+  toast.className = "gem-toast-popup";
+  toast.innerHTML = `
+    <div style="position: fixed; top: 20px; right: 20px; z-index: 99999; background: #0f172a; color: #ffffff; padding: 12px 20px; border-radius: 14px; border: 2px solid #38bdf8; box-shadow: 0 10px 25px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 12px; animation: slideInFromTopRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
+      <span style="font-size: 1.8rem; line-height: 1;">💎</span>
+      <div>
+        <div style="font-weight: 800; font-size: 0.95rem; color: #38bdf8;">Gem Unlocked!</div>
+        <div style="font-size: 0.82rem; color: #cbd5e1;">You earned +${amount} Gem${amount > 1 ? 's' : ''}!</div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3500);
+};
+
 window.appendPin = function(digit) {
   const pinInput = document.getElementById("student-pin-input");
-  if (pinInput && pinInput.value.length < 4) {
-    pinInput.value += digit;
-  }
+  if (pinInput && pinInput.value.length < 4) pinInput.value += digit;
 };
 
 window.clearPin = function() {
@@ -20,7 +39,6 @@ window.backspacePin = function() {
   if (pinInput) pinInput.value = pinInput.value.slice(0, -1);
 };
 
-// 2. Role Tab Switcher Global Window Handler
 window.switchAuthTab = function(mode) {
   const tabStudent = document.getElementById("tab-student-mode");
   const tabTeacher = document.getElementById("tab-teacher-mode");
@@ -31,35 +49,18 @@ window.switchAuthTab = function(mode) {
   if (statusEl) statusEl.innerText = "";
 
   if (mode === "student") {
-    if (tabStudent) {
-      tabStudent.style.background = "#ffffff";
-      tabStudent.style.color = "#0f172a";
-      tabStudent.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
-    }
-    if (tabTeacher) {
-      tabTeacher.style.background = "transparent";
-      tabTeacher.style.color = "#64748b";
-      tabTeacher.style.boxShadow = "none";
-    }
+    if (tabStudent) { tabStudent.style.background = "#ffffff"; tabStudent.style.color = "#0f172a"; tabStudent.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)"; }
+    if (tabTeacher) { tabTeacher.style.background = "transparent"; tabTeacher.style.color = "#64748b"; tabTeacher.style.boxShadow = "none"; }
     if (studentSec) studentSec.style.display = "block";
     if (teacherSec) teacherSec.style.display = "none";
   } else if (mode === "teacher") {
-    if (tabTeacher) {
-      tabTeacher.style.background = "#ffffff";
-      tabTeacher.style.color = "#0f172a";
-      tabTeacher.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
-    }
-    if (tabStudent) {
-      tabStudent.style.background = "transparent";
-      tabStudent.style.color = "#64748b";
-      tabStudent.style.boxShadow = "none";
-    }
+    if (tabTeacher) { tabTeacher.style.background = "#ffffff"; tabTeacher.style.color = "#0f172a"; tabTeacher.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)"; }
+    if (tabStudent) { tabStudent.style.background = "transparent"; tabStudent.style.color = "#64748b"; tabStudent.style.boxShadow = "none"; }
     if (teacherSec) teacherSec.style.display = "block";
     if (studentSec) studentSec.style.display = "none";
   }
 };
 
-// 3. Student PIN Login Submission Handler
 window.submitStudentPin = async function() {
   const pinInput = document.getElementById("student-pin-input");
   const statusEl = document.getElementById("auth-status");
@@ -81,9 +82,9 @@ window.submitStudentPin = async function() {
   }
 };
 
-// 4. Global App Logout Handler
 window.handleLogoutApp = function() {
   resetState();
+  document.body.className = "";
 
   const authCard = document.getElementById("auth-card");
   const appContainer = document.getElementById("app-container");
@@ -102,13 +103,11 @@ window.handleLogoutApp = function() {
   }
 };
 
-// 5. Google OAuth Callback Handler (Teachers)
 window.processGoogleSignIn = async (response) => {
   const statusEl = document.getElementById("auth-status");
   if (statusEl) statusEl.innerText = "Authenticating Google account...";
   
   const token = (typeof response === "string") ? response : (response && response.credential);
-
   if (!token) {
     if (statusEl) statusEl.innerText = "Error: Failed to read token from Google response.";
     return;
@@ -166,6 +165,20 @@ export function renderTopNav(profile = state.profile) {
   }
   if (xpEl) xpEl.innerText = profile.xp || 0;
   if (streakEl) streakEl.innerText = profile.streakCount || 0;
+
+  // Render Gem Counter inside nav stats if feature flag is active
+  const navStats = document.querySelector(".nav-stats");
+  if (navStats && CONFIG.ENABLE_GEMS) {
+    let gemStat = document.getElementById("nav-stat-gems");
+    if (!gemStat) {
+      gemStat = document.createElement("div");
+      gemStat.id = "nav-stat-gems";
+      gemStat.className = "stat";
+      gemStat.style.cssText = "background: #f0f9ff; border: 1px solid #bae6fd; padding: 4px 10px; border-radius: 8px; font-weight: 800; color: #0284c7; display: flex; align-items: center; gap: 4px;";
+      navStats.appendChild(gemStat);
+    }
+    gemStat.innerHTML = `💎 <span id="nav-profile-gems">${profile.gems || 0}</span>`;
+  }
 }
 
 window.renderTopNav = renderTopNav;
