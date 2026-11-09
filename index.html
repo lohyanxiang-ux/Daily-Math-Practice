@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="https://unpkg.com/mathlive@latest/dist/mathlive-static.css">
   <script defer src="https://unpkg.com/mathlive"></script>
 
-  <!-- IMMEDIATE GLOBAL INLINE SCRIPT (Guarantees Keypad Functions Exist Before Modules) -->
+  <!-- IMMEDIATE GLOBAL INLINE SCRIPT (Guarantees Handlers & Queues Exist Before ES Modules Load) -->
   <script>
     window.appendPin = function(digit) {
       const pinInput = document.getElementById("student-pin-input");
