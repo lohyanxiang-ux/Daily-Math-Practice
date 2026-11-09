@@ -1,5 +1,5 @@
 /* =========================================================
-   1. GLOBAL VARIABLES & RESET
+   1. GLOBAL VARIABLES & THEMES
    ========================================================= */
 :root {
   --bg-main: #f0f4f9;
@@ -11,6 +11,32 @@
   --text-muted: #6b7280;
   --border: #e5e7eb;
   --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+}
+
+/* THEME 1: Midnight Dark */
+body.theme_dark {
+  --bg-main: #0f172a;
+  --card-bg: #1e293b;
+  --primary: #38bdf8;
+  --primary-hover: #0284c7;
+  --accent: #34d399;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border: #334155;
+  --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+/* THEME 2: Neon Cyberpunk */
+body.theme_cyberpunk {
+  --bg-main: #0d0e15;
+  --card-bg: #161922;
+  --primary: #ff007f;
+  --primary-hover: #d6006b;
+  --accent: #00f0ff;
+  --text-main: #00ffcc;
+  --text-muted: #8b9bb4;
+  --border: #282e3d;
+  --shadow: 0 10px 25px -5px rgba(255, 0, 127, 0.2);
 }
 
 * {
@@ -27,12 +53,22 @@ body {
   color: var(--text-main);
   height: 100vh;
   width: 100vw;
-  overflow: hidden; /* Lock viewport for iPad landscape app experience */
+  overflow: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* =========================================================
-   2. AUTHENTICATION CONTAINER
-   ========================================================= */
+/* ANIMATION: Gem Earned Toast Popup */
+@keyframes slideInFromTopRight {
+  0% {
+    opacity: 0;
+    transform: translate3d(100px, -20px, 0) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
 #auth-card {
   max-width: 420px;
   margin: 80px auto;
@@ -43,9 +79,6 @@ body {
   text-align: center;
 }
 
-/* =========================================================
-   3. APP SHELL & NAVIGATION BAR
-   ========================================================= */
 #app-container {
   display: flex;
   flex-direction: column;
@@ -65,44 +98,18 @@ body {
   height: 60px;
 }
 
-.nav-user h3 { 
-  font-size: 1.1rem; 
-  font-weight: 700; 
-  color: var(--text-main); 
-}
+.nav-user h3 { font-size: 1.1rem; font-weight: 700; color: var(--text-main); }
+.nav-user .badge { font-size: 0.8rem; background: #e0e7ff; color: var(--primary); padding: 3px 8px; border-radius: 6px; }
+.nav-stats { display: flex; gap: 14px; align-items: center; }
+.stat { font-size: 0.95rem; font-weight: 600; }
+.stat b { color: var(--primary); }
 
-.nav-user .badge { 
-  font-size: 0.8rem; 
-  background: #e0e7ff; 
-  color: var(--primary); 
-  padding: 3px 8px; 
-  border-radius: 6px; 
-}
-
-.nav-stats { 
-  display: flex; 
-  gap: 20px; 
-}
-
-.stat { 
-  font-size: 0.95rem; 
-  font-weight: 600; 
-}
-
-.stat b { 
-  color: var(--primary); 
-}
-
-/* MAIN VIEWPORT TARGET */
 #app-viewport {
   flex: 1;
   height: calc(100vh - 96px);
   overflow: hidden;
 }
 
-/* =========================================================
-   4. DASHBOARD VIEW
-   ========================================================= */
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -127,310 +134,3 @@ body {
   border-color: var(--primary);
   transform: translateY(-2px);
 }
-
-.mode-card.disabled { 
-  opacity: 0.6; 
-  cursor: not-allowed; 
-}
-
-/* =========================================================
-   5. 2-COLUMN PRACTICE WORKSPACE (IPAD LANDSCAPE OPTIMIZED)
-   ========================================================= */
-#left-column-workspace {
-  -webkit-overflow-scrolling: touch;
-}
-
-#scratchpad-scroll-wrapper {
-  touch-action: pan-y;
-}
-
-#question-underlay {
-  user-select: text;
-  -webkit-user-select: text;
-}
-
-/* MATH PROMPT DISPLAY & KA TEX FORMATTING */
-.math-display {
-  font-size: 1.15rem;
-  font-weight: 600;
-  padding: 10px 14px;
-  background: #f9fafb;
-  border-radius: 12px;
-  border-left: 4px solid var(--primary);
-  margin-top: 6px;
-  word-break: break-word;
-  overflow-x: auto;
-}
-
-.math-display .katex-display {
-  margin: 8px 0 !important;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-/* UNCONSTRAINED RESPONSIVE DIAGRAM SVG SCALING */
-.math-display svg,
-#diagram-viewport svg {
-  width: auto !important;
-  max-width: 100% !important;
-  height: auto !important;
-  max-height: 230px !important;
-  display: block;
-  margin: 8px auto;
-}
-
-/* =========================================================
-   APPLE PENCIL SCRATCHPAD CANVAS OVERLAY
-   ========================================================= */
-.scratchpad-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 4px;
-}
-
-.tool-group {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: #f1f5f9;
-  padding: 3px 6px;
-  border-radius: 8px;
-}
-
-.tool-icon-btn {
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  font-size: 0.95rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.tool-icon-btn.active {
-  background: var(--primary);
-  color: white;
-  border-color: var(--primary);
-}
-
-.color-swatch {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 2px solid #ffffff;
-  box-shadow: 0 0 0 1px #d1d5db;
-  cursor: pointer;
-  transition: transform 0.1s ease;
-}
-
-.color-swatch.active {
-  transform: scale(1.2);
-  box-shadow: 0 0 0 2px var(--primary);
-}
-
-.canvas-wrapper {
-  touch-action: none;
-}
-
-canvas#scratchpad-canvas {
-  display: block;
-  width: 100%;
-  background: transparent;
-}
-
-/* =========================================================
-   HINTS & FEEDBACK AREA
-   ========================================================= */
-.hints-wrapper {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.hint-btn {
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fde68a;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 0.82rem;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s ease;
-}
-
-.hint-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.hint-card {
-  background: #fffbeb;
-  border-left: 4px solid #f59e0b;
-  padding: 8px 12px;
-  border-radius: 8px;
-  margin-bottom: 6px;
-  font-size: 0.88rem;
-}
-
-.feedback-area {
-  margin-top: 8px;
-  padding: 10px;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 700;
-  text-align: center;
-}
-
-.solution-box {
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  border-radius: 10px;
-  padding: 10px 12px;
-  margin-top: 8px;
-  color: #166534;
-}
-
-/* =========================================================
-   STRATEGY C TABBED MATHLIVE KEYPAD DOCK
-   ========================================================= */
-.keypad-tab-btn {
-  transition: all 0.15s ease;
-}
-
-.answer-display-box {
-  min-height: 38px;
-  background: #ffffff;
-  border: 1.5px solid var(--primary);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 8px;
-  box-sizing: border-box;
-  overflow-x: auto;
-}
-
-math-field {
-  width: 100%;
-  font-size: 1.2rem;
-  border: none;
-  outline: none;
-  background: transparent;
-  box-shadow: none;
-  padding: 0;
-}
-
-.keypad-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-auto-rows: 1fr;
-  gap: 4px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.keypad-btn {
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  min-height: 0;
-  padding: 0;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--text-main);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 0 #cbd5e1;
-  transition: all 0.1s ease;
-}
-
-.keypad-btn:active {
-  transform: translateY(2px);
-  box-shadow: none;
-}
-
-.keypad-btn.action {
-  background: #f1f5f9;
-  color: #475569;
-}
-
-.keypad-btn.variable {
-  background: #e0f2fe;
-  color: #0369a1;
-  font-style: italic;
-}
-
-.keypad-btn.submit {
-  grid-column: span 4;
-  background: var(--primary);
-  color: white;
-  font-size: 0.95rem;
-  border: none;
-  box-shadow: 0 2px 0 #1d4ed8;
-}
-
-.keypad-btn.submit:active {
-  transform: translateY(2px);
-  box-shadow: none;
-}
-
-/* ENABLE DIRECT TAP & CARET PLACEMENT INSIDE MATHLIVE FIELDS */
-math-field,
-math-field::part(content) {
-  user-select: auto !important;
-  -webkit-user-select: auto !important;
-  pointer-events: auto !important;
-  touch-action: manipulation !important;
-}
-
-math-field::part(virtual-keyboard-toggle) {
-  display: none !important;
-}
-
-/* =========================================================
-   6. UTILITY BUTTONS & MASTERY BADGES
-   ========================================================= */
-.secondary-btn {
-  background: #f3f4f6;
-  border: 1px solid var(--border);
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.secondary-btn:hover {
-  background: #e5e7eb;
-}
-
-.mastery-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
-  border-radius: 12px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.mastery-tier-basic { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
-.mastery-tier-intermediate { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
-.mastery-tier-advanced { background: #f5f3ff; color: #7c3aed; border: 1px solid #ddd6fe; }
-.mastery-tier-mastered { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
