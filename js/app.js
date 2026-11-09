@@ -121,11 +121,6 @@ window.processGoogleSignIn = async (response) => {
   }
 };
 
-if (window.pendingGoogleResponse) {
-  window.processGoogleSignIn(window.pendingGoogleResponse);
-  window.pendingGoogleResponse = null;
-}
-
 function handleLoginSuccess(res) {
   const statusEl = document.getElementById("auth-status");
 
@@ -166,7 +161,6 @@ export function renderTopNav(profile = state.profile) {
   if (xpEl) xpEl.innerText = profile.xp || 0;
   if (streakEl) streakEl.innerText = profile.streakCount || 0;
 
-  // Render Gem Counter inside nav stats if feature flag is active
   const navStats = document.querySelector(".nav-stats");
   if (navStats && CONFIG.ENABLE_GEMS) {
     let gemStat = document.getElementById("nav-stat-gems");
