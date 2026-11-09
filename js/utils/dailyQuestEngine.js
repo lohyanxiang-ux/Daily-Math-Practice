@@ -1,5 +1,6 @@
 import { state } from "../state.js";
 import { syncUserProgress } from "../services/backend.js";
+import { resolveSkillTag } from "./srsEngine.js";
 
 /**
  * Extracts numeric level from academic grade strings (e.g. "Sec 3" -> 3)
@@ -264,16 +265,15 @@ export function markDailyQuestCompletedToday() {
 }
 
 /**
- * Builds Daily Quest queue
+ * Builds Daily Quest queue using central path and class tag resolver
  */
 export function buildDailyQuestQueue(userState = state) {
   const curriculum = userState.curriculum || [];
   const mastery = userState.mastery || {};
-  const skillTags = userState.skillTags || {};
 
   const studentStream = String(userState.profile?.stream || "G3").trim().toUpperCase();
   const studentYear = userState.profile?.year || userState.profile?.grade || "Sec 1";
-  const studentYearNum = parseYearNumber(studentYear);
+  const studentClass = userState.profile?.class || userState.profile?.className || "";
 
   const currentTopicPool = [];
   const pastTopicPool = [];
@@ -287,18 +287,12 @@ export function buildDailyQuestQueue(userState = state) {
       return;
     }
 
-    let rawTag = skillTags[path];
-    if (!rawTag) {
-      const skillYearNum = parseYearNumber(skill.year || skill.level);
-      if (studentYearNum !== null && skillYearNum !== null) {
-        rawTag = skillYearNum < studentYearNum ? "Past" : "Future";
-      } else {
-        rawTag = "Current";
-      }
-    }
+    // Resolve tag using srsEngine's unified path & class resolver
+    const resolvedTag = resolveSkillTag(skill, studentClass || studentYear);
+    const tag = String(resolvedTag).toUpperCase();
 
-    const tag = String(rawTag).toUpperCase();
-    if (tag !== "CURRENT" && tag !== "PAST") return;
+    // HARD GATE: Exclude FUTURE tagged skills completely from Daily Quests
+    if (tag === "FUTURE") return;
 
     const record = mastery[path];
     const score = record ? (Number(record.score) || 0) : 0;
@@ -307,11 +301,16 @@ export function buildDailyQuestQueue(userState = state) {
       generatorPath: path,
       skill,
       score,
-      primaryReason: tag === "CURRENT" ? "🟢 Current Unit Practice" : "🔵 Spaced Repetition (Past Unit)"
+      primaryReason: (tag === "PRIORITY" || tag === "CURRENT")
+        ? (tag === "PRIORITY" ? "🔥 Priority Practice" : "🟢 Current Unit Practice")
+        : "🔵 Spaced Repetition (Past Unit)"
     };
 
-    if (tag === "CURRENT") currentTopicPool.push(queueItem);
-    else if (tag === "PAST") pastTopicPool.push(queueItem);
+    if (tag === "PRIORITY" || tag === "CURRENT") {
+      currentTopicPool.push(queueItem);
+    } else if (tag === "PAST") {
+      pastTopicPool.push(queueItem);
+    }
 
     fallbackEligiblePool.push(queueItem);
   });
