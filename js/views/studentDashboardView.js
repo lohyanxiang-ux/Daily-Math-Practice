@@ -72,7 +72,6 @@ export async function renderStudentDashboard(container) {
         
         <div style="max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px;">
           
-          <!-- TOP BAR: GEM SHOP LAUNCHER -->
           ${CONFIG.ENABLE_GEMS ? `
             <div style="display: flex; justify-content: space-between; align-items: center; background: var(--card-bg, #ffffff); padding: 14px 22px; border-radius: 16px; border: 1px solid var(--border, #cbd5e1); box-shadow: var(--shadow);">
               <div style="display: flex; align-items: center; gap: 10px;">
@@ -89,7 +88,6 @@ export async function renderStudentDashboard(container) {
             </div>
           ` : ''}
 
-          <!-- ACTIVE TEACHER LIVE PRACTICE BANNER -->
           ${isLiveActive ? `
             <div style="background: #f0fdf4; border: 2px solid #22c55e; padding: 20px 24px; border-radius: 20px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.15);">
               <div>
@@ -107,10 +105,8 @@ export async function renderStudentDashboard(container) {
             <style>@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }</style>
           ` : ''}
 
-          <!-- 3-CARD BENTO GRID DASHBOARD -->
           <main style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; width: 100%;">
             
-            <!-- CARD 1: DAILY PRACTICE / DAILY QUEST -->
             <section style="background: var(--card-bg, #ffffff); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; min-height: 380px; box-shadow: var(--shadow); border: 1px solid var(--border, #cbd5e1);">
               <div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
@@ -143,7 +139,6 @@ export async function renderStudentDashboard(container) {
               </button>
             </section>
 
-            <!-- CARD 2: ADAPTIVE MEMORY / SMART REVIEW -->
             <section style="background: var(--card-bg, #ffffff); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; min-height: 380px; box-shadow: var(--shadow); border: 1px solid var(--border, #cbd5e1);">
               <div>
                 <div style="font-size: 0.88rem; font-weight: 700; color: #b45309; margin-bottom: 24px;">
@@ -175,7 +170,6 @@ export async function renderStudentDashboard(container) {
               </button>
             </section>
 
-            <!-- CARD 3: SELF-PACED / SKILL TREE -->
             <section style="background: var(--card-bg, #ffffff); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; min-height: 380px; box-shadow: var(--shadow); border: 1px solid var(--border, #cbd5e1);">
               <div>
                 <div style="font-size: 0.88rem; font-weight: 700; color: #0369a1; margin-bottom: 24px;">
@@ -233,7 +227,6 @@ export async function renderStudentDashboard(container) {
     overlay.innerHTML = `
       <div style="background: #ffffff; border-radius: 24px; max-width: 640px; width: 100%; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3); border: 2px solid #0284c7;">
         
-        <!-- HEADER -->
         <div style="padding: 20px 24px; border-bottom: 2px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
           <div>
             <h3 style="margin: 0; font-size: 1.3rem; color: #0f172a; font-weight: 800;">🛍️ Gem Shop & Rewards</h3>
@@ -242,7 +235,6 @@ export async function renderStudentDashboard(container) {
           <button id="btn-close-shop" style="background: #f1f5f9; color: #475569; border: none; padding: 8px 16px; border-radius: 10px; font-weight: 700; cursor: pointer;">✕ Close</button>
         </div>
 
-        <!-- SHOP ITEMS LIST -->
         <div style="padding: 20px; overflow-y: auto; flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; background: #f1f5f9;">
           ${items.map(item => {
             const isUnlocked = (state.profile.unlockedThemes || []).includes(item.id);
@@ -302,7 +294,6 @@ export async function renderStudentDashboard(container) {
         const type = btn.getAttribute("data-type");
         const isUnlocked = (state.profile.unlockedThemes || []).includes(itemId);
 
-        // If unlocking digital theme already unlocked, activate instantly
         if (type === "DIGITAL" && isUnlocked) {
           state.profile.activeTheme = itemId;
           document.body.className = itemId !== "default" ? itemId : "";
