@@ -1,8 +1,7 @@
 import { calculateNextScore, getDecayedScore } from "./utils/masteryScoreEngine.js";
 
-// Master System Configuration & Feature Flags
 export const CONFIG = {
-  ENABLE_GEMS: true,   // Set to false to isolate and disable all Gem features safely
+  ENABLE_GEMS: true,
   XP_PER_GEM: 100
 };
 
@@ -20,8 +19,8 @@ export const state = {
     activeTheme: "default"
   },
   curriculum: [],
-  mastery: {}, // Keyed by generatorPath
-  skillTags: {}, // Class skill tag mappings for logged-in student
+  mastery: {},
+  skillTags: {},
   shopItems: [],
   redemptions: [],
   teacherData: {
@@ -109,7 +108,6 @@ export function setStateData(payload) {
   
   if (payload.token) state.userToken = payload.token;
 
-  // Dynamically apply current theme if enabled
   if (CONFIG.ENABLE_GEMS && state.profile.activeTheme && typeof document !== "undefined") {
     document.body.className = state.profile.activeTheme !== "default" ? state.profile.activeTheme : "";
   }
@@ -117,9 +115,6 @@ export function setStateData(payload) {
 
 export const updateState = setStateData;
 
-/**
- * Increments XP and checks for 100-XP Gem Milestone Crossings.
- */
 export function addXP(amount) {
   if (!state.profile) return;
 
@@ -130,7 +125,6 @@ export function addXP(amount) {
   const xpEl = document.getElementById("nav-profile-xp");
   if (xpEl) xpEl.innerText = state.profile.xp;
 
-  // Gracefully skip Gem calculation if feature flag is disabled
   if (!CONFIG.ENABLE_GEMS) return;
 
   const oldGemsFromXP = Math.floor(oldXP / CONFIG.XP_PER_GEM);
