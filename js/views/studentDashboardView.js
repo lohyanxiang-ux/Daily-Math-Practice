@@ -302,6 +302,9 @@ export async function renderStudentDashboard(container) {
           }
           overlay.remove();
           renderUI();
+          if (typeof window.renderTopNav === "function") {
+            window.renderTopNav(state.profile);
+          }
           return;
         }
 
@@ -321,6 +324,9 @@ export async function renderStudentDashboard(container) {
             alert(r.message);
             overlay.remove();
             renderUI();
+            if (typeof window.renderTopNav === "function") {
+              window.renderTopNav(state.profile);
+            }
           } else {
             alert("Redemption failed: " + (res?.message || "Unknown error"));
           }
