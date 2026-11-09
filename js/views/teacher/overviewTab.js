@@ -88,7 +88,6 @@ export function renderOverviewTabHTML(props) {
       </div>
     </div>
 
-    <!-- PENDING REAL-WORLD PERKS REWARD CLAIMS -->
     ${pendingRedemptions.length > 0 ? `
       <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 16px; padding: 16px;">
         <h3 style="font-size: 1.05rem; color: #0369a1; margin: 0 0 12px 0; font-weight: 800; display: flex; align-items: center; gap: 8px;">
