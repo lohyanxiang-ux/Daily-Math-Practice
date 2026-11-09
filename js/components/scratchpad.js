@@ -4,12 +4,10 @@ export function initScratchpad(containerEl) {
 
   if (!canvas || !wrapper) return;
 
-  // Detect iOS / iPadOS for low-latency desynchronized rendering (prevents desktop GPU black canvas bug)
   const isAppleTouchDevice = 
     /iPad|iPhone|iPod/.test(navigator.userAgent) || 
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-  // 2D Context setup (desynchronized enabled only on iOS/iPadOS)
   const ctx = canvas.getContext("2d", {
     desynchronized: isAppleTouchDevice,
     alpha: true
@@ -20,11 +18,10 @@ export function initScratchpad(containerEl) {
   let lastY = 0;
   let midX = 0;
   let midY = 0;
-  let currentMode = "pen"; // 'pen', 'eraser', or 'pointer'
+  let currentMode = "pen";
   let currentColor = "#1e293b";
   const baseSize = 2.5;
 
-  // Cached bounding rect to prevent DOM reflows during drawing
   let rectCache = canvas.getBoundingClientRect();
 
   function updateRectCache() {
@@ -42,7 +39,6 @@ export function initScratchpad(containerEl) {
   function resizeCanvas() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     
-    // Dynamic sizing strictly matching the actual wrapper height
     const width = wrapper.clientWidth || wrapper.offsetWidth || 300;
     const height = Math.max(wrapper.clientHeight || wrapper.offsetHeight || 400, wrapper.scrollHeight || 0);
 
@@ -51,7 +47,6 @@ export function initScratchpad(containerEl) {
       return;
     }
 
-    // Preserve existing stroke data across window/container resize
     const tempCanvas = document.createElement("canvas");
     if (canvas.width > 0 && canvas.height > 0) {
       tempCanvas.width = canvas.width;
@@ -65,7 +60,6 @@ export function initScratchpad(containerEl) {
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
 
-    // Clear buffer explicitly to prevent solid black desktop compositor fill
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     ctx.scale(dpr, dpr);
@@ -82,7 +76,6 @@ export function initScratchpad(containerEl) {
   updateTouchAction();
   resizeCanvas();
 
-  // ResizeObserver automatically keeps canvas sized to wrapper without layout lag
   if (window.ResizeObserver) {
     const ro = new ResizeObserver(() => {
       resizeCanvas();
@@ -92,7 +85,6 @@ export function initScratchpad(containerEl) {
     window.addEventListener("resize", resizeCanvas);
   }
 
-  // Set context styling once per frame batch (removes string-parsing overhead)
   function prepareContextStyle(pressure = 0.5, pointerType = "mouse") {
     let strokeWidth = baseSize;
     if (currentMode === "eraser") {
@@ -148,17 +140,14 @@ export function initScratchpad(containerEl) {
     if (!isDrawing || currentMode === "pointer" || !e.isPrimary) return;
     if (e.cancelable) e.preventDefault();
 
-    // Extract hardware coalesced events (120Hz-240Hz Apple Pencil sampling)
     const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     if (events.length === 0) return;
 
     const lastEvent = events[events.length - 1];
     const avgPressure = lastEvent.pressure !== undefined && lastEvent.pressure > 0 ? lastEvent.pressure : 0.5;
 
-    // Prepare style ONCE for the frame burst
     prepareContextStyle(avgPressure, e.pointerType);
 
-    // BATCH ALL COALESCED POINTS INTO A SINGLE PATH (cuts GPU draw-call lag by ~90%)
     ctx.beginPath();
     ctx.moveTo(midX, midY);
 
@@ -178,7 +167,6 @@ export function initScratchpad(containerEl) {
       midY = nextMidY;
     }
 
-    // SINGLE STROKE CALL FOR THE ENTIRE EVENT BURST
     ctx.stroke();
   }
 
@@ -192,14 +180,12 @@ export function initScratchpad(containerEl) {
     }
   }
 
-  // Register listeners with { passive: false } for immediate touch dispatch
   canvas.addEventListener("pointerdown", startDrawing, { passive: false });
   canvas.addEventListener("pointermove", draw, { passive: false });
   canvas.addEventListener("pointerup", stopDrawing);
   canvas.addEventListener("pointercancel", stopDrawing);
   canvas.addEventListener("pointerleave", stopDrawing);
 
-  // Prevent gesture intervention during active drawing
   canvas.addEventListener("touchstart", (e) => {
     if (currentMode !== "pointer" && e.touches.length === 1) {
       if (e.cancelable) e.preventDefault();
@@ -216,20 +202,43 @@ export function initScratchpad(containerEl) {
     });
   });
 
-  // Color Swatches
-  containerEl.querySelectorAll(".color-swatch").forEach(swatch => {
-    swatch.addEventListener("click", () => {
-      containerEl.querySelectorAll(".color-swatch").forEach(s => s.classList.remove("active"));
-      swatch.classList.add("active");
-      currentColor = swatch.getAttribute("data-color");
+  // COLOR SWATCH SELECTION HANDLER FIX
+  const swatches = containerEl.querySelectorAll(".color-swatch, .sp-swatch-btn");
+  
+  // Set initial visual outline for the active swatch
+  swatches.forEach(s => {
+    if (s.classList.contains("active")) {
+      s.style.outline = "2px solid #2563eb";
+      s.style.outlineOffset = "1px";
+      const initialColor = s.getAttribute("data-color");
+      if (initialColor) currentColor = initialColor;
+    }
+  });
 
-      if (currentMode === "pointer" || currentMode === "eraser") {
-        currentMode = "pen";
-        containerEl.querySelectorAll("[data-tool]").forEach(b => b.classList.remove("active"));
-        const penBtn = containerEl.querySelector("[data-tool='pen']");
-        if (penBtn) penBtn.classList.add("active");
-        updateTouchAction();
-      }
+  swatches.forEach(swatch => {
+    swatch.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      swatches.forEach(s => {
+        s.classList.remove("active");
+        s.style.outline = "none";
+      });
+
+      swatch.classList.add("active");
+      swatch.style.outline = "2px solid #2563eb";
+      swatch.style.outlineOffset = "1px";
+
+      const selectedColor = swatch.getAttribute("data-color");
+      if (selectedColor) currentColor = selectedColor;
+
+      // Automatically switch back to Pen mode when selecting a color
+      currentMode = "pen";
+      containerEl.querySelectorAll("[data-tool]").forEach(b => {
+        const isPen = b.getAttribute("data-tool") === "pen";
+        b.classList.toggle("active", isPen);
+      });
+      updateTouchAction();
     });
   });
 
