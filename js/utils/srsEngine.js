@@ -1,6 +1,40 @@
 import { state } from "../state.js";
 
-const YEAR_LEVELS = { "Sec 1": 1, "Sec 2": 2, "Sec 3": 3, "Sec 4": 4 };
+const YEAR_LEVELS = { "Sec 1": 1, "Sec 2": 2, "Sec 3": 3, "Sec 4": 4, "1": 1, "2": 2, "3": 3, "4": 4 };
+
+/**
+ * Parses numeric year level safely (e.g. "Sec 3" -> 3, "3" -> 3, 3 -> 3).
+ * Defaults to 4 (all unlocked) if unparseable or unspecified.
+ */
+function parseYearLevel(val) {
+  if (val === undefined || val === null || val === "") return 4;
+  const str = String(val).trim();
+  const match = str.match(/\d+/);
+  if (match) {
+    const num = parseInt(match[0], 10);
+    if (num >= 1 && num <= 4) return num;
+  }
+  const lower = str.toLowerCase();
+  if (lower.includes("sec 1") || lower.includes("s1")) return 1;
+  if (lower.includes("sec 2") || lower.includes("s2")) return 2;
+  if (lower.includes("sec 3") || lower.includes("s3")) return 3;
+  if (lower.includes("sec 4") || lower.includes("s4")) return 4;
+  return 4;
+}
+
+/**
+ * Normalizes and matches academic streams (e.g., "G3" <-> "Express", "G2" <-> "NA", "G1" <-> "NT").
+ */
+function matchesStream(skillStream, studentStream) {
+  if (!skillStream || skillStream === "All" || !studentStream || studentStream === "All") return true;
+  const s1 = String(skillStream).trim().toLowerCase();
+  const s2 = String(studentStream).trim().toLowerCase();
+  if (s1 === s2) return true;
+  if ((s1 === "g3" || s1 === "express") && (s2 === "g3" || s2 === "express")) return true;
+  if ((s1 === "g2" || s1 === "na" || s1.includes("academic")) && (s2 === "g2" || s2 === "na" || s2.includes("academic"))) return true;
+  if ((s1 === "g1" || s1 === "nt" || s1.includes("technical")) && (s2 === "g1" || s2 === "nt" || s2.includes("technical"))) return true;
+  return false;
+}
 
 /**
  * Robust path matcher: Strips prefixes ('js/questions/'), file extensions ('.js'),
@@ -9,27 +43,26 @@ const YEAR_LEVELS = { "Sec 1": 1, "Sec 2": 2, "Sec 3": 3, "Sec 4": 4 };
 export function getSkillTagFromMap(tagsMap, path) {
   if (!tagsMap || !path || typeof tagsMap !== "object") return null;
 
-  const normInput = String(path)
+  // Direct lookup first
+  if (typeof tagsMap[path] === "string") return tagsMap[path];
+
+  const normalize = (p) => String(p || "")
     .trim()
     .replace(/\\/g, '/')
     .replace(/^(\.\/)?(js\/)?(questions\/)?/i, '')
     .replace(/\.js$/i, '')
     .toLowerCase();
 
-  if (tagsMap[path]) return tagsMap[path];
+  const normInput = normalize(path);
 
   for (const [key, val] of Object.entries(tagsMap)) {
     if (!key || !val) continue;
 
-    const normKey = String(key)
-      .trim()
-      .replace(/\\/g, '/')
-      .replace(/^(\.\/)?(js\/)?(questions\/)?/i, '')
-      .replace(/\.js$/i, '')
-      .toLowerCase();
+    const tagStr = typeof val === "string" ? val : (val.tag || val.status || null);
+    if (!tagStr) continue;
 
-    if (normKey === normInput) {
-      return val;
+    if (normalize(key) === normInput) {
+      return tagStr;
     }
   }
 
@@ -38,27 +71,58 @@ export function getSkillTagFromMap(tagsMap, path) {
 
 /**
  * Resolves skill tags across student and teacher state sources with normalized class matching.
+ * Handles both flat path-to-tag maps and nested class-to-path-tag maps.
  */
 export function getResolvedClassSkillTags() {
-  const studentClass = String(state.profile?.class || state.profile?.className || state.user?.class || "")
-    .trim()
-    .toLowerCase()
-    .replace(/^class\s*/i, "");
+  const rawClass = String(
+    state.profile?.class || 
+    state.profile?.className || 
+    state.user?.class || 
+    state.selectedClass || 
+    ""
+  ).trim();
 
-  if (state.skillTags && typeof state.skillTags === "object" && Object.keys(state.skillTags).length > 0) {
-    return state.skillTags;
-  }
+  const studentClass = rawClass.toLowerCase().replace(/^class\s*/i, "");
 
-  if (state.profile?.skillTags && typeof state.profile.skillTags === "object" && Object.keys(state.profile.skillTags).length > 0) {
-    return state.profile.skillTags;
-  }
+  const sources = [
+    state.skillTags,
+    state.profile?.skillTags,
+    state.classSkillTags,
+    state.profile?.classSkillTags,
+    state.teacherData?.classSkillTags,
+    state.teacherData?.tags
+  ];
 
-  const teacherClassTags = state.teacherData?.classSkillTags || state.classSkillTags;
-  if (teacherClassTags && typeof teacherClassTags === "object") {
-    for (const [cKey, tags] of Object.entries(teacherClassTags)) {
-      const cleanCKey = String(cKey).trim().toLowerCase().replace(/^class\s*/i, "");
-      if (cleanCKey === studentClass && tags) {
-        return tags;
+  for (const src of sources) {
+    if (!src || typeof src !== "object" || Object.keys(src).length === 0) continue;
+
+    const firstVal = Object.values(src)[0];
+    
+    // Flat map: { "algebra/linearEquations.js": "Priority" }
+    if (typeof firstVal === "string") {
+      return src;
+    }
+
+    // Nested map: { "301": { "algebra/linearEquations.js": "Priority" } }
+    if (typeof firstVal === "object" && firstVal !== null) {
+      // 1. Try class match
+      for (const [cKey, tagsMap] of Object.entries(src)) {
+        const cleanCKey = String(cKey).trim().toLowerCase().replace(/^class\s*/i, "");
+        if (cleanCKey === studentClass && tagsMap && typeof tagsMap === "object") {
+          return tagsMap;
+        }
+      }
+      // 2. Try "all" fallback class
+      for (const [cKey, tagsMap] of Object.entries(src)) {
+        const cleanCKey = String(cKey).trim().toLowerCase().replace(/^class\s*/i, "");
+        if (cleanCKey === "all" && tagsMap && typeof tagsMap === "object") {
+          return tagsMap;
+        }
+      }
+      // 3. Fallback: single class in map
+      const classKeys = Object.keys(src);
+      if (classKeys.length === 1 && typeof src[classKeys[0]] === "object") {
+        return src[classKeys[0]];
       }
     }
   }
@@ -70,7 +134,7 @@ export function getResolvedClassSkillTags() {
  * Fallback tag when no explicit entry exists in ClassSkillTags sheet.
  */
 function getFallbackTag(skill, studentYearLevel) {
-  const skillYearLevel = YEAR_LEVELS[String(skill.year || skill.level || "").trim()] || 1;
+  const skillYearLevel = parseYearLevel(skill.year || skill.level);
   if (skillYearLevel < studentYearLevel) return "Past";
   if (skillYearLevel === studentYearLevel) return "Current";
   return "Future";
@@ -78,8 +142,8 @@ function getFallbackTag(skill, studentYearLevel) {
 
 /**
  * Calculates the Smart Review Score (SRS) & component breakdown for a single skill (0–100 scale).
- * Updated with new tag weights (Priority +30, Current +25, Past +10), Time Decay (Max 25),
- * and Low-Mastery (<50) Priority Struggle Override (+15).
+ * Tag weights: Priority +30, Current +25, Past +10 (Future excluded).
+ * Time Decay (Max 25), Deficit (Max 30), Struggle Factor (Max 15).
  */
 export function calculateSRSBreakdown(generatorPath, masteryRecord, skillTag) {
   const tag = String(skillTag || "").toUpperCase();
@@ -151,7 +215,7 @@ export function calculateSRSBreakdown(generatorPath, masteryRecord, skillTag) {
 }
 
 /**
- * Generates an adaptive Smart Review Queue using weighted probabilistic selection.
+ * Generates an adaptive Smart Review Queue based on calculated SRS scores.
  */
 export function getSmartReviewQueue(options = {}) {
   const {
@@ -159,18 +223,18 @@ export function getSmartReviewQueue(options = {}) {
     selectedStrand = "All"
   } = options;
 
-  const studentYearStr = state.profile ? String(state.profile.year).trim() : "Sec 1";
-  const studentStreamStr = state.profile ? String(state.profile.stream).trim() : "G3";
-  const studentYearLevel = YEAR_LEVELS[studentYearStr] || 1;
+  const studentYearStr = state.profile ? (state.profile.year || state.profile.level) : "";
+  const studentStreamStr = state.profile ? state.profile.stream : "";
+  const studentYearLevel = parseYearLevel(studentYearStr);
 
   const resolvedTagsMap = getResolvedClassSkillTags();
   const candidateSkills = [];
 
   (state.curriculum || []).forEach(skill => {
-    if (skill.stream && String(skill.stream).trim() !== studentStreamStr) return;
+    if (!matchesStream(skill.stream, studentStreamStr)) return;
     if (selectedStrand !== "All" && skill.strand !== selectedStrand) return;
 
-    const skillYearLevel = YEAR_LEVELS[String(skill.year).trim()] || 1;
+    const skillYearLevel = parseYearLevel(skill.year || skill.level);
     if (skillYearLevel > studentYearLevel) return;
 
     const path = skill.generatorPath;
@@ -202,28 +266,20 @@ export function getSmartReviewQueue(options = {}) {
   // Sort candidate pool by SRS score descending
   candidateSkills.sort((a, b) => b.srsScore - a.srsScore);
 
-  // Weighted Probabilistic Selection
-  const pool = candidateSkills.map(c => ({ ...c, tempWeight: c.srsScore }));
+  // Reliable Queue Selection: Prioritize highest SRS topics directly
   const questionQueue = [];
 
-  while (questionQueue.length < questionCount && pool.length > 0) {
-    const totalSRS = pool.reduce((sum, item) => sum + item.tempWeight, 0);
+  // Step 1: Pick distinct skills starting from highest SRS score down
+  for (const item of candidateSkills) {
+    if (questionQueue.length >= questionCount) break;
+    questionQueue.push(item.generatorPath);
+  }
 
-    if (totalSRS <= 0) {
-      const nextItem = pool[questionQueue.length % pool.length];
-      questionQueue.push(nextItem.generatorPath);
-      continue;
-    }
-
-    let rand = Math.random() * totalSRS;
-    for (let i = 0; i < pool.length; i++) {
-      rand -= pool[i].tempWeight;
-      if (rand <= 0) {
-        questionQueue.push(pool[i].generatorPath);
-        pool[i].tempWeight = Math.max(1, Math.round(pool[i].tempWeight * 0.3));
-        break;
-      }
-    }
+  // Step 2: If questionCount exceeds available distinct candidate skills, cycle top SRS skills to fill queue
+  let cycleIdx = 0;
+  while (questionQueue.length < questionCount && candidateSkills.length > 0) {
+    questionQueue.push(candidateSkills[cycleIdx % candidateSkills.length].generatorPath);
+    cycleIdx++;
   }
 
   questionQueue.candidateSkills = candidateSkills;
