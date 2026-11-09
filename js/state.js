@@ -1,5 +1,11 @@
 import { calculateNextScore, getDecayedScore } from "./utils/masteryScoreEngine.js";
 
+// Master System Configuration & Feature Flags
+export const CONFIG = {
+  ENABLE_GEMS: true,   // Set to false to isolate and disable all Gem features safely
+  XP_PER_GEM: 100
+};
+
 export const state = {
   userToken: null,
   profile: {
@@ -8,15 +14,21 @@ export const state = {
     stream: "G3",
     role: "student",
     xp: 0,
-    streakCount: 0
+    streakCount: 0,
+    gems: 0,
+    unlockedThemes: ["default"],
+    activeTheme: "default"
   },
   curriculum: [],
   mastery: {}, // Keyed by generatorPath
   skillTags: {}, // Class skill tag mappings for logged-in student
+  shopItems: [],
+  redemptions: [],
   teacherData: {
     students: [],
     classMastery: {},
-    classSkillTags: {}
+    classSkillTags: {},
+    pendingRedemptions: []
   },
   pendingMasteryUpdates: new Set(),
   dailySession: {
@@ -25,14 +37,11 @@ export const state = {
   }
 };
 
-// Expose state globally for browser console debugging
 if (typeof window !== "undefined") {
   window.state = state;
+  window.CONFIG = CONFIG;
 }
 
-/**
- * Resets local state when user logs out.
- */
 export function resetState() {
   state.userToken = null;
   state.profile = {
@@ -41,25 +50,37 @@ export function resetState() {
     stream: "G3",
     role: "student",
     xp: 0,
-    streakCount: 0
+    streakCount: 0,
+    gems: 0,
+    unlockedThemes: ["default"],
+    activeTheme: "default"
   };
   state.curriculum = [];
   state.mastery = {};
   state.skillTags = {};
-  state.teacherData = { students: [], classMastery: {}, classSkillTags: {} };
+  state.shopItems = [];
+  state.redemptions = [];
+  state.teacherData = { students: [], classMastery: {}, classSkillTags: {}, pendingRedemptions: [] };
   state.pendingMasteryUpdates.clear();
   state.dailySession = { targetQuestions: 5, completedToday: 0 };
 }
 
-/**
- * Initializes/updates state from backend payload.
- */
 export function setStateData(payload) {
   if (!payload) return;
-  if (payload.profile) state.profile = { ...state.profile, ...payload.profile };
+  if (payload.profile) {
+    state.profile = {
+      ...state.profile,
+      ...payload.profile,
+      gems: payload.profile.gems !== undefined ? payload.profile.gems : (state.profile.gems || 0),
+      unlockedThemes: payload.profile.unlockedThemes || state.profile.unlockedThemes || ["default"],
+      activeTheme: payload.profile.activeTheme || state.profile.activeTheme || "default"
+    };
+  }
+
   if (payload.curriculum) state.curriculum = payload.curriculum;
+  if (payload.shopItems) state.shopItems = payload.shopItems;
+  if (payload.redemptions) state.redemptions = payload.redemptions;
   
-  // Store class skill tags (handles empty or populated objects safely)
   if (payload.skillTags && typeof payload.skillTags === "object") {
     state.skillTags = { ...payload.skillTags };
   }
@@ -68,19 +89,9 @@ export function setStateData(payload) {
   
   if (payload.mastery) {
     state.mastery = {};
-    // Process mastery map and apply decay / legacy conversions
     Object.keys(payload.mastery).forEach(path => {
       const item = payload.mastery[path];
-      let rawScore = item.score !== undefined ? item.score : (item.stars !== undefined ? item.stars : 0);
-
-      // Legacy conversion for old 0–3 star records stored in Sheet
-      if (rawScore > 0 && rawScore <= 3 && item.score === undefined) {
-        if (rawScore === 1) rawScore = 40;
-        else if (rawScore === 2) rawScore = 70;
-        else if (rawScore === 3) rawScore = 90;
-      }
-
-      // Calculate time-decayed score for SRS
+      let rawScore = item.score !== undefined ? item.score : 0;
       const effectiveScore = getDecayedScore(rawScore, item.lastPracticed, 2);
 
       state.mastery[path] = {
@@ -98,21 +109,46 @@ export function setStateData(payload) {
   
   if (payload.token) state.userToken = payload.token;
 
-  console.log("State updated. Loaded skillTags count:", Object.keys(state.skillTags).length);
+  // Dynamically apply current theme if enabled
+  if (CONFIG.ENABLE_GEMS && state.profile.activeTheme && typeof document !== "undefined") {
+    document.body.className = state.profile.activeTheme !== "default" ? state.profile.activeTheme : "";
+  }
 }
 
-// Export alias so app.js imports work seamlessly
 export const updateState = setStateData;
 
+/**
+ * Increments XP and checks for 100-XP Gem Milestone Crossings.
+ */
 export function addXP(amount) {
-  state.profile.xp = (state.profile.xp || 0) + amount;
+  if (!state.profile) return;
+
+  const oldXP = Number(state.profile.xp) || 0;
+  const newXP = oldXP + amount;
+  state.profile.xp = newXP;
+
   const xpEl = document.getElementById("nav-profile-xp");
   if (xpEl) xpEl.innerText = state.profile.xp;
+
+  // Gracefully skip Gem calculation if feature flag is disabled
+  if (!CONFIG.ENABLE_GEMS) return;
+
+  const oldGemsFromXP = Math.floor(oldXP / CONFIG.XP_PER_GEM);
+  const newGemsFromXP = Math.floor(newXP / CONFIG.XP_PER_GEM);
+  const gemsEarned = newGemsFromXP - oldGemsFromXP;
+
+  if (gemsEarned > 0) {
+    state.profile.gems = (Number(state.profile.gems) || 0) + gemsEarned;
+    
+    const gemNavEl = document.getElementById("nav-profile-gems");
+    if (gemNavEl) gemNavEl.innerText = state.profile.gems;
+
+    if (typeof window.showGemEarnedToast === "function") {
+      window.showGemEarnedToast(gemsEarned);
+    }
+  }
 }
 
-/**
- * Local-First Question Attempt Recorder using Mastery Score (0–100).
- */
 export function recordQuestionAttempt(generatorPath, isCorrect, hintsUsed = 0, maxHints = 3) {
   if (!generatorPath) return;
 
@@ -129,26 +165,14 @@ export function recordQuestionAttempt(generatorPath, isCorrect, hintsUsed = 0, m
   skillData.totalAttempted += 1;
   if (isCorrect) skillData.totalCorrect += 1;
 
-  // Maintain rolling history of last 10 attempts
-  skillData.rollingHistory.push({
-    correct: isCorrect,
-    hints: hintsUsed,
-    timestamp: Date.now()
-  });
+  skillData.rollingHistory.push({ correct: isCorrect, hints: hintsUsed, timestamp: Date.now() });
+  if (skillData.rollingHistory.length > 10) skillData.rollingHistory.shift();
 
-  if (skillData.rollingHistory.length > 10) {
-    skillData.rollingHistory.shift();
-  }
-
-  // Calculate rolling accuracy
   const totalRolling = skillData.rollingHistory.length;
   const correctRolling = skillData.rollingHistory.filter(h => h.correct).length;
   skillData.accuracy = totalRolling > 0 ? Math.round((correctRolling / totalRolling) * 100) : 0;
 
-  // Check if score is currently decayed
   const isDecayed = (skillData.effectiveScore || skillData.score) < skillData.score;
-
-  // Calculate new Mastery Score (0–100)
   const nextScore = calculateNextScore(skillData.score, isCorrect, hintsUsed, maxHints, isDecayed);
   skillData.score = nextScore;
   skillData.effectiveScore = nextScore;
