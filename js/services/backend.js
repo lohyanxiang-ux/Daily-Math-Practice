@@ -13,9 +13,6 @@ export async function fetchUserData(tokenInput) {
   return await response.json();
 }
 
-/**
- * Authenticates students using 4-digit PIN only (Column C PIN & Column M Active Status verification).
- */
 export async function loginWithPin(pin) {
   const response = await fetch(APPS_SCRIPT_URL, {
     method: "POST",
@@ -27,10 +24,7 @@ export async function loginWithPin(pin) {
   return await response.json();
 }
 
-/**
- * Syncs user XP, Streak, and optional Daily Quest completion date.
- */
-export async function syncUserProgress(idToken, xp, streakCount, lastDailyQuestDate = null) {
+export async function syncUserProgress(idToken, xp, streakCount, lastDailyQuestDate = null, gems = null, activeTheme = null) {
   try {
     const payload = {
       token: idToken,
@@ -39,9 +33,9 @@ export async function syncUserProgress(idToken, xp, streakCount, lastDailyQuestD
       streakCount: streakCount
     };
 
-    if (lastDailyQuestDate) {
-      payload.lastDailyQuestDate = lastDailyQuestDate;
-    }
+    if (lastDailyQuestDate) payload.lastDailyQuestDate = lastDailyQuestDate;
+    if (gems !== null) payload.gems = gems;
+    if (activeTheme) payload.activeTheme = activeTheme;
 
     await fetch(APPS_SCRIPT_URL, {
       method: "POST",
@@ -53,9 +47,61 @@ export async function syncUserProgress(idToken, xp, streakCount, lastDailyQuestD
   }
 }
 
-/**
- * Transmits dirty skill mastery records in a single batch request.
- */
+export async function redeemShopItem(idToken, itemId) {
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        token: idToken,
+        action: "redeemShopItem",
+        itemId: itemId
+      })
+    });
+    return await response.json();
+  } catch (err) {
+    console.error("Failed to redeem shop item:", err);
+  }
+}
+
+export async function adjustStudentBalance(idToken, studentEmail, xpDelta, gemDelta, reason) {
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        token: idToken,
+        action: "adjustStudentBalance",
+        studentEmail: studentEmail,
+        xpDelta: xpDelta,
+        gemDelta: gemDelta,
+        reason: reason
+      })
+    });
+    return await response.json();
+  } catch (err) {
+    console.error("Failed to adjust student balance:", err);
+  }
+}
+
+export async function processRedemptionClaim(idToken, redemptionId, status) {
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        token: idToken,
+        action: "processRedemptionClaim",
+        redemptionId: redemptionId,
+        status: status
+      })
+    });
+    return await response.json();
+  } catch (err) {
+    console.error("Failed to process redemption claim:", err);
+  }
+}
+
 export async function syncBatchMastery(idToken, updatesArray) {
   if (!updatesArray || updatesArray.length === 0) return;
 
@@ -75,9 +121,6 @@ export async function syncBatchMastery(idToken, updatesArray) {
   }
 }
 
-/**
- * Saves Class Skill Tags set by teacher in Google Sheet.
- */
 export async function saveClassSkillTags(idToken, className, tagsMap) {
   try {
     const response = await fetch(APPS_SCRIPT_URL, {
