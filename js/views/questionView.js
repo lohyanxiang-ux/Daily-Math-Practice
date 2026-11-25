@@ -496,7 +496,13 @@ export function renderQuestionView(container, options = {}) {
       </main>
     `;
 
-    renderKaTeX(container.querySelector("#question-prompt"));
+    const promptEl = container.querySelector("#question-prompt");
+    console.log("1. Raw currentQuestion.prompt:", currentQuestion.prompt);
+    console.log("2. DOM #question-prompt BEFORE renderKaTeX:", promptEl ? promptEl.innerHTML : null);
+
+    renderKaTeX(promptEl);
+
+    console.log("3. DOM #question-prompt AFTER renderKaTeX:", promptEl ? promptEl.innerHTML : null);
     initScratchpad(container);
 
     initKeypad(
