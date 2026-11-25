@@ -1,5 +1,6 @@
 function decodeHtmlEntities(str) {
-  return str
+  if (!str) return "";
+  return String(str)
     .replace(/</g, "<")
     .replace(/>/g, ">")
     .replace(/"/g, '"')
