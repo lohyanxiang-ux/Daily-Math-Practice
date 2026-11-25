@@ -16,34 +16,101 @@ function pickRandom(arr) {
 }
 
 /**
- * Deterministic smooth cumulative frequency function CF(x) on [xMin, xMax]
- * mapped to [0, total] via a smooth S-curve (smoothstep / cubic blend).
+ * Grid snapping helper:
+ * Each major interval has 5 small boxes, so:
+ * - 1 small box = step / 5
+ * - Half a small box (edge or middle of a small box) = step / 10
  */
-function smoothstep01(t) {
-  const clamped = Math.max(0, Math.min(1, t));
-  return clamped * clamped * (3 - 2 * clamped);
+function getSnapUnits(xStep, yStep) {
+  return {
+    xSmall: xStep / 5,
+    xHalf: xStep / 10,
+    ySmall: yStep / 5,
+    yHalf: yStep / 10
+  };
 }
 
-function evalCf(x, xMin, xMax, total) {
-  const t = (x - xMin) / (xMax - xMin);
-  return Math.round(total * smoothstep01(t));
+function snapToHalfBox(val, halfStep, minVal, maxVal) {
+  const snapped = Math.round(val / halfStep) * halfStep;
+  return Math.max(minVal, Math.min(maxVal, Number(snapped.toFixed(4))));
 }
 
-function invertCfForValue(targetCf, xMin, xMax, total) {
-  // Monotone non-decreasing lookup with linear interpolation on grid steps
-  const steps = 200;
-  for (let i = 0; i < steps; i++) {
-    const xA = xMin + ((xMax - xMin) * i) / steps;
-    const xB = xMin + ((xMax - xMin) * (i + 1)) / steps;
-    const cfA = evalCf(xA, xMin, xMax, total);
-    const cfB = evalCf(xB, xMin, xMax, total);
-    if (targetCf >= cfA && targetCf <= cfB) {
-      if (cfB === cfA) return Number(xA.toFixed(1));
-      const frac = (targetCf - cfA) / (cfB - cfA);
-      return Number((xA + frac * (xB - xA)).toFixed(1));
+/**
+ * Builds a monotone piecewise-smooth ogive from snapped control knots
+ * so that readings at any snapped x or cf land on a small-box edge or middle.
+ */
+function createCurveEvaluator(scenario) {
+  const { xMin, xMax, xStep, yStep, total } = scenario;
+  const { xSmall, yHalf } = getSnapUnits(xStep, yStep);
+
+  const rawFractions = [0, 0.06, 0.22, 0.52, 0.82, 0.95, 1];
+  const knots = [];
+
+  for (let i = 0; i < rawFractions.length; i++) {
+    let kx;
+    if (i === 0) kx = xMin;
+    else if (i === rawFractions.length - 1) kx = xMax;
+    else {
+      const frac = i / (rawFractions.length - 1);
+      const approxX = xMin + frac * (xMax - xMin);
+      kx = snapToHalfBox(approxX, xSmall, xMin + xSmall, xMax - xSmall);
     }
+
+    let kcf;
+    if (i === 0) kcf = 0;
+    else if (i === rawFractions.length - 1) kcf = total;
+    else {
+      const approxCf = rawFractions[i] * total;
+      kcf = snapToHalfBox(approxCf, yHalf, yHalf, total - yHalf);
+    }
+
+    if (knots.length > 0) {
+      const prev = knots[knots.length - 1];
+      if (kx <= prev.x) {
+        kx = Math.min(xMax, Number((prev.x + xSmall).toFixed(4)));
+      }
+      if (kcf < prev.cf) {
+        kcf = prev.cf;
+      }
+    }
+    knots.push({ x: kx, cf: kcf });
   }
-  return targetCf <= 0 ? xMin : xMax;
+
+  // Ensure monotonic non-decreasing along any snapped x grid
+  function evalCf(x) {
+    if (x <= knots[0].x) return 0;
+    if (x >= knots[knots.length - 1].x) return total;
+
+    for (let i = 0; i < knots.length - 1; i++) {
+      const p0 = knots[i];
+      const p1 = knots[i + 1];
+      if (x >= p0.x && x <= p1.x) {
+        if (p1.x === p0.x) return p1.cf;
+        const t = (x - p0.x) / (p1.x - p0.x);
+        const smoothT = t * t * (3 - 2 * t);
+        const rawVal = p0.cf + smoothT * (p1.cf - p0.cf);
+        return snapToHalfBox(rawVal, yHalf, p0.cf, p1.cf);
+      }
+    }
+    return total;
+  }
+
+  function invertCf(targetCf) {
+    const clampedCf = snapToHalfBox(targetCf, yHalf, 0, total);
+    let bestX = xMin;
+    const stepCount = Math.max(10, Math.round((xMax - xMin) / xSmall));
+    for (let i = 0; i <= stepCount; i++) {
+      const candidateX = Number((xMin + i * xSmall).toFixed(4));
+      const cfAtX = evalCf(candidateX);
+      if (cfAtX >= clampedCf) {
+        bestX = candidateX;
+        break;
+      }
+    }
+    return bestX;
+  }
+
+  return { evalCf, invertCf };
 }
 
 /**
@@ -60,6 +127,7 @@ function buildCfGraphSvg({
   total,
   yStep,
   hasBreak = false,
+  evalCf,
   highlights = []
 }) {
   const width = 420;
@@ -89,17 +157,14 @@ function buildCfGraphSvg({
   const yMinorCount = 5;
   const yMinorStep = yStep / yMinorCount;
   for (let yv = 0; yv <= yMax + 1e-9; yv += yMinorStep) {
-    const isMajor =
-      Math.abs(Math.round(yv / yStep) - yv / yStep) < 1e-6;
+    const isMajor = Math.abs(Math.round(yv / yStep) - yv / yStep) < 1e-6;
     const sy = toSvgY(yv).toFixed(1);
     gridLines += `<line x1='${padLeft}' y1='${sy}' x2='${(padLeft + plotW).toFixed(1)}' y2='${sy}' stroke='${isMajor ? "#cbd5e1" : "#e2e8f0"}' stroke-width='${isMajor ? "1.1" : "0.6"}'/>`;
   }
 
-  // Axis ticks & labels
   let ticksAndLabels = "";
   for (let xv = xMin; xv <= xMax + 1e-9; xv += xStep) {
     const sx = toSvgX(xv).toFixed(1);
-    const baseY = (padTop + plotH).toFixed(1);
     ticksAndLabels += `<line x1='${sx}' y1='${(padTop + plotH - 4).toFixed(1)}' x2='${sx}' y2='${(padTop + plotH + 4).toFixed(1)}' stroke='#1e293b' stroke-width='1.5'/><text x='${sx}' y='${(padTop + plotH + 17).toFixed(1)}' font-size='11' fill='#1e293b' text-anchor='middle' font-family='sans-serif'>${Math.round(xv)}</text>`;
   }
 
@@ -108,25 +173,23 @@ function buildCfGraphSvg({
     ticksAndLabels += `<line x1='${(padLeft - 4).toFixed(1)}' y1='${sy}' x2='${(padLeft + 4).toFixed(1)}' y2='${sy}' stroke='#1e293b' stroke-width='1.5'/><text x='${(padLeft - 8).toFixed(1)}' y='${(Number(sy) + 4).toFixed(1)}' font-size='11' fill='#1e293b' text-anchor='end' font-family='sans-serif'>${Math.round(yv)}</text>`;
   }
 
-  // Origin label
   ticksAndLabels += `<text x='${(padLeft - 8).toFixed(1)}' y='${(padTop + plotH + 17).toFixed(1)}' font-size='11' fill='#475569' text-anchor='end' font-family='sans-serif'>0</text>`;
 
-  // Optional axis break zig-zag on x-axis
   const axisBreakSvg = hasBreak
     ? `<polyline points='${(padLeft + 10).toFixed(1)},${(padTop + plotH).toFixed(1)} ${(padLeft + 15).toFixed(1)},${(padTop + plotH - 7).toFixed(1)} ${(padLeft + 21).toFixed(1)},${(padTop + plotH + 7).toFixed(1)} ${(padLeft + 26).toFixed(1)},${(padTop + plotH).toFixed(1)}' fill='none' stroke='#1e293b' stroke-width='1.6'/>`
     : "";
 
-  // Smooth curve path
-  const samples = 60;
+  const samples = 80;
   const pts = [];
   for (let i = 0; i <= samples; i++) {
     const xv = xMin + ((xMax - xMin) * i) / samples;
-    const cf = evalCf(xv, xMin, xMax, total);
-    pts.push(`${i === 0 ? "M" : "L"} ${toSvgX(xv).toFixed(1)} ${toSvgY(cf).toFixed(1)}`);
+    const cf = evalCf(xv);
+    pts.push(
+      `${i === 0 ? "M" : "L"} ${toSvgX(xv).toFixed(1)} ${toSvgY(cf).toFixed(1)}`
+    );
   }
   const curvePath = `<path d='${pts.join(" ")}' fill='none' stroke='#16a34a' stroke-width='2.4' stroke-linecap='round'/>`;
 
-  // Dashed guide lines for worked solution steps
   let guideSvg = "";
   for (const h of highlights) {
     const sx = toSvgX(h.x).toFixed(1);
@@ -141,10 +204,8 @@ function buildCfGraphSvg({
 const SCENARIOS = [
   {
     entity: "cars",
-    singular: "car",
     title: "Speeds of cars",
     xLabel: "Speed (km/h)",
-    unit: "km/h",
     context:
       "The speeds of $500$ cars passing by a speed camera on an expressway were recorded. The cumulative frequency graph shows the distribution of the speeds in kilometres per hour.",
     total: 500,
@@ -157,15 +218,12 @@ const SCENARIOS = [
       (x) => `had speeds greater than $${x}\\text{ km/h}$`,
       (x) => `were speeding if the speed limit was $${x}\\text{ km/h}$`
     ],
-    lowerPhrases: (x) => `had speeds less than or equal to $${x}\\text{ km/h}$`,
-    sampleX: [50, 60, 70, 80]
+    lowerPhrases: (x) => `had speeds less than or equal to $${x}\\text{ km/h}$`
   },
   {
     entity: "students",
-    singular: "student",
     title: "Times taken to solve a mathematical puzzle",
     xLabel: "Time (min)",
-    unit: "min",
     context:
       "$150$ students were asked to solve a mathematical puzzle. The cumulative frequency graph shows the distribution of the times in minutes taken to solve the puzzle.",
     total: 150,
@@ -174,18 +232,13 @@ const SCENARIOS = [
     xStep: 10,
     yStep: 50,
     hasBreak: false,
-    upperPhrases: [
-      (x) => `took more than $${x}$ minutes to solve the puzzle`
-    ],
-    lowerPhrases: (x) => `took at most $${x}$ minutes to solve the puzzle`,
-    sampleX: [20, 30, 40, 50]
+    upperPhrases: [(x) => `took more than $${x}$ minutes to solve the puzzle`],
+    lowerPhrases: (x) => `took at most $${x}$ minutes to solve the puzzle`
   },
   {
     entity: "parcels",
-    singular: "parcel",
     title: "Masses of parcels",
     xLabel: "Mass (kg)",
-    unit: "kg",
     context:
       "The masses of $100$ small parcels that arrived at a post office on a particular day were measured. The cumulative frequency graph shows the distribution of the masses in kilograms.",
     total: 100,
@@ -194,18 +247,13 @@ const SCENARIOS = [
     xStep: 2,
     yStep: 20,
     hasBreak: false,
-    upperPhrases: [
-      (x) => `had masses greater than $${x}\\text{ kg}$`
-    ],
-    lowerPhrases: (x) => `had masses equal to $${x}\\text{ kg}$ or less`,
-    sampleX: [2, 4, 6, 8]
+    upperPhrases: [(x) => `had masses greater than $${x}\\text{ kg}$`],
+    lowerPhrases: (x) => `had masses equal to $${x}\\text{ kg}$ or less`
   },
   {
     entity: "students",
-    singular: "student",
     title: "Number of trips made by students",
     xLabel: "Number of trips",
-    unit: " trips",
     context:
       "The cumulative frequency graph shows the distribution of the number of trips made via public transport by $300$ students in the first school term of the year.",
     total: 300,
@@ -214,18 +262,13 @@ const SCENARIOS = [
     xStep: 5,
     yStep: 100,
     hasBreak: true,
-    upperPhrases: [
-      (x) => `made more than $${x}$ trips`
-    ],
-    lowerPhrases: (x) => `made at most $${x}$ trips`,
-    sampleX: [95, 100, 105, 110]
+    upperPhrases: [(x) => `made more than $${x}$ trips`],
+    lowerPhrases: (x) => `made at most $${x}$ trips`
   },
   {
     entity: "plants",
-    singular: "plant",
     title: "Heights of plants",
     xLabel: "Height (cm)",
-    unit: " cm",
     context:
       "The cumulative frequency graph shows the distribution of the heights, in centimetres, of $400$ plants after two months.",
     total: 400,
@@ -234,17 +277,127 @@ const SCENARIOS = [
     xStep: 10,
     yStep: 100,
     hasBreak: false,
+    upperPhrases: [(x) => `had heights greater than $${x}\\text{ cm}$`],
+    lowerPhrases: (x) => `had heights less than or equal to $${x}\\text{ cm}$`
+  },
+  {
+    entity: "students",
+    title: "Mathematics test scores",
+    xLabel: "Score (marks)",
+    context:
+      "The scores of $200$ Secondary 3 students in a Mathematics test out of $80$ marks were recorded. The cumulative frequency graph shows the distribution of their scores.",
+    total: 200,
+    xMin: 20,
+    xMax: 80,
+    xStep: 10,
+    yStep: 50,
+    hasBreak: true,
     upperPhrases: [
-      (x) => `had heights greater than $${x}\\text{ cm}$`
+      (x) => `scored more than $${x}$ marks`,
+      (x) => `achieved a distinction if the cutoff was above $${x}$ marks`
     ],
-    lowerPhrases: (x) => `had heights less than or equal to $${x}\\text{ cm}$`,
-    sampleX: [15, 20, 30, 40, 45, 50]
+    lowerPhrases: (x) => `scored $${x}$ marks or fewer`
+  },
+  {
+    entity: "patients",
+    title: "Waiting times at a clinic",
+    xLabel: "Waiting time (min)",
+    context:
+      "The waiting times of $250$ patients visiting a neighbourhood clinic on a Monday morning were recorded. The cumulative frequency graph shows the distribution of waiting times in minutes.",
+    total: 250,
+    xMin: 0,
+    xMax: 50,
+    xStep: 10,
+    yStep: 50,
+    hasBreak: false,
+    upperPhrases: [(x) => `waited for more than $${x}$ minutes`],
+    lowerPhrases: (x) => `waited for $${x}$ minutes or less`
+  },
+  {
+    entity: "batteries",
+    title: "Battery life of wireless earbuds",
+    xLabel: "Battery life (h)",
+    context:
+      "A manufacturer tested $120$ wireless earbuds to measure how long their batteries lasted on a single charge. The cumulative frequency graph shows the results in hours.",
+    total: 120,
+    xMin: 10,
+    xMax: 35,
+    xStep: 5,
+    yStep: 20,
+    hasBreak: true,
+    upperPhrases: [(x) => `lasted for more than $${x}$ hours`],
+    lowerPhrases: (x) => `lasted for at most $${x}$ hours`
+  },
+  {
+    entity: "households",
+    title: "Monthly water consumption",
+    xLabel: "Water usage (m³)",
+    context:
+      "The monthly water consumption of $600$ households in a residential estate was recorded. The cumulative frequency graph shows the distribution in cubic metres ($\\text{m}^3$).",
+    total: 600,
+    xMin: 10,
+    xMax: 60,
+    xStep: 10,
+    yStep: 100,
+    hasBreak: true,
+    upperPhrases: [(x) => `used more than $${x}\\text{ m}^3$ of water`],
+    lowerPhrases: (x) => `used $${x}\\text{ m}^3$ of water or less`
+  },
+  {
+    entity: "runners",
+    title: "Distances run in a charity event",
+    xLabel: "Distance (km)",
+    context:
+      "$400$ participants took part in a charity run. The cumulative frequency graph shows the distribution of the total distances completed in kilometres.",
+    total: 400,
+    xMin: 0,
+    xMax: 20,
+    xStep: 5,
+    yStep: 100,
+    hasBreak: false,
+    upperPhrases: [(x) => `ran more than $${x}\\text{ km}$`],
+    lowerPhrases: (x) => `ran at most $${x}\\text{ km}$`
   }
 ];
+
+function getSnappedCandidateXs(sc, count = 4) {
+  const { xSmall } = getSnapUnits(sc.xStep, sc.yStep);
+  const minBound = sc.xMin + xSmall;
+  const maxBound = sc.xMax - xSmall;
+  const totalSteps = Math.max(2, Math.round((maxBound - minBound) / xSmall));
+  const candidates = [];
+  for (let i = 1; i < totalSteps; i++) {
+    const val = Number((minBound + i * xSmall).toFixed(4));
+    candidates.push(val);
+  }
+  if (candidates.length <= count) return candidates;
+  const picked = [];
+  for (let i = 0; i < count; i++) {
+    const idx = Math.floor(((i + 0.5) / count) * candidates.length);
+    picked.push(candidates[Math.min(candidates.length - 1, idx)]);
+  }
+  return picked;
+}
 
 export function generateQuestion(tier = 1) {
   const extraKeys = [];
   const sc = pickRandom(SCENARIOS);
+  const { evalCf, invertCf } = createCurveEvaluator(sc);
+  const { yHalf } = getSnapUnits(sc.xStep, sc.yStep);
+  const candidateXs = getSnappedCandidateXs(sc, 4);
+
+  const cleanQuestionGraphSvg = buildCfGraphSvg({
+    title: sc.title,
+    xLabel: sc.xLabel,
+    xMin: sc.xMin,
+    xMax: sc.xMax,
+    xStep: sc.xStep,
+    total: sc.total,
+    yStep: sc.yStep,
+    hasBreak: sc.hasBreak,
+    evalCf,
+    highlights: []
+  });
 
   // =========================================================
   // TIER 1: BASIC (Direct CF Reading, Tail Count/% & CF Table Lookup)
@@ -254,13 +407,13 @@ export function generateQuestion(tier = 1) {
 
     if (subType === 1) {
       // Type 1A: Number or percentage of items <= x
-      const xVal = pickRandom(sc.sampleX);
-      const cfVal = evalCf(xVal, sc.xMin, sc.xMax, sc.total);
+      const xVal = pickRandom(candidateXs);
+      const cfVal = evalCf(xVal);
       const askPct = randInt(0, 1) === 1;
       const pctVal = Number(((cfVal / sc.total) * 100).toPrecision(3)).toString();
       const ans = askPct ? pctVal : cfVal.toString();
 
-      const svg = buildCfGraphSvg({
+      const solSvg = buildCfGraphSvg({
         title: sc.title,
         xLabel: sc.xLabel,
         xMin: sc.xMin,
@@ -269,6 +422,7 @@ export function generateQuestion(tier = 1) {
         total: sc.total,
         yStep: sc.yStep,
         hasBreak: sc.hasBreak,
+        evalCf,
         highlights: [{ x: xVal, cf: cfVal }]
       });
 
@@ -278,11 +432,11 @@ export function generateQuestion(tier = 1) {
 
       const steps = askPct
         ? [
-            `From the graph at $${sc.xLabel.split(" ")[0].toLowerCase()} = ${xVal}$, the cumulative frequency is $${cfVal}$.`,
+            `From the graph at $x = ${xVal}$, the cumulative frequency is $${cfVal}$.\n\n${solSvg}`,
             `Calculate the percentage of ${sc.entity}: $$\\frac{${cfVal}}{${sc.total}} \\times 100\\% = ${ans}\\%$$`
           ]
         : [
-            `Locate $${xVal}$ on the horizontal axis and read up to the curve to find the cumulative frequency: $$\\text{CF}(${xVal}) = ${cfVal}$$`
+            `Locate $${xVal}$ on the horizontal axis and read up to the curve to find the cumulative frequency: $$\\text{CF}(${xVal}) = ${cfVal}$$\n\n${solSvg}`
           ];
 
       return {
@@ -290,8 +444,8 @@ export function generateQuestion(tier = 1) {
         tier: 1,
         tierName: "Basic",
         skillTitle: "Cumulative Frequency Graphs",
-        prompt: `${sc.context}\n\n${svg}\n\nUse the graph to estimate ${targetDesc}.${askPct ? " (Give your answer correct to 3 significant figures.)" : ""}`,
-        diagramSvg: svg,
+        prompt: `${sc.context}\n\nUse the graph to estimate ${targetDesc}.${askPct ? " (Give your answer correct to 3 significant figures.)" : ""}`,
+        diagramSvg: cleanQuestionGraphSvg,
         inputCount: 1,
         inputLabels: [askPct ? "Percentage (%) =" : `Number of ${sc.entity} =`],
         expectedAnswer: ans,
@@ -303,14 +457,14 @@ export function generateQuestion(tier = 1) {
 
     if (subType === 2) {
       // Type 1B: Tail count or percentage (> x)
-      const xVal = pickRandom(sc.sampleX);
-      const cfVal = evalCf(xVal, sc.xMin, sc.xMax, sc.total);
+      const xVal = pickRandom(candidateXs);
+      const cfVal = evalCf(xVal);
       const tailCount = sc.total - cfVal;
       const askPct = randInt(0, 1) === 1;
       const pctVal = Number(((tailCount / sc.total) * 100).toPrecision(3)).toString();
       const ans = askPct ? pctVal : tailCount.toString();
 
-      const svg = buildCfGraphSvg({
+      const solSvg = buildCfGraphSvg({
         title: sc.title,
         xLabel: sc.xLabel,
         xMin: sc.xMin,
@@ -319,6 +473,7 @@ export function generateQuestion(tier = 1) {
         total: sc.total,
         yStep: sc.yStep,
         hasBreak: sc.hasBreak,
+        evalCf,
         highlights: [{ x: xVal, cf: cfVal }]
       });
 
@@ -329,12 +484,12 @@ export function generateQuestion(tier = 1) {
 
       const steps = askPct
         ? [
-            `Read the cumulative frequency at $${xVal}$: $$\\text{CF}(${xVal}) = ${cfVal}$$`,
+            `Read the cumulative frequency at $${xVal}$: $$\\text{CF}(${xVal}) = ${cfVal}$$\n\n${solSvg}`,
             `Find the number of ${sc.entity} above $${xVal}$: $$${sc.total} - ${cfVal} = ${tailCount}$$`,
             `Express as a percentage of $${sc.total}$: $$\\frac{${tailCount}}{${sc.total}} \\times 100\\% = ${ans}\\%$$`
           ]
         : [
-            `Read the cumulative frequency at $${xVal}$: $$\\text{CF}(${xVal}) = ${cfVal}$$`,
+            `Read the cumulative frequency at $${xVal}$: $$\\text{CF}(${xVal}) = ${cfVal}$$\n\n${solSvg}`,
             `Subtract from the total frequency: $$${sc.total} - ${cfVal} = ${tailCount}$$`
           ];
 
@@ -343,8 +498,8 @@ export function generateQuestion(tier = 1) {
         tier: 1,
         tierName: "Basic",
         skillTitle: "Cumulative Frequency Graphs",
-        prompt: `${sc.context}\n\n${svg}\n\nUse the graph to estimate ${targetDesc}.${askPct ? " (Give your answer correct to 3 significant figures.)" : ""}`,
-        diagramSvg: svg,
+        prompt: `${sc.context}\n\nUse the graph to estimate ${targetDesc}.${askPct ? " (Give your answer correct to 3 significant figures.)" : ""}`,
+        diagramSvg: cleanQuestionGraphSvg,
         inputCount: 1,
         inputLabels: [askPct ? "Percentage (%) =" : `Number of ${sc.entity} =`],
         expectedAnswer: ans,
@@ -354,12 +509,12 @@ export function generateQuestion(tier = 1) {
       };
     }
 
-    // subType === 3: Type 1C - Cumulative frequency at a specific upper boundary in a CF table
-    const xVal = pickRandom(sc.sampleX);
-    const cfVal = evalCf(xVal, sc.xMin, sc.xMax, sc.total);
+    // subType === 3: Type 1C - Cumulative frequency at a specific upper boundary
+    const xVal = pickRandom(candidateXs);
+    const cfVal = evalCf(xVal);
     const ans = cfVal.toString();
 
-    const svg = buildCfGraphSvg({
+    const solSvg = buildCfGraphSvg({
       title: sc.title,
       xLabel: sc.xLabel,
       xMin: sc.xMin,
@@ -368,6 +523,7 @@ export function generateQuestion(tier = 1) {
       total: sc.total,
       yStep: sc.yStep,
       hasBreak: sc.hasBreak,
+      evalCf,
       highlights: [{ x: xVal, cf: cfVal }]
     });
 
@@ -376,8 +532,8 @@ export function generateQuestion(tier = 1) {
       tier: 1,
       tierName: "Basic",
       skillTitle: "Cumulative Frequency Graphs",
-      prompt: `${sc.context}\n\n${svg}\n\nFind the cumulative frequency for the class boundary $x \\le ${xVal}$.`,
-      diagramSvg: svg,
+      prompt: `${sc.context}\n\nFind the cumulative frequency for the class boundary $x \\le ${xVal}$.`,
+      diagramSvg: cleanQuestionGraphSvg,
       inputCount: 1,
       inputLabels: [`CF(x ≤ ${xVal}) =`],
       expectedAnswer: ans,
@@ -385,7 +541,7 @@ export function generateQuestion(tier = 1) {
       extraKeys,
       steps: [
         `Locate $x = ${xVal}$ along the horizontal axis and move vertically to the cumulative frequency curve.`,
-        `Read across to the vertical axis to get the cumulative frequency: $$${ans}$$`
+        `Read across to the vertical axis to get the cumulative frequency: $$${ans}$$\n\n${solSvg}`
       ]
     };
   }
@@ -398,18 +554,18 @@ export function generateQuestion(tier = 1) {
 
     if (subType === 1) {
       // Type 2A: Interval count or percentage (a < x <= b)
-      const idxA = randInt(0, sc.sampleX.length - 2);
-      const xA = sc.sampleX[idxA];
-      const xB = sc.sampleX[idxA + 1];
+      const idxA = randInt(0, candidateXs.length - 2);
+      const xA = candidateXs[idxA];
+      const xB = candidateXs[idxA + 1];
 
-      const cfA = evalCf(xA, sc.xMin, sc.xMax, sc.total);
-      const cfB = evalCf(xB, sc.xMin, sc.xMax, sc.total);
+      const cfA = evalCf(xA);
+      const cfB = evalCf(xB);
       const intervalCount = cfB - cfA;
       const askPct = randInt(0, 1) === 1;
       const pctVal = Number(((intervalCount / sc.total) * 100).toPrecision(3)).toString();
       const ans = askPct ? pctVal : intervalCount.toString();
 
-      const svg = buildCfGraphSvg({
+      const solSvg = buildCfGraphSvg({
         title: sc.title,
         xLabel: sc.xLabel,
         xMin: sc.xMin,
@@ -418,6 +574,7 @@ export function generateQuestion(tier = 1) {
         total: sc.total,
         yStep: sc.yStep,
         hasBreak: sc.hasBreak,
+        evalCf,
         highlights: [
           { x: xA, cf: cfA },
           { x: xB, cf: cfB }
@@ -430,12 +587,12 @@ export function generateQuestion(tier = 1) {
 
       const steps = askPct
         ? [
-            `Read the cumulative frequencies: $$\\text{CF}(${xB}) = ${cfB} \\quad \\text{and} \\quad \\text{CF}(${xA}) = ${cfA}$$`,
+            `Read the cumulative frequencies: $$\\text{CF}(${xB}) = ${cfB} \\quad \\text{and} \\quad \\text{CF}(${xA}) = ${cfA}$$\n\n${solSvg}`,
             `Subtract to find the number of ${sc.entity} in the interval: $$${cfB} - ${cfA} = ${intervalCount}$$`,
             `Convert to a percentage: $$\\frac{${intervalCount}}{${sc.total}} \\times 100\\% = ${ans}\\%$$`
           ]
         : [
-            `Read the cumulative frequencies at both boundaries: $$\\text{CF}(${xB}) = ${cfB} \\quad \\text{and} \\quad \\text{CF}(${xA}) = ${cfA}$$`,
+            `Read the cumulative frequencies at both boundaries: $$\\text{CF}(${xB}) = ${cfB} \\quad \\text{and} \\quad \\text{CF}(${xA}) = ${cfA}$$\n\n${solSvg}`,
             `Subtract the lower cumulative frequency from the upper one: $$${cfB} - ${cfA} = ${intervalCount}$$`
           ];
 
@@ -444,8 +601,8 @@ export function generateQuestion(tier = 1) {
         tier: 2,
         tierName: "Intermediate",
         skillTitle: "Cumulative Frequency Graphs",
-        prompt: `${sc.context}\n\n${svg}\n\nUse the graph to estimate ${targetDesc}.${askPct ? " (Give your answer correct to 3 significant figures.)" : ""}`,
-        diagramSvg: svg,
+        prompt: `${sc.context}\n\nUse the graph to estimate ${targetDesc}.${askPct ? " (Give your answer correct to 3 significant figures.)" : ""}`,
+        diagramSvg: cleanQuestionGraphSvg,
         inputCount: 1,
         inputLabels: [askPct ? "Percentage (%) =" : `Number of ${sc.entity} =`],
         expectedAnswer: ans,
@@ -456,15 +613,19 @@ export function generateQuestion(tier = 1) {
     }
 
     if (subType === 2) {
-      // Type 2B: Reverse lookup - estimate k or x from a given count or percentage
+      // Type 2B: Reverse lookup - estimate k or x from a snapped count or percentage
       const pctGiven = pickRandom([20, 25, 40, 60, 75]);
       const isUpperTail = randInt(0, 1) === 1;
-      const tailCount = Math.round((pctGiven / 100) * sc.total);
-      const targetCf = isUpperTail ? sc.total - tailCount : tailCount;
-      const estX = invertCfForValue(targetCf, sc.xMin, sc.xMax, sc.total);
+      const rawTail = (pctGiven / 100) * sc.total;
+      const tailCount = snapToHalfBox(rawTail, yHalf, yHalf, sc.total - yHalf);
+      const targetCf = isUpperTail
+        ? snapToHalfBox(sc.total - tailCount, yHalf, yHalf, sc.total - yHalf)
+        : tailCount;
+
+      const estX = invertCf(targetCf);
       const ans = estX.toString();
 
-      const svg = buildCfGraphSvg({
+      const solSvg = buildCfGraphSvg({
         title: sc.title,
         xLabel: sc.xLabel,
         xMin: sc.xMin,
@@ -473,23 +634,24 @@ export function generateQuestion(tier = 1) {
         total: sc.total,
         yStep: sc.yStep,
         hasBreak: sc.hasBreak,
+        evalCf,
         highlights: [{ x: estX, cf: targetCf }]
       });
 
       const promptText = isUpperTail
-        ? `${pctGiven}\\% of the ${sc.entity} have values greater than $k$. Estimate the value of $k$. (Give your answer correct to 1 decimal place.)`
-        : `${pctGiven}\\% of the ${sc.entity} have values less than or equal to $x$. Estimate the value of $x$. (Give your answer correct to 1 decimal place.)`;
+        ? `About $${pctGiven}\\%$ of the ${sc.entity} have values greater than $k$. Estimate the value of $k$ from the graph.`
+        : `About $${pctGiven}\\%$ of the ${sc.entity} have values less than or equal to $x$. Estimate the value of $x$ from the graph.`;
 
       const varName = isUpperTail ? "k" : "x";
       const steps = isUpperTail
         ? [
-            `Calculate $${pctGiven}\\%$ of $${sc.total}$ ${sc.entity}: $$\\frac{${pctGiven}}{100} \\times ${sc.total} = ${tailCount}$$`,
-            `Since $${tailCount}$ ${sc.entity} are above $k$, the cumulative frequency at $k$ is: $$\\text{CF}(k) = ${sc.total} - ${tailCount} = ${targetCf}$$`,
-            `Locate $${targetCf}$ on the vertical axis, move across to the curve, and read down to estimate $k$: $$k \\approx ${ans}$$`
+            `Calculate $${pctGiven}\\%$ of $${sc.total}$ ${sc.entity} (to nearest grid reading): $$\\approx ${tailCount}$$`,
+            `Since about $${tailCount}$ ${sc.entity} are above $k$, the cumulative frequency at $k$ is: $$\\text{CF}(k) = ${sc.total} - ${tailCount} = ${targetCf}$$`,
+            `Locate $${targetCf}$ on the vertical axis, move across to the curve, and read down to estimate $k$: $$k = ${ans}$$\n\n${solSvg}`
           ]
         : [
-            `Calculate $${pctGiven}\\%$ of $${sc.total}$ ${sc.entity}: $$\\text{CF}(x) = \\frac{${pctGiven}}{100} \\times ${sc.total} = ${targetCf}$$`,
-            `Locate $${targetCf}$ on the vertical axis, move across to the curve, and read down to estimate $x$: $$x \\approx ${ans}$$`
+            `Calculate $${pctGiven}\\%$ of $${sc.total}$ ${sc.entity} (to nearest grid reading): $$\\text{CF}(x) \\approx ${targetCf}$$`,
+            `Locate $${targetCf}$ on the vertical axis, move across to the curve, and read down to estimate $x$: $$x = ${ans}$$\n\n${solSvg}`
           ];
 
       return {
@@ -497,27 +659,27 @@ export function generateQuestion(tier = 1) {
         tier: 2,
         tierName: "Intermediate",
         skillTitle: "Cumulative Frequency Graphs",
-        prompt: `${sc.context}\n\n${svg}\n\n${promptText}`,
-        diagramSvg: svg,
+        prompt: `${sc.context}\n\n${promptText}`,
+        diagramSvg: cleanQuestionGraphSvg,
         inputCount: 1,
         inputLabels: [`${varName} =`],
         expectedAnswer: ans,
-        displayAnswer: `${varName} \\approx ${ans}`,
+        displayAnswer: `${varName} = ${ans}`,
         extraKeys,
         steps
       };
     }
 
     // subType === 3: Type 2C - Frequency of a specific class interval (a < x <= b)
-    const idxA = randInt(0, sc.sampleX.length - 2);
-    const xA = sc.sampleX[idxA];
-    const xB = sc.sampleX[idxA + 1];
-    const cfA = evalCf(xA, sc.xMin, sc.xMax, sc.total);
-    const cfB = evalCf(xB, sc.xMin, sc.xMax, sc.total);
+    const idxA = randInt(0, candidateXs.length - 2);
+    const xA = candidateXs[idxA];
+    const xB = candidateXs[idxA + 1];
+    const cfA = evalCf(xA);
+    const cfB = evalCf(xB);
     const freq = cfB - cfA;
     const ans = freq.toString();
 
-    const svg = buildCfGraphSvg({
+    const solSvg = buildCfGraphSvg({
       title: sc.title,
       xLabel: sc.xLabel,
       xMin: sc.xMin,
@@ -526,6 +688,7 @@ export function generateQuestion(tier = 1) {
       total: sc.total,
       yStep: sc.yStep,
       hasBreak: sc.hasBreak,
+      evalCf,
       highlights: [
         { x: xA, cf: cfA },
         { x: xB, cf: cfB }
@@ -537,8 +700,8 @@ export function generateQuestion(tier = 1) {
       tier: 2,
       tierName: "Intermediate",
       skillTitle: "Cumulative Frequency Graphs",
-      prompt: `${sc.context}\n\n${svg}\n\nFind the frequency of ${sc.entity} in the class interval $${xA} < x \\le ${xB}$.`,
-      diagramSvg: svg,
+      prompt: `${sc.context}\n\nFind the frequency of ${sc.entity} in the class interval $${xA} < x \\le ${xB}$.`,
+      diagramSvg: cleanQuestionGraphSvg,
       inputCount: 1,
       inputLabels: ["Frequency ="],
       expectedAnswer: ans,
@@ -546,7 +709,7 @@ export function generateQuestion(tier = 1) {
       extraKeys,
       steps: [
         `Read the cumulative frequency at the upper class boundary $x = ${xB}$: $$\\text{CF}(${xB}) = ${cfB}$$`,
-        `Read the cumulative frequency at the lower class boundary $x = ${xA}$: $$\\text{CF}(${xA}) = ${cfA}$$`,
+        `Read the cumulative frequency at the lower class boundary $x = ${xA}$: $$\\text{CF}(${xA}) = ${cfA}$$\n\n${solSvg}`,
         `Subtract to find the class frequency: $$${cfB} - ${cfA} = ${freq}$$`
       ]
     };
@@ -558,14 +721,14 @@ export function generateQuestion(tier = 1) {
   const subType = randInt(1, 2);
 
   if (subType === 1) {
-    // Type 3A: Threshold / filter condition (discarded/excluded below x -> percentage kept/remaining)
-    const xCut = pickRandom(sc.sampleX);
-    const cfCut = evalCf(xCut, sc.xMin, sc.xMax, sc.total);
+    // Type 3A: Threshold / filter condition (excluded below xCut -> percentage remaining)
+    const xCut = pickRandom(candidateXs);
+    const cfCut = evalCf(xCut);
     const keptCount = sc.total - cfCut;
     const keptPct = Number(((keptCount / sc.total) * 100).toPrecision(3)).toString();
     const ans = keptPct;
 
-    const svg = buildCfGraphSvg({
+    const solSvg = buildCfGraphSvg({
       title: sc.title,
       xLabel: sc.xLabel,
       xMin: sc.xMin,
@@ -574,6 +737,7 @@ export function generateQuestion(tier = 1) {
       total: sc.total,
       yStep: sc.yStep,
       hasBreak: sc.hasBreak,
+      evalCf,
       highlights: [{ x: xCut, cf: cfCut }]
     });
 
@@ -582,15 +746,15 @@ export function generateQuestion(tier = 1) {
       tier: 3,
       tierName: "Advanced",
       skillTitle: "Cumulative Frequency Graphs",
-      prompt: `${sc.context}\n\n${svg}\n\nItems with a measurement less than or equal to $${xCut}$ are excluded from the main group. Find the percentage of ${sc.entity} that remain in the main group. (Give your answer correct to 3 significant figures.)`,
-      diagramSvg: svg,
+      prompt: `${sc.context}\n\nItems with a measurement less than or equal to $${xCut}$ are excluded from the main group. Find the percentage of ${sc.entity} that remain in the main group. (Give your answer correct to 3 significant figures.)`,
+      diagramSvg: cleanQuestionGraphSvg,
       inputCount: 1,
       inputLabels: ["Percentage (%) ="],
       expectedAnswer: ans,
       displayAnswer: `${ans}\\%`,
       extraKeys,
       steps: [
-        `Read the number of ${sc.entity} with value $\\le ${xCut}$ from the graph: $$\\text{CF}(${xCut}) = ${cfCut}$$`,
+        `Read the number of ${sc.entity} with value $\\le ${xCut}$ from the graph: $$\\text{CF}(${xCut}) = ${cfCut}$$\n\n${solSvg}`,
         `Find the number of ${sc.entity} remaining above $${xCut}$: $$${sc.total} - ${cfCut} = ${keptCount}$$`,
         `Calculate the percentage remaining: $$\\frac{${keptCount}}{${sc.total}} \\times 100\\% = ${ans}\\%$$`
       ]
@@ -599,16 +763,17 @@ export function generateQuestion(tier = 1) {
 
   // subType === 2: Top p% cutoff k, then find number of items between xLow and estimated k
   const topPct = pickRandom([10, 20, 25]);
-  const topCount = Math.round((topPct / 100) * sc.total);
-  const cfAtK = sc.total - topCount;
-  const kEst = invertCfForValue(cfAtK, sc.xMin, sc.xMax, sc.total);
+  const rawTopCount = (topPct / 100) * sc.total;
+  const topCount = snapToHalfBox(rawTopCount, yHalf, yHalf, sc.total - yHalf);
+  const cfAtK = snapToHalfBox(sc.total - topCount, yHalf, yHalf, sc.total - yHalf);
+  const kEst = invertCf(cfAtK);
 
-  const xLow = sc.sampleX[0];
-  const cfLow = evalCf(xLow, sc.xMin, sc.xMax, sc.total);
+  const xLow = candidateXs[0];
+  const cfLow = evalCf(xLow);
   const bandCount = Math.max(0, cfAtK - cfLow);
   const ans = bandCount.toString();
 
-  const svg = buildCfGraphSvg({
+  const solSvg = buildCfGraphSvg({
     title: sc.title,
     xLabel: sc.xLabel,
     xMin: sc.xMin,
@@ -617,6 +782,7 @@ export function generateQuestion(tier = 1) {
     total: sc.total,
     yStep: sc.yStep,
     hasBreak: sc.hasBreak,
+    evalCf,
     highlights: [
       { x: xLow, cf: cfLow },
       { x: kEst, cf: cfAtK }
@@ -628,16 +794,16 @@ export function generateQuestion(tier = 1) {
     tier: 3,
     tierName: "Advanced",
     skillTitle: "Cumulative Frequency Graphs",
-    prompt: `${sc.context}\n\n${svg}\n\nThe top $${topPct}\\%$ of ${sc.entity} have values greater than $k$. Estimate the number of ${sc.entity} with values greater than $${xLow}$ but less than or equal to $k$.`,
-    diagramSvg: svg,
+    prompt: `${sc.context}\n\nAbout the top $${topPct}\\%$ of ${sc.entity} have values greater than $k$. Estimate the number of ${sc.entity} with values greater than $${xLow}$ but less than or equal to $k$.`,
+    diagramSvg: cleanQuestionGraphSvg,
     inputCount: 1,
     inputLabels: [`Number of ${sc.entity} =`],
     expectedAnswer: ans,
     displayAnswer: ans,
     extraKeys,
     steps: [
-      `Find the cumulative frequency corresponding to the top $${topPct}\\%$ cutoff $k$: $$\\text{CF}(k) = ${sc.total} - \\frac{${topPct}}{100} \\times ${sc.total} = ${cfAtK}$$`,
-      `Read the cumulative frequency at $${xLow}$: $$\\text{CF}(${xLow}) = ${cfLow}$$`,
+      `Find the cumulative frequency at the top $${topPct}\\%$ cutoff $k$ (snapped to grid): $$\\text{CF}(k) = ${sc.total} - ${topCount} = ${cfAtK}$$`,
+      `Read the cumulative frequency at $${xLow}$: $$\\text{CF}(${xLow}) = ${cfLow}$$\n\n${solSvg}`,
       `Subtract to find the number of ${sc.entity} in the band $${xLow} < x \\le k$: $$${cfAtK} - ${cfLow} = ${ans}$$`
     ]
   };
