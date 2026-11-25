@@ -86,8 +86,9 @@ function createSmoothCurve(scenario) {
 }
 
 /**
- * Builds an SVG cumulative frequency graph with a taller vertical axis and
- * container box so grid intervals are spacious and easy to read.
+ * Builds an SVG cumulative frequency graph with an even taller vertical axis
+ * (`height = 440`, `plotH = 368`) and wider spacing between gridlines so
+ * reading cumulative frequency values and small grid divisions is effortless.
  */
 function buildCfGraphSvg({
   title,
@@ -103,7 +104,7 @@ function buildCfGraphSvg({
   highlights = []
 }) {
   const width = 620;
-  const height = 340;
+  const height = 440;
   const padLeft = 86;
   const padRight = 24;
   const padTop = 28;
@@ -124,7 +125,7 @@ function buildCfGraphSvg({
     const xv = xMin + i * xMinorStep;
     const isMajor = i % 5 === 0;
     const sx = toSvgX(xv).toFixed(1);
-    gridLines += `<line x1='${sx}' y1='${padTop}' x2='${sx}' y2='${(padTop + plotH).toFixed(1)}' stroke='${isMajor ? "#cbd5e1" : "#e2e8f0"}' stroke-width='${isMajor ? "1.0" : "0.6"}'/>`;
+    gridLines += `<line x1='${sx}' y1='${padTop}' x2='${sx}' y2='${(padTop + plotH).toFixed(1)}' stroke='${isMajor ? "#cbd5e1" : "#e2e8f0"}' stroke-width='${isMajor ? "1.1" : "0.65"}'/>`;
   }
 
   const yMinorStep = yStep / 5;
@@ -133,7 +134,7 @@ function buildCfGraphSvg({
     const yv = i * yMinorStep;
     const isMajor = i % 5 === 0;
     const sy = toSvgY(yv).toFixed(1);
-    gridLines += `<line x1='${padLeft}' y1='${sy}' x2='${(padLeft + plotW).toFixed(1)}' y2='${sy}' stroke='${isMajor ? "#cbd5e1" : "#e2e8f0"}' stroke-width='${isMajor ? "1.0" : "0.6"}'/>`;
+    gridLines += `<line x1='${padLeft}' y1='${sy}' x2='${(padLeft + plotW).toFixed(1)}' y2='${sy}' stroke='${isMajor ? "#cbd5e1" : "#e2e8f0"}' stroke-width='${isMajor ? "1.1" : "0.65"}'/>`;
   }
 
   let ticksAndLabels = "";
@@ -141,14 +142,14 @@ function buildCfGraphSvg({
   for (let i = 0; i <= totalMajorX; i++) {
     const xv = Math.round(xMin + i * xStep);
     const sx = toSvgX(xv).toFixed(1);
-    ticksAndLabels += `<line x1='${sx}' y1='${(padTop + plotH - 3.5).toFixed(1)}' x2='${sx}' y2='${(padTop + plotH + 3.5).toFixed(1)}' stroke='#0f172a' stroke-width='1.5'/><text x='${sx}' y='${(padTop + plotH + 16).toFixed(1)}' font-size='10.5' fill='#0f172a' text-anchor='middle' font-family='sans-serif'>${xv}</text>`;
+    ticksAndLabels += `<line x1='${sx}' y1='${(padTop + plotH - 3.5).toFixed(1)}' x2='${sx}' y2='${(padTop + plotH + 3.5).toFixed(1)}' stroke='#0f172a' stroke-width='1.5'/><text x='${sx}' y='${(padTop + plotH + 16).toFixed(1)}' font-size='11' fill='#0f172a' text-anchor='middle' font-family='sans-serif'>${xv}</text>`;
   }
 
   const totalMajorY = Math.round(yMax / yStep);
   for (let i = 0; i <= totalMajorY; i++) {
     const yv = Math.round(i * yStep);
     const sy = toSvgY(yv).toFixed(1);
-    ticksAndLabels += `<line x1='${(padLeft - 3.5).toFixed(1)}' y1='${sy}' x2='${(padLeft + 3.5).toFixed(1)}' y2='${sy}' stroke='#0f172a' stroke-width='1.5'/><text x='${(padLeft - 8).toFixed(1)}' y='${(Number(sy) + 3.5).toFixed(1)}' font-size='10.5' fill='#0f172a' text-anchor='end' font-family='sans-serif'>${yv}</text>`;
+    ticksAndLabels += `<line x1='${(padLeft - 3.5).toFixed(1)}' y1='${sy}' x2='${(padLeft + 3.5).toFixed(1)}' y2='${sy}' stroke='#0f172a' stroke-width='1.5'/><text x='${(padLeft - 8).toFixed(1)}' y='${(Number(sy) + 3.5).toFixed(1)}' font-size='11' fill='#0f172a' text-anchor='end' font-family='sans-serif'>${yv}</text>`;
   }
 
   const axisBreakSvg = hasBreak
@@ -178,7 +179,7 @@ function buildCfGraphSvg({
   const yAxisTitleX = 16;
   const yAxisTitleY = (padTop + plotH / 2).toFixed(1);
 
-  return `<div style='width:100%; min-height:356px; padding:8px; box-sizing:border-box; overflow:visible;'><svg width='${width}' height='${height}' viewBox='0 0 ${width} ${height}' preserveAspectRatio='xMidYMid meet' xmlns='http://www.w3.org/2000/svg' style='width:100%; max-width:${width}px; min-height:${height}px; height:auto; box-sizing:border-box; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; display:block; margin:0 auto;'><defs><marker id='cfArr' viewBox='0 0 10 10' refX='6' refY='5' markerWidth='5.5' markerHeight='5.5' orient='auto-start-reverse'><path d='M 0 0 L 10 5 L 0 10 z' fill='#0f172a'/></marker></defs><text x='${(width / 2).toFixed(1)}' y='17' font-size='12' font-weight='bold' fill='#0f172a' text-anchor='middle' font-family='sans-serif'>${title}</text>${gridLines}${axisBreakSvg}<line x1='${padLeft}' y1='${(padTop + plotH).toFixed(1)}' x2='${(width - 10).toFixed(1)}' y2='${(padTop + plotH).toFixed(1)}' stroke='#0f172a' stroke-width='1.6' marker-end='url(#cfArr)'/><line x1='${padLeft}' y1='${(padTop + plotH).toFixed(1)}' x2='${padLeft}' y2='22' stroke='#0f172a' stroke-width='1.6' marker-end='url(#cfArr)'/>${ticksAndLabels}${curvePath}${guideSvg}<text x='${(padLeft + plotW / 2).toFixed(1)}' y='${xAxisTitleY}' font-size='11.5' font-weight='bold' fill='#0f172a' text-anchor='middle' font-family='sans-serif'>${xLabel}</text><text x='${yAxisTitleX}' y='${yAxisTitleY}' font-size='11.5' font-weight='bold' fill='#0f172a' text-anchor='middle' transform='rotate(-90, ${yAxisTitleX}, ${yAxisTitleY})' font-family='sans-serif'>${yLabel}</text></svg></div>`;
+  return `<div style='width:100%; min-height:456px; padding:8px; box-sizing:border-box; overflow:visible;'><svg width='${width}' height='${height}' viewBox='0 0 ${width} ${height}' preserveAspectRatio='xMidYMid meet' xmlns='http://www.w3.org/2000/svg' style='width:100%; max-width:${width}px; min-height:${height}px; height:auto; box-sizing:border-box; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; display:block; margin:0 auto;'><defs><marker id='cfArr' viewBox='0 0 10 10' refX='6' refY='5' markerWidth='5.5' markerHeight='5.5' orient='auto-start-reverse'><path d='M 0 0 L 10 5 L 0 10 z' fill='#0f172a'/></marker></defs><text x='${(width / 2).toFixed(1)}' y='17' font-size='12' font-weight='bold' fill='#0f172a' text-anchor='middle' font-family='sans-serif'>${title}</text>${gridLines}${axisBreakSvg}<line x1='${padLeft}' y1='${(padTop + plotH).toFixed(1)}' x2='${(width - 10).toFixed(1)}' y2='${(padTop + plotH).toFixed(1)}' stroke='#0f172a' stroke-width='1.6' marker-end='url(#cfArr)'/><line x1='${padLeft}' y1='${(padTop + plotH).toFixed(1)}' x2='${padLeft}' y2='22' stroke='#0f172a' stroke-width='1.6' marker-end='url(#cfArr)'/>${ticksAndLabels}${curvePath}${guideSvg}<text x='${(padLeft + plotW / 2).toFixed(1)}' y='${xAxisTitleY}' font-size='11.5' font-weight='bold' fill='#0f172a' text-anchor='middle' font-family='sans-serif'>${xLabel}</text><text x='${yAxisTitleX}' y='${yAxisTitleY}' font-size='11.5' font-weight='bold' fill='#0f172a' text-anchor='middle' transform='rotate(-90, ${yAxisTitleX}, ${yAxisTitleY})' font-family='sans-serif'>${yLabel}</text></svg></div>`;
 }
 
 const SCENARIOS = [
