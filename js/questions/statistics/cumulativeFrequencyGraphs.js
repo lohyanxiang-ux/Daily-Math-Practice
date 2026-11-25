@@ -30,44 +30,48 @@ function getSnapUnits(xStep, yStep) {
   };
 }
 
-function snapToHalfBox(val, halfStep, minVal, maxVal) {
-  const snapped = Math.round(val / halfStep) * halfStep;
+function snapToGrid(val, unit, minVal, maxVal) {
+  const snapped = Math.round(val / unit) * unit;
   return Math.max(minVal, Math.min(maxVal, Number(snapped.toFixed(4))));
 }
 
 /**
- * Builds a monotone piecewise-smooth ogive from snapped control knots
- * so that readings at any snapped x or cf land on a small-box edge or middle.
+ * Generates smooth control points (x, cf) along a monotone S-curve where
+ * knot values snap cleanly to small-box edges/middles, while curve rendering
+ * uses a smooth Catmull-Rom-to-cubic-Bezier spline (no jagged stair-stepping).
  */
-function createCurveEvaluator(scenario) {
+function createSmoothOgive(scenario) {
   const { xMin, xMax, xStep, yStep, total } = scenario;
-  const { xSmall, yHalf } = getSnapUnits(xStep, yStep);
+  const { xHalf, yHalf } = getSnapUnits(xStep, yStep);
 
-  const rawFractions = [0, 0.06, 0.22, 0.52, 0.82, 0.95, 1];
+  const fractions = [0, 0.05, 0.18, 0.45, 0.75, 0.92, 1];
   const knots = [];
 
-  for (let i = 0; i < rawFractions.length; i++) {
+  for (let i = 0; i < fractions.length; i++) {
     let kx;
-    if (i === 0) kx = xMin;
-    else if (i === rawFractions.length - 1) kx = xMax;
-    else {
-      const frac = i / (rawFractions.length - 1);
-      const approxX = xMin + frac * (xMax - xMin);
-      kx = snapToHalfBox(approxX, xSmall, xMin + xSmall, xMax - xSmall);
+    if (i === 0) {
+      kx = xMin;
+    } else if (i === fractions.length - 1) {
+      kx = xMax;
+    } else {
+      const approxX = xMin + (i / (fractions.length - 1)) * (xMax - xMin);
+      kx = snapToGrid(approxX, xHalf, xMin + xHalf, xMax - xHalf);
     }
 
     let kcf;
-    if (i === 0) kcf = 0;
-    else if (i === rawFractions.length - 1) kcf = total;
-    else {
-      const approxCf = rawFractions[i] * total;
-      kcf = snapToHalfBox(approxCf, yHalf, yHalf, total - yHalf);
+    if (i === 0) {
+      kcf = 0;
+    } else if (i === fractions.length - 1) {
+      kcf = total;
+    } else {
+      const approxCf = fractions[i] * total;
+      kcf = snapToGrid(approxCf, yHalf, yHalf, total - yHalf);
     }
 
     if (knots.length > 0) {
       const prev = knots[knots.length - 1];
       if (kx <= prev.x) {
-        kx = Math.min(xMax, Number((prev.x + xSmall).toFixed(4)));
+        kx = Math.min(xMax, Number((prev.x + xHalf).toFixed(4)));
       }
       if (kcf < prev.cf) {
         kcf = prev.cf;
@@ -76,7 +80,7 @@ function createCurveEvaluator(scenario) {
     knots.push({ x: kx, cf: kcf });
   }
 
-  // Ensure monotonic non-decreasing along any snapped x grid
+  // Smooth monotone-friendly cubic interpolation across knots for numerical queries
   function evalCf(x) {
     if (x <= knots[0].x) return 0;
     if (x >= knots[knots.length - 1].x) return total;
@@ -88,34 +92,55 @@ function createCurveEvaluator(scenario) {
         if (p1.x === p0.x) return p1.cf;
         const t = (x - p0.x) / (p1.x - p0.x);
         const smoothT = t * t * (3 - 2 * t);
-        const rawVal = p0.cf + smoothT * (p1.cf - p0.cf);
-        return snapToHalfBox(rawVal, yHalf, p0.cf, p1.cf);
+        const raw = p0.cf + smoothT * (p1.cf - p0.cf);
+        return snapToGrid(raw, yHalf, p0.cf, p1.cf);
       }
     }
     return total;
   }
 
   function invertCf(targetCf) {
-    const clampedCf = snapToHalfBox(targetCf, yHalf, 0, total);
-    let bestX = xMin;
-    const stepCount = Math.max(10, Math.round((xMax - xMin) / xSmall));
-    for (let i = 0; i <= stepCount; i++) {
-      const candidateX = Number((xMin + i * xSmall).toFixed(4));
-      const cfAtX = evalCf(candidateX);
-      if (cfAtX >= clampedCf) {
-        bestX = candidateX;
-        break;
+    const snappedTarget = snapToGrid(targetCf, yHalf, 0, total);
+    const numSteps = Math.max(20, Math.round((xMax - xMin) / xHalf));
+    for (let i = 0; i <= numSteps; i++) {
+      const candX = Number((xMin + i * xHalf).toFixed(4));
+      if (evalCf(candX) >= snappedTarget) {
+        return candX;
       }
     }
-    return bestX;
+    return xMax;
   }
 
-  return { evalCf, invertCf };
+  return { knots, evalCf, invertCf };
 }
 
 /**
- * Builds an SVG cumulative frequency graph with major/minor gridlines,
- * optional x-axis break, smooth curve, and optional dashed reference lines.
+ * Converts a list of (sx, sy) points into a smooth SVG cubic Bezier path.
+ */
+function buildSmoothSvgPath(points) {
+  if (points.length === 0) return "";
+  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+
+  let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
+
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+/**
+ * Builds a clear, unclipped SVG cumulative frequency graph with major/minor gridlines,
+ * optional x-axis break, smooth ogive curve, clear axis labels, and optional highlights.
  */
 function buildCfGraphSvg({
   title,
@@ -127,78 +152,80 @@ function buildCfGraphSvg({
   total,
   yStep,
   hasBreak = false,
-  evalCf,
+  knots,
   highlights = []
 }) {
-  const width = 420;
-  const height = 290;
-  const padLeft = 62;
+  const width = 440;
+  const height = 320;
+  const padLeft = 72;
   const padRight = 24;
   const padTop = 38;
-  const padBottom = 46;
+  const padBottom = 56;
   const plotW = width - padLeft - padRight;
   const plotH = height - padTop - padBottom;
 
-  const yMax = Math.ceil((total * 1.08) / yStep) * yStep;
+  const yMax = Math.ceil(total / yStep) * yStep;
 
   const toSvgX = (val) => padLeft + ((val - xMin) / (xMax - xMin)) * plotW;
   const toSvgY = (cf) => padTop + plotH - (cf / yMax) * plotH;
 
   let gridLines = "";
-  const xMinorCount = 5;
-  const xMinorStep = xStep / xMinorCount;
-  for (let xv = xMin; xv <= xMax + 1e-9; xv += xMinorStep) {
-    const isMajor =
-      Math.abs(Math.round((xv - xMin) / xStep) - (xv - xMin) / xStep) < 1e-6;
+  const xMinorStep = xStep / 5;
+  const totalXSteps = Math.round((xMax - xMin) / xMinorStep);
+  for (let i = 0; i <= totalXSteps; i++) {
+    const xv = xMin + i * xMinorStep;
+    const isMajor = i % 5 === 0;
     const sx = toSvgX(xv).toFixed(1);
-    gridLines += `<line x1='${sx}' y1='${padTop}' x2='${sx}' y2='${(padTop + plotH).toFixed(1)}' stroke='${isMajor ? "#cbd5e1" : "#e2e8f0"}' stroke-width='${isMajor ? "1.1" : "0.6"}'/>`;
+    gridLines += `<line x1='${sx}' y1='${padTop}' x2='${sx}' y2='${(padTop + plotH).toFixed(1)}' stroke='${isMajor ? "#cbd5e1" : "#e2e8f0"}' stroke-width='${isMajor ? "1.1" : "0.65"}'/>`;
   }
 
-  const yMinorCount = 5;
-  const yMinorStep = yStep / yMinorCount;
-  for (let yv = 0; yv <= yMax + 1e-9; yv += yMinorStep) {
-    const isMajor = Math.abs(Math.round(yv / yStep) - yv / yStep) < 1e-6;
+  const yMinorStep = yStep / 5;
+  const totalYSteps = Math.round(yMax / yMinorStep);
+  for (let i = 0; i <= totalYSteps; i++) {
+    const yv = i * yMinorStep;
+    const isMajor = i % 5 === 0;
     const sy = toSvgY(yv).toFixed(1);
-    gridLines += `<line x1='${padLeft}' y1='${sy}' x2='${(padLeft + plotW).toFixed(1)}' y2='${sy}' stroke='${isMajor ? "#cbd5e1" : "#e2e8f0"}' stroke-width='${isMajor ? "1.1" : "0.6"}'/>`;
+    gridLines += `<line x1='${padLeft}' y1='${sy}' x2='${(padLeft + plotW).toFixed(1)}' y2='${sy}' stroke='${isMajor ? "#cbd5e1" : "#e2e8f0"}' stroke-width='${isMajor ? "1.1" : "0.65"}'/>`;
   }
 
   let ticksAndLabels = "";
-  for (let xv = xMin; xv <= xMax + 1e-9; xv += xStep) {
+  const totalMajorX = Math.round((xMax - xMin) / xStep);
+  for (let i = 0; i <= totalMajorX; i++) {
+    const xv = Math.round(xMin + i * xStep);
     const sx = toSvgX(xv).toFixed(1);
-    ticksAndLabels += `<line x1='${sx}' y1='${(padTop + plotH - 4).toFixed(1)}' x2='${sx}' y2='${(padTop + plotH + 4).toFixed(1)}' stroke='#1e293b' stroke-width='1.5'/><text x='${sx}' y='${(padTop + plotH + 17).toFixed(1)}' font-size='11' fill='#1e293b' text-anchor='middle' font-family='sans-serif'>${Math.round(xv)}</text>`;
+    ticksAndLabels += `<line x1='${sx}' y1='${(padTop + plotH - 4).toFixed(1)}' x2='${sx}' y2='${(padTop + plotH + 4).toFixed(1)}' stroke='#1e293b' stroke-width='1.5'/><text x='${sx}' y='${(padTop + plotH + 19).toFixed(1)}' font-size='11' fill='#1e293b' text-anchor='middle' font-family='sans-serif'>${xv}</text>`;
   }
 
-  for (let yv = 0; yv <= yMax + 1e-9; yv += yStep) {
+  const totalMajorY = Math.round(yMax / yStep);
+  for (let i = 0; i <= totalMajorY; i++) {
+    const yv = Math.round(i * yStep);
     const sy = toSvgY(yv).toFixed(1);
-    ticksAndLabels += `<line x1='${(padLeft - 4).toFixed(1)}' y1='${sy}' x2='${(padLeft + 4).toFixed(1)}' y2='${sy}' stroke='#1e293b' stroke-width='1.5'/><text x='${(padLeft - 8).toFixed(1)}' y='${(Number(sy) + 4).toFixed(1)}' font-size='11' fill='#1e293b' text-anchor='end' font-family='sans-serif'>${Math.round(yv)}</text>`;
+    ticksAndLabels += `<line x1='${(padLeft - 4).toFixed(1)}' y1='${sy}' x2='${(padLeft + 4).toFixed(1)}' y2='${sy}' stroke='#1e293b' stroke-width='1.5'/><text x='${(padLeft - 9).toFixed(1)}' y='${(Number(sy) + 4).toFixed(1)}' font-size='11' fill='#1e293b' text-anchor='end' font-family='sans-serif'>${yv}</text>`;
   }
-
-  ticksAndLabels += `<text x='${(padLeft - 8).toFixed(1)}' y='${(padTop + plotH + 17).toFixed(1)}' font-size='11' fill='#475569' text-anchor='end' font-family='sans-serif'>0</text>`;
 
   const axisBreakSvg = hasBreak
     ? `<polyline points='${(padLeft + 10).toFixed(1)},${(padTop + plotH).toFixed(1)} ${(padLeft + 15).toFixed(1)},${(padTop + plotH - 7).toFixed(1)} ${(padLeft + 21).toFixed(1)},${(padTop + plotH + 7).toFixed(1)} ${(padLeft + 26).toFixed(1)},${(padTop + plotH).toFixed(1)}' fill='none' stroke='#1e293b' stroke-width='1.6'/>`
     : "";
 
-  const samples = 80;
-  const pts = [];
-  for (let i = 0; i <= samples; i++) {
-    const xv = xMin + ((xMax - xMin) * i) / samples;
-    const cf = evalCf(xv);
-    pts.push(
-      `${i === 0 ? "M" : "L"} ${toSvgX(xv).toFixed(1)} ${toSvgY(cf).toFixed(1)}`
-    );
-  }
-  const curvePath = `<path d='${pts.join(" ")}' fill='none' stroke='#16a34a' stroke-width='2.4' stroke-linecap='round'/>`;
+  const svgPoints = knots.map((k) => ({
+    x: toSvgX(k.x),
+    y: toSvgY(k.cf)
+  }));
+  const curvePath = `<path d='${buildSmoothSvgPath(svgPoints)}' fill='none' stroke='#16a34a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/>`;
 
   let guideSvg = "";
   for (const h of highlights) {
     const sx = toSvgX(h.x).toFixed(1);
     const sy = toSvgY(h.cf).toFixed(1);
     const baseY = (padTop + plotH).toFixed(1);
-    guideSvg += `<line x1='${sx}' y1='${sy}' x2='${sx}' y2='${baseY}' stroke='#dc2626' stroke-width='1.2' stroke-dasharray='4,3'/><line x1='${padLeft}' y1='${sy}' x2='${sx}' y2='${sy}' stroke='#dc2626' stroke-width='1.2' stroke-dasharray='4,3'/><circle cx='${sx}' cy='${sy}' r='3.5' fill='#dc2626'/>`;
+    guideSvg += `<line x1='${sx}' y1='${sy}' x2='${sx}' y2='${baseY}' stroke='#dc2626' stroke-width='1.3' stroke-dasharray='4,3'/><line x1='${padLeft}' y1='${sy}' x2='${sx}' y2='${sy}' stroke='#dc2626' stroke-width='1.3' stroke-dasharray='4,3'/><circle cx='${sx}' cy='${sy}' r='3.6' fill='#dc2626'/>`;
   }
 
-  return `<svg width='${width}' height='${height}' viewBox='0 0 ${width} ${height}' xmlns='http://www.w3.org/2000/svg' style='background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; display:block; margin:10px auto; max-width:100%;'><defs><marker id='cfArr' viewBox='0 0 10 10' refX='6' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'><path d='M 0 0 L 10 5 L 0 10 z' fill='#1e293b'/></marker></defs><text x='${(width / 2).toFixed(1)}' y='20' font-size='13' font-weight='bold' fill='#0f172a' text-anchor='middle' font-family='sans-serif'>${title}</text>${gridLines}${axisBreakSvg}<line x1='${padLeft}' y1='${(padTop + plotH).toFixed(1)}' x2='${(width - 10).toFixed(1)}' y2='${(padTop + plotH).toFixed(1)}' stroke='#1e293b' stroke-width='1.8' marker-end='url(#cfArr)'/><line x1='${padLeft}' y1='${(padTop + plotH).toFixed(1)}' x2='${padLeft}' y2='28' stroke='#1e293b' stroke-width='1.8' marker-end='url(#cfArr)'/>${ticksAndLabels}${curvePath}${guideSvg}<text x='${(padLeft + plotW / 2).toFixed(1)}' y='${(height - 7).toFixed(1)}' font-size='12' font-weight='bold' fill='#1e293b' text-anchor='middle' font-family='sans-serif'>${xLabel}</text><text x='16' y='${(padTop + plotH / 2).toFixed(1)}' font-size='12' font-weight='bold' fill='#1e293b' text-anchor='middle' transform='rotate(-90, 16, ${(padTop + plotH / 2).toFixed(1)})' font-family='sans-serif'>${yLabel}</text></svg>`;
+  const xAxisTitleY = (padTop + plotH + 40).toFixed(1);
+  const yAxisTitleX = 18;
+  const yAxisTitleY = (padTop + plotH / 2).toFixed(1);
+
+  return `<svg width='${width}' height='${height}' viewBox='0 0 ${width} ${height}' xmlns='http://www.w3.org/2000/svg' style='background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; display:block; margin:10px auto; max-width:100%; overflow:visible;'><defs><marker id='cfArr' viewBox='0 0 10 10' refX='6' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'><path d='M 0 0 L 10 5 L 0 10 z' fill='#1e293b'/></marker></defs><text x='${(width / 2).toFixed(1)}' y='20' font-size='13' font-weight='bold' fill='#0f172a' text-anchor='middle' font-family='sans-serif'>${title}</text>${gridLines}${axisBreakSvg}<line x1='${padLeft}' y1='${(padTop + plotH).toFixed(1)}' x2='${(width - 12).toFixed(1)}' y2='${(padTop + plotH).toFixed(1)}' stroke='#1e293b' stroke-width='1.8' marker-end='url(#cfArr)'/><line x1='${padLeft}' y1='${(padTop + plotH).toFixed(1)}' x2='${padLeft}' y2='28' stroke='#1e293b' stroke-width='1.8' marker-end='url(#cfArr)'/>${ticksAndLabels}${curvePath}${guideSvg}<text x='${(padLeft + plotW / 2).toFixed(1)}' y='${xAxisTitleY}' font-size='12' font-weight='bold' fill='#0f172a' text-anchor='middle' font-family='sans-serif'>${xLabel}</text><text x='${yAxisTitleX}' y='${yAxisTitleY}' font-size='12' font-weight='bold' fill='#0f172a' text-anchor='middle' transform='rotate(-90, ${yAxisTitleX}, ${yAxisTitleY})' font-family='sans-serif'>${yLabel}</text></svg>`;
 }
 
 const SCENARIOS = [
@@ -361,13 +388,13 @@ const SCENARIOS = [
 ];
 
 function getSnappedCandidateXs(sc, count = 4) {
-  const { xSmall } = getSnapUnits(sc.xStep, sc.yStep);
-  const minBound = sc.xMin + xSmall;
-  const maxBound = sc.xMax - xSmall;
-  const totalSteps = Math.max(2, Math.round((maxBound - minBound) / xSmall));
+  const { xHalf } = getSnapUnits(sc.xStep, sc.yStep);
+  const minBound = sc.xMin + xHalf;
+  const maxBound = sc.xMax - xHalf;
+  const totalSteps = Math.max(2, Math.round((maxBound - minBound) / xHalf));
   const candidates = [];
   for (let i = 1; i < totalSteps; i++) {
-    const val = Number((minBound + i * xSmall).toFixed(4));
+    const val = Number((minBound + i * xHalf).toFixed(4));
     candidates.push(val);
   }
   if (candidates.length <= count) return candidates;
@@ -382,7 +409,7 @@ function getSnappedCandidateXs(sc, count = 4) {
 export function generateQuestion(tier = 1) {
   const extraKeys = [];
   const sc = pickRandom(SCENARIOS);
-  const { evalCf, invertCf } = createCurveEvaluator(sc);
+  const { knots, evalCf, invertCf } = createSmoothOgive(sc);
   const { yHalf } = getSnapUnits(sc.xStep, sc.yStep);
   const candidateXs = getSnappedCandidateXs(sc, 4);
 
@@ -395,7 +422,7 @@ export function generateQuestion(tier = 1) {
     total: sc.total,
     yStep: sc.yStep,
     hasBreak: sc.hasBreak,
-    evalCf,
+    knots,
     highlights: []
   });
 
@@ -422,7 +449,7 @@ export function generateQuestion(tier = 1) {
         total: sc.total,
         yStep: sc.yStep,
         hasBreak: sc.hasBreak,
-        evalCf,
+        knots,
         highlights: [{ x: xVal, cf: cfVal }]
       });
 
@@ -473,7 +500,7 @@ export function generateQuestion(tier = 1) {
         total: sc.total,
         yStep: sc.yStep,
         hasBreak: sc.hasBreak,
-        evalCf,
+        knots,
         highlights: [{ x: xVal, cf: cfVal }]
       });
 
@@ -523,7 +550,7 @@ export function generateQuestion(tier = 1) {
       total: sc.total,
       yStep: sc.yStep,
       hasBreak: sc.hasBreak,
-      evalCf,
+      knots,
       highlights: [{ x: xVal, cf: cfVal }]
     });
 
@@ -574,7 +601,7 @@ export function generateQuestion(tier = 1) {
         total: sc.total,
         yStep: sc.yStep,
         hasBreak: sc.hasBreak,
-        evalCf,
+        knots,
         highlights: [
           { x: xA, cf: cfA },
           { x: xB, cf: cfB }
@@ -617,9 +644,9 @@ export function generateQuestion(tier = 1) {
       const pctGiven = pickRandom([20, 25, 40, 60, 75]);
       const isUpperTail = randInt(0, 1) === 1;
       const rawTail = (pctGiven / 100) * sc.total;
-      const tailCount = snapToHalfBox(rawTail, yHalf, yHalf, sc.total - yHalf);
+      const tailCount = snapToGrid(rawTail, yHalf, yHalf, sc.total - yHalf);
       const targetCf = isUpperTail
-        ? snapToHalfBox(sc.total - tailCount, yHalf, yHalf, sc.total - yHalf)
+        ? snapToGrid(sc.total - tailCount, yHalf, yHalf, sc.total - yHalf)
         : tailCount;
 
       const estX = invertCf(targetCf);
@@ -634,7 +661,7 @@ export function generateQuestion(tier = 1) {
         total: sc.total,
         yStep: sc.yStep,
         hasBreak: sc.hasBreak,
-        evalCf,
+        knots,
         highlights: [{ x: estX, cf: targetCf }]
       });
 
@@ -688,7 +715,7 @@ export function generateQuestion(tier = 1) {
       total: sc.total,
       yStep: sc.yStep,
       hasBreak: sc.hasBreak,
-      evalCf,
+      knots,
       highlights: [
         { x: xA, cf: cfA },
         { x: xB, cf: cfB }
@@ -737,7 +764,7 @@ export function generateQuestion(tier = 1) {
       total: sc.total,
       yStep: sc.yStep,
       hasBreak: sc.hasBreak,
-      evalCf,
+      knots,
       highlights: [{ x: xCut, cf: cfCut }]
     });
 
@@ -764,8 +791,8 @@ export function generateQuestion(tier = 1) {
   // subType === 2: Top p% cutoff k, then find number of items between xLow and estimated k
   const topPct = pickRandom([10, 20, 25]);
   const rawTopCount = (topPct / 100) * sc.total;
-  const topCount = snapToHalfBox(rawTopCount, yHalf, yHalf, sc.total - yHalf);
-  const cfAtK = snapToHalfBox(sc.total - topCount, yHalf, yHalf, sc.total - yHalf);
+  const topCount = snapToGrid(rawTopCount, yHalf, yHalf, sc.total - yHalf);
+  const cfAtK = snapToGrid(sc.total - topCount, yHalf, yHalf, sc.total - yHalf);
   const kEst = invertCf(cfAtK);
 
   const xLow = candidateXs[0];
@@ -782,7 +809,7 @@ export function generateQuestion(tier = 1) {
     total: sc.total,
     yStep: sc.yStep,
     hasBreak: sc.hasBreak,
-    evalCf,
+    knots,
     highlights: [
       { x: xLow, cf: cfLow },
       { x: kEst, cf: cfAtK }
