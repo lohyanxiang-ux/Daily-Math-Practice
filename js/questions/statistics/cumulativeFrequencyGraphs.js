@@ -86,9 +86,9 @@ function createSmoothCurve(scenario) {
 }
 
 /**
- * Builds an SVG cumulative frequency graph with an expanded vertical axis span
- * (extra headroom above `total` to the next major tick) and tall plot height
- * so small grid boxes are spacious and easy to read.
+ * Builds an SVG cumulative frequency graph with expanded vertical axis span
+ * (extra major tick above `total`) and a spacious outer box so the entire graph
+ * is visible without clipping.
  */
 function buildCfGraphSvg({
   title,
@@ -103,16 +103,15 @@ function buildCfGraphSvg({
   smoothCf,
   highlights = []
 }) {
-  const width = 460;
-  const height = 380;
-  const padLeft = 76;
-  const padRight = 22;
-  const padTop = 32;
-  const padBottom = 48;
+  const width = 540;
+  const height = 310;
+  const padLeft = 78;
+  const padRight = 24;
+  const padTop = 30;
+  const padBottom = 46;
   const plotW = width - padLeft - padRight;
   const plotH = height - padTop - padBottom;
 
-  // Extend vertical axis to at least one full major yStep above `total`
   const baseTop = Math.ceil(total / yStep) * yStep;
   const yMax = baseTop >= total ? baseTop + yStep : baseTop;
 
@@ -143,7 +142,7 @@ function buildCfGraphSvg({
   for (let i = 0; i <= totalMajorX; i++) {
     const xv = Math.round(xMin + i * xStep);
     const sx = toSvgX(xv).toFixed(1);
-    ticksAndLabels += `<line x1='${sx}' y1='${(padTop + plotH - 4).toFixed(1)}' x2='${sx}' y2='${(padTop + plotH + 4).toFixed(1)}' stroke='#0f172a' stroke-width='1.5'/><text x='${sx}' y='${(padTop + plotH + 18).toFixed(1)}' font-size='11' fill='#0f172a' text-anchor='middle' font-family='sans-serif'>${xv}</text>`;
+    ticksAndLabels += `<line x1='${sx}' y1='${(padTop + plotH - 4).toFixed(1)}' x2='${sx}' y2='${(padTop + plotH + 4).toFixed(1)}' stroke='#0f172a' stroke-width='1.5'/><text x='${sx}' y='${(padTop + plotH + 17).toFixed(1)}' font-size='11' fill='#0f172a' text-anchor='middle' font-family='sans-serif'>${xv}</text>`;
   }
 
   const totalMajorY = Math.round(yMax / yStep);
@@ -176,11 +175,11 @@ function buildCfGraphSvg({
     guideSvg += `<line x1='${sx}' y1='${sy}' x2='${sx}' y2='${baseY}' stroke='#dc2626' stroke-width='1.3' stroke-dasharray='4,3'/><line x1='${padLeft}' y1='${sy}' x2='${sx}' y2='${sy}' stroke='#dc2626' stroke-width='1.3' stroke-dasharray='4,3'/><circle cx='${sx}' cy='${sy}' r='3.5' fill='#dc2626'/>`;
   }
 
-  const xAxisTitleY = (padTop + plotH + 36).toFixed(1);
+  const xAxisTitleY = (padTop + plotH + 34).toFixed(1);
   const yAxisTitleX = 16;
   const yAxisTitleY = (padTop + plotH / 2).toFixed(1);
 
-  return `<svg width='${width}' height='${height}' viewBox='0 0 ${width} ${height}' preserveAspectRatio='xMidYMid meet' xmlns='http://www.w3.org/2000/svg' style='width:100%; max-width:${width}px; min-height:${height}px; height:auto; box-sizing:border-box; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; display:block; margin:6px auto;'><defs><marker id='cfArr' viewBox='0 0 10 10' refX='6' refY='5' markerWidth='5.5' markerHeight='5.5' orient='auto-start-reverse'><path d='M 0 0 L 10 5 L 0 10 z' fill='#0f172a'/></marker></defs><text x='${(width / 2).toFixed(1)}' y='18' font-size='12.5' font-weight='bold' fill='#0f172a' text-anchor='middle' font-family='sans-serif'>${title}</text>${gridLines}${axisBreakSvg}<line x1='${padLeft}' y1='${(padTop + plotH).toFixed(1)}' x2='${(width - 10).toFixed(1)}' y2='${(padTop + plotH).toFixed(1)}' stroke='#0f172a' stroke-width='1.6' marker-end='url(#cfArr)'/><line x1='${padLeft}' y1='${(padTop + plotH).toFixed(1)}' x2='${padLeft}' y2='24' stroke='#0f172a' stroke-width='1.6' marker-end='url(#cfArr)'/>${ticksAndLabels}${curvePath}${guideSvg}<text x='${(padLeft + plotW / 2).toFixed(1)}' y='${xAxisTitleY}' font-size='11.5' font-weight='bold' fill='#0f172a' text-anchor='middle' font-family='sans-serif'>${xLabel}</text><text x='${yAxisTitleX}' y='${yAxisTitleY}' font-size='11.5' font-weight='bold' fill='#0f172a' text-anchor='middle' transform='rotate(-90, ${yAxisTitleX}, ${yAxisTitleY})' font-family='sans-serif'>${yLabel}</text></svg>`;
+  return `<div style='width:100%; min-height:320px; padding:8px; box-sizing:border-box; overflow:visible;'><svg width='${width}' height='${height}' viewBox='0 0 ${width} ${height}' preserveAspectRatio='xMidYMid meet' xmlns='http://www.w3.org/2000/svg' style='width:100%; max-width:${width}px; min-height:300px; height:auto; box-sizing:border-box; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; display:block; margin:0 auto;'><defs><marker id='cfArr' viewBox='0 0 10 10' refX='6' refY='5' markerWidth='5.5' markerHeight='5.5' orient='auto-start-reverse'><path d='M 0 0 L 10 5 L 0 10 z' fill='#0f172a'/></marker></defs><text x='${(width / 2).toFixed(1)}' y='18' font-size='12.5' font-weight='bold' fill='#0f172a' text-anchor='middle' font-family='sans-serif'>${title}</text>${gridLines}${axisBreakSvg}<line x1='${padLeft}' y1='${(padTop + plotH).toFixed(1)}' x2='${(width - 10).toFixed(1)}' y2='${(padTop + plotH).toFixed(1)}' stroke='#0f172a' stroke-width='1.6' marker-end='url(#cfArr)'/><line x1='${padLeft}' y1='${(padTop + plotH).toFixed(1)}' x2='${padLeft}' y2='22' stroke='#0f172a' stroke-width='1.6' marker-end='url(#cfArr)'/>${ticksAndLabels}${curvePath}${guideSvg}<text x='${(padLeft + plotW / 2).toFixed(1)}' y='${xAxisTitleY}' font-size='11.5' font-weight='bold' fill='#0f172a' text-anchor='middle' font-family='sans-serif'>${xLabel}</text><text x='${yAxisTitleX}' y='${yAxisTitleY}' font-size='11.5' font-weight='bold' fill='#0f172a' text-anchor='middle' transform='rotate(-90, ${yAxisTitleX}, ${yAxisTitleY})' font-family='sans-serif'>${yLabel}</text></svg></div>`;
 }
 
 const SCENARIOS = [
