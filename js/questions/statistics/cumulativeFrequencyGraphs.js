@@ -185,6 +185,7 @@ function buildCfGraphSvg({
 const SCENARIOS = [
   {
     entity: "cars",
+    metricNoun: "speed",
     title: "Speeds of cars",
     xLabel: "Speed (km/h)",
     context:
@@ -203,6 +204,7 @@ const SCENARIOS = [
   },
   {
     entity: "students",
+    metricNoun: "time",
     title: "Times taken to solve a mathematical puzzle",
     xLabel: "Time (min)",
     context:
@@ -218,6 +220,7 @@ const SCENARIOS = [
   },
   {
     entity: "parcels",
+    metricNoun: "mass",
     title: "Masses of parcels",
     xLabel: "Mass (kg)",
     context:
@@ -233,6 +236,7 @@ const SCENARIOS = [
   },
   {
     entity: "students",
+    metricNoun: "number of trips",
     title: "Number of trips made by students",
     xLabel: "Number of trips",
     context:
@@ -248,6 +252,7 @@ const SCENARIOS = [
   },
   {
     entity: "plants",
+    metricNoun: "height",
     title: "Heights of plants",
     xLabel: "Height (cm)",
     context:
@@ -263,6 +268,7 @@ const SCENARIOS = [
   },
   {
     entity: "students",
+    metricNoun: "score",
     title: "Mathematics test scores",
     xLabel: "Score (marks)",
     context:
@@ -281,6 +287,7 @@ const SCENARIOS = [
   },
   {
     entity: "patients",
+    metricNoun: "waiting time",
     title: "Waiting times at a clinic",
     xLabel: "Waiting time (min)",
     context:
@@ -296,6 +303,7 @@ const SCENARIOS = [
   },
   {
     entity: "batteries",
+    metricNoun: "battery life",
     title: "Battery life of wireless earbuds",
     xLabel: "Battery life (h)",
     context:
@@ -311,6 +319,7 @@ const SCENARIOS = [
   },
   {
     entity: "households",
+    metricNoun: "water usage",
     title: "Monthly water consumption",
     xLabel: "Water usage (m³)",
     context:
@@ -326,6 +335,7 @@ const SCENARIOS = [
   },
   {
     entity: "runners",
+    metricNoun: "distance",
     title: "Distances run in a charity event",
     xLabel: "Distance (km)",
     context:
@@ -340,6 +350,10 @@ const SCENARIOS = [
     lowerPhrases: (x) => `ran at most $${x}\\text{ km}$`
   }
 ];
+
+function formatLeReading(sc, xVal, cfVal) {
+  return `From graph, no. of ${sc.entity} with ${sc.metricNoun} less than or equal to $${xVal} = ${cfVal}$`;
+}
 
 function getSnappedCandidateXs(sc, count = 4) {
   const { xHalf } = getSnapUnits(sc.xStep, sc.yStep);
@@ -412,11 +426,11 @@ export function generateQuestion(tier = 1) {
 
       const steps = askPct
         ? [
-            `From the graph at $x = ${xVal}$, the cumulative frequency is $${cfVal}$.\n\n${solSvg}`,
+            `${formatLeReading(sc, xVal, cfVal)}.\n\n${solSvg}`,
             `Calculate the percentage of ${sc.entity}: $$\\frac{${cfVal}}{${sc.total}} \\times 100\\% = ${ans}\\%$$`
           ]
         : [
-            `Locate $${xVal}$ on the horizontal axis and read up to the curve to find the cumulative frequency: $$\\text{CF}(${xVal}) = ${cfVal}$$\n\n${solSvg}`
+            `Locate $${xVal}$ on the horizontal axis and read up to the curve: ${formatLeReading(sc, xVal, cfVal)}.\n\n${solSvg}`
           ];
 
       return {
@@ -463,12 +477,12 @@ export function generateQuestion(tier = 1) {
 
       const steps = askPct
         ? [
-            `Read the cumulative frequency at $${xVal}$: $$\\text{CF}(${xVal}) = ${cfVal}$$\n\n${solSvg}`,
+            `${formatLeReading(sc, xVal, cfVal)}.\n\n${solSvg}`,
             `Find the number of ${sc.entity} above $${xVal}$: $$${sc.total} - ${cfVal} = ${tailCount}$$`,
             `Express as a percentage of $${sc.total}$: $$\\frac{${tailCount}}{${sc.total}} \\times 100\\% = ${ans}\\%$$`
           ]
         : [
-            `Read the cumulative frequency at $${xVal}$: $$\\text{CF}(${xVal}) = ${cfVal}$$\n\n${solSvg}`,
+            `${formatLeReading(sc, xVal, cfVal)}.\n\n${solSvg}`,
             `Subtract from the total frequency: $$${sc.total} - ${cfVal} = ${tailCount}$$`
           ];
 
@@ -510,16 +524,16 @@ export function generateQuestion(tier = 1) {
       tier: 1,
       tierName: "Basic",
       skillTitle: "Cumulative Frequency Graphs",
-      prompt: `${sc.context}\n\nFind the cumulative frequency for the class boundary $x \\le ${xVal}$.`,
+      prompt: `${sc.context}\n\nFind the number of ${sc.entity} with ${sc.metricNoun} less than or equal to $${xVal}$.`,
       diagramSvg: cleanQuestionGraphSvg,
       inputCount: 1,
-      inputLabels: [`CF(x ≤ ${xVal}) =`],
+      inputLabels: [`No. of ${sc.entity} (≤ ${xVal}) =`],
       expectedAnswer: ans,
       displayAnswer: ans,
       extraKeys,
       steps: [
-        `Locate $x = ${xVal}$ along the horizontal axis and move vertically to the cumulative frequency curve.`,
-        `Read across to the vertical axis to get the cumulative frequency: $$${ans}$$\n\n${solSvg}`
+        `Locate $${xVal}$ along the horizontal axis and move vertically to the cumulative frequency curve.`,
+        `${formatLeReading(sc, xVal, cfVal)}.\n\n${solSvg}`
       ]
     };
   }
@@ -559,18 +573,18 @@ export function generateQuestion(tier = 1) {
       });
 
       const targetDesc = askPct
-        ? `the percentage of ${sc.entity} with values greater than $${xA}$ and less than or equal to $${xB}$`
-        : `the number of ${sc.entity} with values between $${xA}$ and $${xB}$ ($${xA} < x \\le ${xB}$)`;
+        ? `the percentage of ${sc.entity} with ${sc.metricNoun} greater than $${xA}$ and less than or equal to $${xB}$`
+        : `the number of ${sc.entity} with ${sc.metricNoun} between $${xA}$ and $${xB}$ ($${xA} < x \\le ${xB}$)`;
 
       const steps = askPct
         ? [
-            `Read the cumulative frequencies: $$\\text{CF}(${xB}) = ${cfB} \\quad \\text{and} \\quad \\text{CF}(${xA}) = ${cfA}$$\n\n${solSvg}`,
+            `${formatLeReading(sc, xB, cfB)} and ${formatLeReading(sc, xA, cfA)}.\n\n${solSvg}`,
             `Subtract to find the number of ${sc.entity} in the interval: $$${cfB} - ${cfA} = ${intervalCount}$$`,
             `Convert to a percentage: $$\\frac{${intervalCount}}{${sc.total}} \\times 100\\% = ${ans}\\%$$`
           ]
         : [
-            `Read the cumulative frequencies at both boundaries: $$\\text{CF}(${xB}) = ${cfB} \\quad \\text{and} \\quad \\text{CF}(${xA}) = ${cfA}$$\n\n${solSvg}`,
-            `Subtract the lower cumulative frequency from the upper one: $$${cfB} - ${cfA} = ${intervalCount}$$`
+            `${formatLeReading(sc, xB, cfB)} and ${formatLeReading(sc, xA, cfA)}.\n\n${solSvg}`,
+            `Subtract the lower reading from the upper reading: $$${cfB} - ${cfA} = ${intervalCount}$$`
           ];
 
       return {
@@ -615,18 +629,18 @@ export function generateQuestion(tier = 1) {
       });
 
       const promptText = isUpperTail
-        ? `About $${pctGiven}\\%$ of the ${sc.entity} have values greater than $k$. Estimate the value of $k$ from the graph.`
-        : `About $${pctGiven}\\%$ of the ${sc.entity} have values less than or equal to $x$. Estimate the value of $x$ from the graph.`;
+        ? `About $${pctGiven}\\%$ of the ${sc.entity} have ${sc.metricNoun} greater than $k$. Estimate the value of $k$ from the graph.`
+        : `About $${pctGiven}\\%$ of the ${sc.entity} have ${sc.metricNoun} less than or equal to $x$. Estimate the value of $x$ from the graph.`;
 
       const varName = isUpperTail ? "k" : "x";
       const steps = isUpperTail
         ? [
             `Calculate $${pctGiven}\\%$ of $${sc.total}$ ${sc.entity} (snapped to grid): $$\\approx ${tailCount}$$`,
-            `Since about $${tailCount}$ ${sc.entity} are above $k$, the cumulative frequency at $k$ is: $$\\text{CF}(k) = ${sc.total} - ${tailCount} = ${targetCf}$$`,
+            `Since about $${tailCount}$ ${sc.entity} have ${sc.metricNoun} greater than $k$, the number of ${sc.entity} with ${sc.metricNoun} less than or equal to $k$ is: $$${sc.total} - ${tailCount} = ${targetCf}$$`,
             `Locate $${targetCf}$ on the vertical axis, move across to the curve, and read down to estimate $k$: $$k = ${ans}$$\n\n${solSvg}`
           ]
         : [
-            `Calculate $${pctGiven}\\%$ of $${sc.total}$ ${sc.entity} (snapped to grid): $$\\text{CF}(x) \\approx ${targetCf}$$`,
+            `Calculate $${pctGiven}\\%$ of $${sc.total}$ ${sc.entity} (snapped to grid): $$\\approx ${targetCf}$$`,
             `Locate $${targetCf}$ on the vertical axis, move across to the curve, and read down to estimate $x$: $$x = ${ans}$$\n\n${solSvg}`
           ];
 
@@ -683,8 +697,8 @@ export function generateQuestion(tier = 1) {
       displayAnswer: ans,
       extraKeys,
       steps: [
-        `Read the cumulative frequency at the upper class boundary $x = ${xB}$: $$\\text{CF}(${xB}) = ${cfB}$$`,
-        `Read the cumulative frequency at the lower class boundary $x = ${xA}$: $$\\text{CF}(${xA}) = ${cfA}$$\n\n${solSvg}`,
+        `${formatLeReading(sc, xB, cfB)}.`,
+        `${formatLeReading(sc, xA, cfA)}.\n\n${solSvg}`,
         `Subtract to find the class frequency: $$${cfB} - ${cfA} = ${freq}$$`
       ]
     };
@@ -720,7 +734,7 @@ export function generateQuestion(tier = 1) {
       tier: 3,
       tierName: "Advanced",
       skillTitle: "Cumulative Frequency Graphs",
-      prompt: `${sc.context}\n\nItems with a measurement less than or equal to $${xCut}$ are excluded from the main group. Find the percentage of ${sc.entity} that remain in the main group. (Give your answer correct to 3 significant figures.)`,
+      prompt: `${sc.context}\n\nItems with ${sc.metricNoun} less than or equal to $${xCut}$ are excluded from the main group. Find the percentage of ${sc.entity} that remain in the main group. (Give your answer correct to 3 significant figures.)`,
       diagramSvg: cleanQuestionGraphSvg,
       inputCount: 1,
       inputLabels: ["Percentage (%) ="],
@@ -728,7 +742,7 @@ export function generateQuestion(tier = 1) {
       displayAnswer: `${ans}\\%`,
       extraKeys,
       steps: [
-        `Read the number of ${sc.entity} with value $\\le ${xCut}$ from the graph: $$\\text{CF}(${xCut}) = ${cfCut}$$\n\n${solSvg}`,
+        `${formatLeReading(sc, xCut, cfCut)}.\n\n${solSvg}`,
         `Find the number of ${sc.entity} remaining above $${xCut}$: $$${sc.total} - ${cfCut} = ${keptCount}$$`,
         `Calculate the percentage remaining: $$\\frac{${keptCount}}{${sc.total}} \\times 100\\% = ${ans}\\%$$`
       ]
@@ -767,7 +781,7 @@ export function generateQuestion(tier = 1) {
     tier: 3,
     tierName: "Advanced",
     skillTitle: "Cumulative Frequency Graphs",
-    prompt: `${sc.context}\n\nAbout the top $${topPct}\\%$ of ${sc.entity} have values greater than $k$. Estimate the number of ${sc.entity} with values greater than $${xLow}$ but less than or equal to $k$.`,
+    prompt: `${sc.context}\n\nAbout the top $${topPct}\\%$ of ${sc.entity} have ${sc.metricNoun} greater than $k$. Estimate the number of ${sc.entity} with ${sc.metricNoun} greater than $${xLow}$ but less than or equal to $k$.`,
     diagramSvg: cleanQuestionGraphSvg,
     inputCount: 1,
     inputLabels: [`Number of ${sc.entity} =`],
@@ -775,8 +789,8 @@ export function generateQuestion(tier = 1) {
     displayAnswer: ans,
     extraKeys,
     steps: [
-      `Find the cumulative frequency at the top $${topPct}\\%$ cutoff $k$ (snapped to grid): $$\\text{CF}(k) = ${sc.total} - ${topCount} = ${cfAtK}$$`,
-      `Read the cumulative frequency at $${xLow}$: $$\\text{CF}(${xLow}) = ${cfLow}$$\n\n${solSvg}`,
+      `Number of ${sc.entity} with ${sc.metricNoun} less than or equal to $k$: $$${sc.total} - ${topCount} = ${cfAtK}$$`,
+      `${formatLeReading(sc, xLow, cfLow)}.\n\n${solSvg}`,
       `Subtract to find the number of ${sc.entity} in the band $${xLow} < x \\le k$: $$${cfAtK} - ${cfLow} = ${ans}$$`
     ]
   };
