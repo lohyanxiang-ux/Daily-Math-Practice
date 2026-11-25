@@ -86,8 +86,9 @@ function createSmoothCurve(scenario) {
 }
 
 /**
- * Builds a taller, easy-to-read SVG cumulative frequency graph with clear
- * major/minor grid boxes, crisp labels, and smooth curve.
+ * Builds an SVG cumulative frequency graph with an expanded vertical axis span
+ * (extra headroom above `total` to the next major tick) and tall plot height
+ * so small grid boxes are spacious and easy to read.
  */
 function buildCfGraphSvg({
   title,
@@ -103,15 +104,17 @@ function buildCfGraphSvg({
   highlights = []
 }) {
   const width = 460;
-  const height = 340;
-  const padLeft = 74;
+  const height = 380;
+  const padLeft = 76;
   const padRight = 22;
   const padTop = 32;
   const padBottom = 48;
   const plotW = width - padLeft - padRight;
   const plotH = height - padTop - padBottom;
 
-  const yMax = Math.ceil((total * 1.05) / yStep) * yStep;
+  // Extend vertical axis to at least one full major yStep above `total`
+  const baseTop = Math.ceil(total / yStep) * yStep;
+  const yMax = baseTop >= total ? baseTop + yStep : baseTop;
 
   const toSvgX = (val) => padLeft + ((val - xMin) / (xMax - xMin)) * plotW;
   const toSvgY = (cf) => padTop + plotH - (cf / yMax) * plotH;
