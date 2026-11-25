@@ -381,8 +381,8 @@ export function renderQuestionView(container, options = {}) {
     const stepsList = currentQuestion.steps || currentQuestion.hints || [];
     const diagramSvgContent = currentQuestion.diagramSvg || currentQuestion.svg || "";
     const diagramHtml = (diagramSvgContent || currentQuestion.imageUrl) ? `
-      <div id="diagram-viewport" style="margin-top: 14px; width: 100%; max-height: 200px; display: flex; justify-content: center; align-items: center; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 6px; box-sizing: border-box; overflow: hidden;">
-        ${diagramSvgContent || `<img src="${currentQuestion.imageUrl}" style="max-width: 100%; max-height: 180px; object-fit: contain;">`}
+      <div id="diagram-viewport" style="margin-top: 14px; width: 100%; max-height: 380px; display: flex; justify-content: center; align-items: center; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 6px; box-sizing: border-box; overflow: visible;">
+        ${diagramSvgContent || `<img src="${currentQuestion.imageUrl}" style="max-width: 100%; max-height: 360px; object-fit: contain;">`}
       </div>
     ` : "";
 
